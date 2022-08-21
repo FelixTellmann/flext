@@ -1,0 +1,10 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://flext.dev
+
+# Sitemaps
+Sitemap: https://flext.dev/sitemap.xml
+

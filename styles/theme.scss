@@ -1,0 +1,100 @@
+@font-face {
+  font-family: 'Inter var';
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+  font-named-instance: 'Regular';
+  src: url('/fonts/Inter-roman-latin.var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter var';
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: italic;
+  font-named-instance: 'Italic';
+  src: url('/fonts/Inter-italic-latin.var.woff2') format('woff2');
+}
+
+.focus-border:focus {
+  -moz-box-shadow: black 0px 0px 0px 2px;
+  -webkit-box-shadow: black 0px 0px 0px 2px;
+  box-shadow: black 0px 0px 0px 2px;
+}
+
+/*html {
+  font-family: Inter var, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, Noto Sans, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+  -webkit-font-smoothing: antialiased;
+}*/
+
+html {
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+
+button, input, textarea {
+  font: inherit;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+* {
+  &:focus:not(:focus-visible):not(:is([type="checkbox"], [type="radio"])) {
+    outline: none;
+  }
+
+  @apply outline-accent;
+}
+
+/*:is([type="checkbox"], [type="radio"]):is(:focus) {
+  &:focus {
+    @apply ring-2 ring-offset-1 ring-sky-400 dark:ring-white dark:ring-offset-0 appearance-none}
+}*/
+
+* {
+  &:focus-visible:not(:is(input, select)) {
+    outline: none;
+    @apply ring-2 ring-offset-2 ring-sky-400 dark:ring-white dark:ring-offset-0;
+    //@apply rounded-sm
+  }
+  :is(input, select):not(:is([type="checkbox"], [type="radio"])):focus-visible {
+    outline: none;
+  }
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+button {
+  &:hover:not(:focus-visible), &:focus:not(:focus-visible), &:active:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/*
+::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-300/25
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gradient-to-b from-sky-200 to-sky-400 dark:from-gray-400 dark:to-gray-800 rounded-[3px];
+}
+
+
+::-webkit-scrollbar-thumb:horizontal {
+  @apply bg-gradient-to-r from-gray-300 to-gray-400 dark:from-gray-400 dark:to-gray-800 rounded-[3px] border border-solid border-gray-300/25;
+
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-200;
+}*/

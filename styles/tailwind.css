@@ -1,0 +1,144 @@
+@import "typography.scss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.color-gray--slate {
+  --color-gray-100: 241 245 249;
+  --color-gray-200: 226 232 240;
+  --color-gray-300: 203 213 225;
+  --color-gray-400: 148 163 184;
+  --color-gray-50: 248 250 252;
+  --color-gray-500: 100 116 139;
+  --color-gray-600: 71 85 105;
+  --color-gray-700: 51 65 85;
+  --color-gray-800: 30 41 59;
+  --color-gray-900: 15 23 42;
+}
+
+.color-gray--coolgray {
+  --color-gray-100: 243 244 246;
+  --color-gray-200: 229 231 235;
+  --color-gray-300: 209 213 219;
+  --color-gray-400: 156 163 175;
+  --color-gray-50: 249 250 251;
+  --color-gray-500: 107 114 128;
+  --color-gray-600: 75 85 99;
+  --color-gray-700: 55 65 81;
+  --color-gray-800: 31 41 55;
+  --color-gray-900: 17 24 39;
+}
+
+.color-gray--bluegray {
+  --color-gray-100: 241 245 249;
+  --color-gray-200: 226 232 240;
+  --color-gray-300: 203 213 225;
+  --color-gray-400: 148 163 184;
+  --color-gray-50: 248 250 252;
+  --color-gray-500: 100 116 139;
+  --color-gray-600: 71 85 105;
+  --color-gray-700: 51 65 85;
+  --color-gray-800: 30 41 59;
+  --color-gray-900: 15 23 42;
+}
+
+.color-gray--gray {
+  --color-gray-100: 243 244 246;
+  --color-gray-200: 229 231 235;
+  --color-gray-300: 209 213 219;
+  --color-gray-400: 156 163 175;
+  --color-gray-50: 249 250 251;
+  --color-gray-500: 107 114 128;
+  --color-gray-600: 75 85 99;
+  --color-gray-700: 55 65 81;
+  --color-gray-800: 31 41 55;
+  --color-gray-900: 17 24 39;
+}
+
+.color-gray--zinc {
+  --color-gray-100: 244 244 245;
+  --color-gray-200: 228 228 231;
+  --color-gray-300: 212 212 216;
+  --color-gray-400: 161 161 170;
+  --color-gray-50: 250 250 250;
+  --color-gray-500: 113 113 122;
+  --color-gray-600: 82 82 91;
+  --color-gray-700: 63 63 70;
+  --color-gray-800: 39 39 42;
+  --color-gray-900: 24 24 27;
+}
+
+.color-gray--neutral {
+  --color-gray-100: 245 245 245;
+  --color-gray-200: 229 229 229;
+  --color-gray-300: 212 212 212;
+  --color-gray-400: 163 163 163;
+  --color-gray-50: 250 250 250;
+  --color-gray-500: 115 115 115;
+  --color-gray-600: 82 82 82;
+  --color-gray-700: 64 64 64;
+  --color-gray-800: 38 38 38;
+  --color-gray-900: 23 23 23;
+}
+
+.color-gray--stone {
+  --color-gray-100: 245 245 244;
+  --color-gray-200: 231 229 228;
+  --color-gray-300: 214 211 209;
+  --color-gray-400: 168 162 158;
+  --color-gray-50: 250 250 249;
+  --color-gray-500: 120 113 108;
+  --color-gray-600: 87 83 78;
+  --color-gray-700: 68 64 60;
+  --color-gray-800: 41 37 36;
+  --color-gray-900: 28 25 23;
+}
+
+
+
+
+@layer base {
+  @font-face {
+    font-family: 'Inter';
+    font-weight: 100 900;
+    font-display: swap;
+    font-style: normal;
+    font-named-instance: 'Regular';
+    src: url('/fonts/inter-var-latin.woff2') format('woff2');
+  }
+
+  :root {
+    --color-bg: 255 255 255;
+    --color-bg-dark: 14 19 31;
+    --color-bg-secondary: 248 250 252;
+    --color-bg-secondary-dark: 248 250 252;
+    --color-card: 241 245 249;
+    --color-card-dark: 25 34 46;
+    --color-accent: 14 165 233;
+    --color-accent-contrast: 14 165 233;
+    --color-accent-secondary: 236 72 153;
+    --color-accent-secondary-contrast: 236 72 153;
+    --color-accent-dark: 56 189 248;
+    --color-accent-contrast-dark: 56 189 248;
+    --color-accent-secondary-dark: 27 33 46;
+    --color-accent-secondary-contrast-dark: 27 33 46;
+    --color-success: 34 197 94;
+    --color-info: 56 189 248;
+    --color-warning: 245 158 11;
+    --color-danger: 252 0 0;
+  }
+
+  select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    -webkit-print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+}
+
+
