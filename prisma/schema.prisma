@@ -3,6 +3,7 @@
 
 // url                  = "mysql://root@127.0.0.1:3309/flext?connection_limit=10000&pool_timeout=0"
 // url                  = env("DATABASE_URL_DEV")
+// url                  = env("DATABASE_URL_PROD")
 // url                  = env("DATABASE_URL")
 //
 
