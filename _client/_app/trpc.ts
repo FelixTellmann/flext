@@ -62,7 +62,7 @@ export const trpc = setupTRPC<TrpcRouter, SSRContext>({
       queryClientConfig: { defaultOptions: { queries: { staleTime: 60 } } },
     };
   },
-  ssr: true,
+  // ssr: true,
   responseMeta(opts) {
     const ctx = opts.ctx as SSRContext;
 
@@ -73,6 +73,7 @@ export const trpc = setupTRPC<TrpcRouter, SSRContext>({
     }
 
     const error = opts.clientErrors[0];
+    console.log(error);
     if (error) {
       return {
         // @ts-ignore
