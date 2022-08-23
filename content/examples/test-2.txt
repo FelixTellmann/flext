@@ -1,0 +1,16 @@
+// Compose a custom Tooltip component
+export const StatusTooltip = ({ state, label }) => {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger asChild>
+        <Text>
+          <Status variant={state} />
+        </Text>
+      </Tooltip.Trigger>
+      <TooltipContent>
+        <Tooltip.Arrow />
+        {label}
+      </TooltipContent>
+    </Tooltip.Root>
+  );
+};

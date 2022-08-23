@@ -1,0 +1,142 @@
+---
+title: "TypeScript Functions with Generics"
+publishedAt: "2022-05-01"
+summary: "Learn how to improve functions with TypeScript and Generic Types"
+tldr: ""
+type: Blog
+image: "/images/ts-5.svg"
+icon: "typescript"
+tags:
+  - "typescript"
+  - "javascript"
+  - "development"
+  - "dev tools"
+---
+
+Let's assume there is a JavaScript library that defines a `flip` function. It can work with strings or arrays, and it returns a reversed version of the input without changing the original.
+
+```js
+function flip(input) {
+  return typeof input === "string" ? input.split("").flip().join("") : input.slice().flip();
+}
+```
+
+This is only an example implementation. A real implementation would have to handle Unicode code points that are represented by multiple code units. We would also need to perform more input validation. An even better solution would be to separate the two functions.
+
+So that being said, how can we write the `flip` function in TypeScript?
+
+## Any Type
+
+In the simplest approach, both the parameter and the return value could be annotated with the `any` type, for which any value in JavaScript would be valid:
+
+```ts
+function flip(input: any): any {
+  // ...
+}
+```
+
+As a result, the TypeScript compiler cannot help us out much. We don't restrict the parameter type, so the compiler happily accepts parameters that result in runtime errors:
+
+```ts
+flip(true);
+flip({});
+flip(Math.random);
+```
+
+For mistakes like these to be avoided, we need to be more specific.
+
+## Union Types
+
+As a next step towards more refined types, we could use [union types](https://www.typescriptlang.org/docs/handbook/unions-and-intersections.html) to specify that the `input` parameter must either be a string or an array of elements of an arbitrary type. The resulting union type is `string | any[]`, which we use as both the parameter and return type:
+
+To refine the types, we can use [union types](https://www.typescriptlang.org/docs/handbook/unions-and-intersections.html) to specify that the `input` parameter will either be a string or an array of arbitrary elements. The resulting union type is `string | any`, which we use as both the parameter and return type:
+
+```ts
+function flip(input: string | any[]): string | any[] {
+  // ...
+}
+```
+
+Now that these type annotations are in place, incorrect invocations from the previous example result in a type error, but correct invocations work as expected:
+
+```ts
+flip(true); // Error!
+flip({}); // Error!
+flip(Math.random); // Error!
+
+const elpmaxe: string | any[] = flip("example");
+const numbers: string | any[] = flip([1, 2, 3, 4, 5]);
+```
+
+In this case, we have lost some type information. The type of the `numbers` constant does not reflect that an
+argument of type `number[]` was passed to the `flip` function. It would be more useful if the second component type of the union type was `number[]`, not `any`.
+
+## Union Types + Generics
+
+A slightly better way to type the `flip` function would be to use [generic types](https://www.typescriptlang.org/docs/handbook/generics.html). Instead of typing the array elements as `any`, we can generically type them as `T`. That way, the `input` parameter is either of type `string` or of type `T[]`. The same goes for the return value:
+
+Using [generic types](https://www.typescriptlang.org/docs/handbook/generics.html) would be a slightly better way to type the flip function. Instead of typing array elements as `any`, we could type them as `T`; the `input` parameter would then be either of the type `string` or of the type `T[]`. The return value will also follow the same pattern:
+
+```ts
+function flip<T>(input: string | T[]): string | T[] {
+  // ...
+}
+```
+
+We now preserve the type information:
+
+```ts
+const elpmaxe: string | string[] = flip("example");
+const numbers: string | number[] = flip([1, 2, 3, 4, 5]);
+```
+
+As things stand, the function type still has some problems. Because of the union type of the return value, it's not possible to access array prototype methods such as `map`, even though we know that we'll get back an array when we pass in an array. The type system does not have that knowledge, since it's not accurate in modeling the possible parameter and return type combinations.
+
+According to its signature, the `flip` function's parameters and returns are string or array, respectively. Put differently, there are four possible parameter and return types:
+
+- `(input: string) => string`
+- `(input: string) => T[]`
+- `(input: T[]) => string`
+- `(input: T[]) => T[]`
+
+Due to the way the `flip` function is implemented, only two of the following combinations will ever be possible at runtime:
+
+- `(input: string) => string`
+- `(input: T[]) => T[]`
+
+Then let's figure out how we can incorporate this knowledge into the type system.
+
+## Function Overloads
+
+With other programming languages, we could overload the function `flip` by calling two different functions with the same name, but different types:
+
+```ts
+function flip(string: string): string {
+  return string.split("").flip().join("");
+}
+
+function flip<T>(array: T[]): T[] {
+  return array.slice().flip();
+}
+```
+
+However, this isn't valid TypeScript, since we can't have two functions with the same name in the same scope. Imagine if this were compiled into JavaScript: We'd have two `flip` functions which could not be differentiated by names.
+
+Instead, TypeScript lets us specify an [overload list](https://www.typescriptlang.org/docs/handbook/2/functions.html#function-overloads) to supply multiple types for the same function. That way, we can describe to the type system exactly what our function accepts and what it returns:
+
+Rather, TypeScript allows us to supply multiple types for a single function. By doing so, we are able to clearly
+tell the type system what our function accepts and what it returns. Learn more about [overload lists](https://www.
+typescriptlang.org/docs/handbook/2/functions.html#function-overloads).
+
+```ts
+function flip(string: string): string;
+function flip<T>(array: T[]): T[];
+function flip<T>(input: string | T[]): string | T[] {
+  return typeof input === "string" ? input.split("").flip().join("") : input.slice().flip();
+}
+```
+
+As you can see, the top two lines of the above example list several valid overloads for the `flip` function, which is the "external" signature of the function. The third line specifies the generic "internal" signature, which must be compatible with all specified overloads. This is how these overloads look in an IDE (Visual Studio in this example):
+
+It's interesting to note that only the first two overloads show up in the autocompletion list, while the
+implementation itself with union types doesn't. Also notice how we can type our parameters differently depending on the type. And that's it! We've accurately typed a `flip` function using function overloads.

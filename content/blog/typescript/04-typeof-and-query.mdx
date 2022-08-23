@@ -1,0 +1,73 @@
+---
+title: "Typeof and Type Queries"
+publishedAt: "2022-04-30"
+summary: "Learn how to use the typeof operator and how to assign type queries and aliases in TypeScript"
+tldr: ""
+type: Blog
+image: "/images/ts-4.svg"
+icon: "typescript"
+tags:
+  - "typescript"
+  - "javascript"
+  - "development"
+  - "dev tools"
+---
+
+While it shares the same name as JavaScript's operator `typeof`, TypeScript's `typeof` keyword captures anonymous types in a rather different way - the two can only appear in mutually exclusive contexts.
+
+## JavaScript's`typeof` Operator
+
+ECMAScript 2015 features the `typeof` operator that returns a string representing the type of its operand. It returns one of seven string values:
+
+```js
+typeof 1234; // "number"
+typeof true; // "boolean"
+typeof {}; // "object"
+typeof undefined; // "undefined"
+typeof "Hello World!"; // "string"
+typeof Symbol(); // "symbol"
+typeof parseInt; // "function"
+```
+
+As TypeScript is a strict superset of JavaScript, every valid JavaScript program is a TypeScript program. Therefore, the `typeof` operator works with both languages:
+
+```ts
+const number: string = typeof 1234;
+```
+
+The emitted JavaScript code is almost unchanged:
+
+```js
+const number = typeof 1234;
+```
+
+## TypeScript's Type Queries
+
+In TypeScript, the typeof keyword is used to initiate a **type query**. A type query gets the type of an _identifier_ or _property access expression_ (which is a connection of multiple identifiers):
+
+```ts
+const box = { width: 100, height: 200 };
+let anotherBox: typeof box;
+```
+
+The type of the `box` variable is inferred from its declaration with the annotation `typeof box` because no type annotation was provided on the variable declaration. We can give the same type to `anotherBox` by annotating the variable declaration with the type query `typeof box`.
+
+As with other static type system artifacts, type queries do not manifest at runtime. They are completely removed from the generated JavaScript code:
+
+```js
+const box = { width: 100, height: 200 };
+let anotherBox;
+```
+
+## Naming Types with Type Aliases
+
+In TypeScript, we can give the captured anonymous type a name using a **type alias**. Then, use that name with TypeScript wherever it expects a type:
+
+```ts
+const box = { width: 100, height: 200 };
+
+// Obtain the type of `box` and call it `Box`
+type Box = typeof box;
+
+let anotherBox: Box;
+```

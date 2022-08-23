@@ -1,0 +1,132 @@
+---
+title: "Why Typescript?"
+publishedAt: "2022-04-01"
+summary: "SUPER"
+image: "/images/ts-1.svg"
+icon: "typescript"
+type: Blog
+tags:
+  - "typescript"
+  - "javascript"
+  - "development"
+  - "dev tools"
+---
+
+As a JavaScript developer, you already know what TypeScript is and why it is useful.
+If you don't know, this article will explain the benefits of using TypeScript over
+JavaScript and how to get started with TypeScript
+
+JavaScript is a powerful programming language, yet you can easily start the adventure
+with it.One problem, though, is that apps these days are more complex as users expect from
+them more than ever before. JavaScript is no longer just an ornament on a website, you
+can use it to build some pretty advanced applications. Furthermore, these apps can
+have tons of possible states, which make it difficult to fully test them. This is where
+JavaScript's dynamic nature breaks the developer experience, as instant feedback that the
+developer once received is no longer the same.
+
+## Why should I use TypeScript?
+
+TypeScript is an open-source programming language created by Microsoft. Actually, it’s a
+superset of JavaScript which adds static typing to the language. The compilation of
+TypeScript to JavaScript allows the code to run on any environment that supports
+JavaScript. The web browser can be used as a client or Node.js can be used as a server.
+
+Now you may ask: "Ok, but why do I need static typing at all? If TypeScript compiles
+to JavaScript, shouldn't JavaScript be enough?"?
+
+If you want to write everything in pure JS, then you can, but why hurt yourself? It's
+always better to know what type you need than not to.
+
+> TypeScript may save your project from failure
+
+It's just inevitable that there will be bugs in programming. Sometimes it's just a
+typo and sometimes it's rushing before the deadline. Imagine that you are creating a
+payroll system for your company that automatically handles the paychecks of your
+employees. Such a system should be first and foremost reliable, right?
+
+We'll look at an example. Suppose you need to calculate employee salary with bonuses.
+Your function might look like this:
+
+Now let's take a look at this example. Suppose you have a really complicated function
+for calculating salaries with bonuses. In plain Javascript, it may look like this:
+
+```js
+function calculateSalaryWithBonus(salary, bonus) {
+  return salary + bonus;
+}
+```
+
+We assume that this function takes numbers as arguments and should work flawlessly when
+applied to calculating salary and automatically transferring money to employees.
+Suppose you get a list of bonuses as strings instead of numbers because of a bug in your
+backend code or application code. What could possibly go wrong here?
+
+```js
+const salary = calculateSalaryWithBonus(5000, "0");
+// salary is 50000 😱😱😱
+```
+
+As it turns out, the person would be happy to get an additional 0 at the end of the salary
+amount rather than no bonus at all. Because JavaScript is dynamic, you may get unexpected
+results even if you built this function with the intention of adding numbers.
+
+Here is how the function would look like in TypeScript:
+
+```ts
+function calculateSalaryWithBonus(salary: number, bonus: number) {
+  return salary + bonus;
+}
+```
+
+If we try to assign the salary no with a string, we would get the following error:
+
+```ts
+const salary = calculateSalaryWithBonus(5000, "0");
+// Error: TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+```
+
+I know that this example seems trivial, but remember... Static types can help prevent
+certain problems even at the software development stage.
+
+Another reason to go for TypeScript over JavaScript is that TS is _self-documenting_.
+The code that you write, will literally explain itself to you or any other person
+reading your code. With JavaScript, we are often forced to read entire libraries of
+documentation (if there is any at all) to just find a small piece of information that's
+applicable in a given situation. In TypeScript, we often end up writing quite a bit
+more as we code along, but we are also writing the documentation (which can often be
+extracted with some wonderful developer tools). Furthermore, we when we read the code,
+we get the bits of documentation as they are needed, and just what we need without
+having to search for it.
+
+### Unlock Typescript superpowers with your IDE
+
+The vast majority of developers spend most of their time in an IDE (integrated
+development environment, like WebStorm) or a lightweight editor like VSCode. Sure, we
+could all write our code in a notepad, but that would be time consuming and painful. In
+IDEs, TypeScript provides many features, for instance:
+
+- **Type checking in real-time** - In JavaScript, all the properties of an object can be
+  accessed even if they don't exist (i.e., "undefined"). This often leads to errors that
+  are
+  difficult to track down, but with Typescript, your IDE tells you in real-time when you
+  are
+  trying to access something that doesn't exist.
+- **Autocomplete** - The code auto-completion is just faster and works more efficiently in
+  static type languages IDEs. Code hints make it so you don't have to dig into
+  documentation.
+- **Mouse hover support** Simply hover over the area of code you are interested in,
+  and you'll be able to see more details.
+
+In the end, when you use Typescript, your IDE becomes best friend. The
+hints, red underlines, and warning messages give you the impression that someone warns
+you, “Hey, you made a mistake here, check it out!”. There are a number of Javascript
+plug-ins that allow you to accomplish similar (but not identical) results, but they
+eventually cannot compete with Typescript's rich features.
+
+### Use Typescript inference and don't event write more
+
+It may seem that Typescript is more code writing-intensive than Javascript because you
+must declare all types for variables, function arguments, function return types etc. But
+Typescript also incorporates a powerful feature known as type inference. Simply put,
+Typescript can identify the type of a variable by its value or a function result by its
+body.

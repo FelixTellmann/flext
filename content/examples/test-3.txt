@@ -1,0 +1,24 @@
+// Compose a Popover with custom focus and positioning
+export const DeploymentPopover = ({ children }) => {
+  const popoverCloseButton = React.useRef(null);
+  return (
+    <Popover.Root>
+      <Popover.Trigger>View deployment</Popover.Trigger>
+      <PopoverContent
+        align="start"
+        collisionTolerance={10}
+        portalled={false}
+        onOpenAutoFocus={(event) => {
+          // Focus the close button when popover opens
+          event.preventDefault();
+          popoverCloseButton.current?.focus();
+        }}
+      >
+        {children}
+        <Popover.Close ref={popoverCloseButton}>
+          Close
+        </Popover.Close>
+      </PopoverContent>
+    </Popover.Root>
+  );
+};

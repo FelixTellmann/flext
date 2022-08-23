@@ -1,5 +1,25 @@
 @layer components {
 
+  .button-hero {
+    @apply relative border-2 border-gray-700/10 rounded-lg bg-white/90 px-4 py-2 text-sm text-gray-500 hfa:text-gray-900 hfa:border-gray-800/20;
+    background-clip: padding-box;
+
+    &:hover, &:focus, &:active {
+        &:before, &:after {
+          @apply opacity-80;
+        }
+    }
+    &:before {
+      @apply absolute bottom-1 top-4 left-3 right-3 -z-10 blur-lg opacity-40 transition-all;
+      content: "";
+      background: linear-gradient(120deg,#ec6192,#ec4c34,#ffbd2b,#ebde56,#57c754,#53a1eb);
+    }
+    &:after {
+      @apply absolute bottom-1 top-4 left-3 right-3 -z-10 blur-lg opacity-40 transition-all;
+      content: "";
+      background: linear-gradient(70deg,#ec6192,#ec4c34,#ffbd2b,#ebde56,#57c754,#53a1eb);
+    }
+  }
   /*= =============== HEADINGS ================ */
   .heading-3xl {
     @apply mb-3 text-3xl font-bold lg:mb-4 lg:text-5xl xl:text-6xl text-gray-800 tracking-tighter dark:[--color-gray-800:var(--color-gray-50)];

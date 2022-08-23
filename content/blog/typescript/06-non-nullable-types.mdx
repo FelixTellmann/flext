@@ -1,0 +1,184 @@
+---
+title: "Nullable and Non-nullable types"
+publishedAt: "2022-05-04"
+summary: "Learn how to use nullable and Non-nullable types in TypeScript"
+tldr: ""
+type: Blog
+image: "/images/ts-6.svg"
+icon: "typescript"
+tags:
+  - "typescript"
+  - "javascript"
+  - "development"
+  - "dev tools"
+---
+
+In this article, we'll discuss `non-nullable` types, which give the type system a fundamental boost by helping prevent nullability errors at compile time.
+
+## The`null` and `undefined` Values
+
+Until TypeScript 2.0, the type checker considered `null` and `undefined` to be valid values of `every` type. Null and undefined were valid values for primitive types such as strings, numbers, and booleans:
+
+```ts
+let name: string;
+name = "Felix"; // OK
+name = undefined; // OK
+name = null; // OK
+
+let age: number;
+age = 36; // OK
+age = undefined; // OK
+age = null; // OK
+
+let hasDog: boolean;
+hasDog = true; // OK
+hasDog = false; // OK
+hasDog = undefined; // OK
+hasDog = null; // OK
+```
+
+In the past, type systems weren't able to express that a certain variable was not nullable. One example is the `number` type, whose domain includes not only all floating point numbers but also the two special values `null` and `undefined`. This was also true for `objects`, `arrays`, and `functions`. Luckily, TypeScript 2.0 has resolved this problem.
+
+## Strict Null Checking
+
+You can enable the`strictNullChecks` mode by providing the `--strictNullChecks` flag on the command line. Alternatively, you can enable it in your project's `tsconfig.json` file:
+
+```json
+{
+  "compilerOptions": {
+    "strictNullChecks": true
+    // ...
+  }
+}
+```
+
+As soon as we compile our previous examples with strict null checking enabled, we get a type error when we attempt to assign `null` or undefined` to any variable:
+
+```ts
+// Compiled with --strictNullChecks
+
+let name: string;
+name = "Felix"; // OK
+name = undefined; // Error
+name = null; // Error
+
+let age: number;
+age = 24; // OK
+age = undefined; // Error
+age = null; // Error
+
+let hasDog: boolean;
+hasDog = true; // OK
+hasDog = false; // OK
+hasDog = undefined; // Error
+hasDog = null; // Error
+```
+
+So how do we make a variable nullable?
+
+## Modeling Nullability with Union Types
+
+When strict null checking is enabled, types aren't nullable by default. Thus, to enable nullability, we need to specify which variables will be nullable here. This is done by creating a union type containing the nullable and undefined types (Read more about <Link href="/posts/typescript/06-non-nullable-types">Union Types</Link>):
+
+```ts
+let name: string | null;
+name = "Felix"; // OK
+name = undefined; // Error
+name = null; // OK
+```
+
+This type union does not contain a type named `undefined`, so `undefined` cannot be used as a value for the _name_ variable. A big advantage of this approach is that it becomes obvious and self-documenting which members of a type are nullable.
+
+```ts
+type User = {
+  firstName: string;
+  lastName: string | undefined;
+};
+
+const nicole: User = { firstName: "Nicole", lastName: undefined };
+const jimmy: User = { firstName: "Jimmy", lastName: "Doe" };
+```
+
+It is possible to make the `lastName` property optional by appending the symbol ? to its name, which allows us to omit the definition of the `lastName` property entirely. Also, the `undefined` type is automatically added to the union type, so the following assignment is type-correct:
+
+```ts
+type User = {
+  firstName: string;
+  lastName?: string;
+};
+
+// We can assign a string to the "lastName" property
+const jimmy: User = { firstName: "Jimmy", lastName: "Doe" };
+
+// ... or we can explicitly assign the value undefined
+const nicole: User = { firstName: "Nicole", lastName: undefined };
+
+// ... or we can not define the property at all
+const tom: User = { firstName: "Tom" };
+```
+
+## Property Access with Nullable Types
+
+Accessing any property of a `null`-type or `undefined`-type object results in a compile-time error:
+
+```ts
+function getLength(s: string | null) {
+  // Error: Object is possibly 'null'.
+  return s.length;
+}
+```
+
+Type guards are used to ensure that an object's property access is safe before you access its properties:
+
+```ts
+function getLength(s: string | null) {
+  if (s === null) {
+    return 0;
+  }
+
+  return s.length;
+}
+```
+
+Because TypeScript supports type guarding in conditional expressions and understands JavaScript's truthiness semantics, this approach also works:
+
+```ts
+function getLength(s: string | null) {
+  return s ? s.length : 0;
+}
+```
+
+## Function Invocations with Nullable Types
+
+A compile-time error is produced when you attempt to call a type that includes `null` or `undefined`. The `callback` parameter below is optional (note the `?`), so it may be `undefined`. Therefore, it is not possible to call this function directly:
+
+```ts
+function doSomething(callback?: () => void) {
+  // Error: Object is possibly 'undefined'.
+  callback();
+}
+```
+
+We need to check first whether the function has a non-null value, similar to checking for objects before accessing a property:
+
+```ts
+function doSomething(callback?: () => void) {
+  if (callback) {
+    callback();
+  }
+}
+```
+
+If you prefer, you can check the value returned by the `typeof` operator:
+
+```ts
+function doSomething(callback?: () => void) {
+  if (typeof callback === "function") {
+    callback();
+  }
+}
+```
+
+## Summary
+
+In TypeScript, non-nullable types are fundamental and valuable. They provide an accurate model of which variables and properties are nullable. A property access or function call is only permitted if a type guard has deemed it safe. This prevents many nullability errors at compile time.

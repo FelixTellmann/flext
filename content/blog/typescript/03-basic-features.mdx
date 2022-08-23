@@ -1,0 +1,71 @@
+---
+title: "Main Features of TypeScript"
+publishedAt: "2022-04-25"
+summary: "Learn basic features of TypeScript and how they can improve your development flow."
+tldr: ""
+type: Blog
+image: "/images/ts-3.svg"
+icon: "typescript"
+tags:
+  - "typescript"
+  - "javascript"
+  - "development"
+  - "dev tools"
+---
+
+Lets have a look at how we can use typescript in our code and make use of TypeScripts powers to make
+coding easier and more predictable. The simple yet powerful _main feature_ of TypeScript is to add
+_type annotations_ to variables or functions.
+
+Some of the valid TypeScript types are:
+
+- `number`
+- `string`
+- `boolean`
+- `Array`
+- `enum`
+- `null`
+- `undefined`
+- `void`
+- `tuple`
+- `never`
+- `any`
+
+<CodeComponent
+  maxWidth={"650px"}
+  contentBlock={{
+    title: `Let's explore some of the Basic Types in detail`,
+    heading: "h2",
+  }}
+  mergeOnDesktop
+  codeBlocks={[
+    {
+      caption: "Type `number`",
+      description: `The number type can be used for integers, floats, bigint's, binary, hex and NaN. Constants are
+      inferred to their exact value`,
+      code: `@import(./content/examples/ts-03-numbers.tsx)`,
+      language: "typescript",
+    },
+    {
+      caption: "Type `string`",
+      description: `The string type is used for textual data, unlike other typed languages, strings do not have a
+      character limit.`,
+      code: `@import(./content/examples/ts-03-strings.tsx)`,
+      language: "typescript",
+    },
+    {
+      caption: "Type `boolean`",
+      description: `Booleans are used everywhere and TypeScript gives you the superpower to infer values using "==="
+      anywhere.`,
+      code: `@import(./content/examples/ts-03-booleans.tsx)`,
+      language: "typescript",
+    },
+    {
+      caption: "Type `Array`",
+      description: `Array types can be written in one of two ways in TypeScript.You can use the type
+      of the element followed by [] or the Array<Type> keyword.`,
+      code: `@import(./content/examples/ts-03-arrays.tsx)`,
+      language: "typescript",
+    },
+  ]}
+/>

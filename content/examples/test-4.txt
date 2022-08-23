@@ -1,0 +1,22 @@
+// Compose a Dialog with custom focus management
+export const InfoDialog = ({ children }) => {
+  const dialogCloseButton = React.useRef(null);
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger>View details</Dialog.Trigger>
+      <Dialog.Overlay />
+      <DialogContent
+        onOpenAutoFocus={(event) => {
+          // Focus the close button when dialog opens
+          event.preventDefault();
+          dialogCloseButton.current?.focus();
+        }}
+      >
+        {children}
+        <Dialog.Close ref={dialogCloseButton}>
+          Close
+        </Dialog.Close>
+      </DialogContent>
+    </Dialog.Root>
+  );
+};

@@ -1,0 +1,71 @@
+---
+title: "Debugging & Refactoring"
+publishedAt: "2022/05/09"
+hidden: false
+summary: ""
+type: Blog
+tldr: ""
+image: "/images/debugging.jpg"
+icon: "code"
+tags:
+  - "habits"
+  - "writing"
+  - "personal development"
+  - "productivity"
+---
+
+Today I've spend a good amount of time debugging & refactoring a Shopify site. Its, not a large site and part of my job is to actually remove a lot of old/unused features. Its rather messy code and I'd definitely opt for a complete rewrite if I'd have the time-budget. However, this time I chose to go the faster _quick-fix_ route and saved the client as much money as possible.
+
+Interestingly enough, debugging has actually be the first thing I've ever done when it comes to learning to code. Way before I read the first tutorial / book about how to do X, I actually just read peoples HTML, CSS and so on by clicking `View Page Soure` and trying to read whats going on. Its actually a great thing that the basics are super self-explanatory. You can read HTML, CSS and JavaScript without knowing anything about web development and yet, you will understand whats going on.
+
+So, debugging and refactoring code has always been a thing, that we just continuously do? Yet, we never really spend time actively learning.
+
+Of course, there are small tutorials like on [freeCodeCamp](https://www.freecodecamp.org/news/debugging-javascript-for-beginners-5d4ac15dd1cd/) that teach how to use developer tools in Chrome or Firefox, but it doesn't really cover the essence of debugging and refactoring, it rather covers what tools are out there that can help you to see what is already flawed.
+
+So then what is debugging / refactoring?
+
+## Defining Debugging / Refactoring
+
+**Debugging** is the process of finding and fixing _bugs_ in your code. Defining what a _bug_ is can be tricky sometimes, in its essence a _bug_ occurs when a the code produces an outcome that was not desired. This often involves behaviour/design features. Its important highlight the **outcome not desired** part, as it also shows that bugs can only occur if we know, down to the smallest detail, what we want to achieve.
+
+Here is a classic example. Imagine you want a page with a red background (desired outcome), yet your implementation has no effect as it is overwritten further down the cascade:
+
+```css
+body {
+  background-color: red;
+}
+/* ... some more code ... */
+html * {
+  background: unset;
+}
+```
+
+**Refactoring** on the other side, is the process of refining code to make it _more readable_, _easier to understand_, sometimes to make it _more reusable_, _more efficient_, and _overall cleaner_. Its easy to see by the words that **refactoring** is a process done to make something that already works, somewhat better - an incremental improvement. Unlike debugging, refactoring does not involve fixing bugs or errors, nor does it involve any changes to the desired outcome.
+
+Here is an obvious example of refactoring variables in JavaScript:
+
+```javascript
+const a = "Felix";
+const b = "Tellmann";
+
+function g(a, b) {
+  return `Welcome ${a} ${b}, what a wonderful day today.`;
+}
+```
+
+This code might be shorter, but making it shorter comes at the cost of understanding anything that's going on. Imagine you'd have to use the `g` function 100 lines further down?. And yes, its 2022, we have so many different compilers to make shorten (and gzip) before sending it to the browser, there is absolutely no need to skip on readability.
+
+Here's a simple refactored version of the snippet:
+
+```javascript
+const firstName = "Felix";
+const lastName = "Tellmann";
+
+function greeting(firstName, lastName) {
+  return `Welcome ${firstName} ${lastName}, what a wonderful day today.`;
+}
+```
+
+Lets have a look at what different levels of debugging / refactoring there are from the smallest to the largest option:
+
+## Levels of Debugging / Refactoring
