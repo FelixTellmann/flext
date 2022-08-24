@@ -32,9 +32,13 @@ module.exports = {
           "0%, 100%": { transform: "translate3d(0,0,0)" },
           "100%": { transform: "translate3d(-50%,0,0)" },
         },
+        blink: {
+          "50%": { opacity: "0" },
+        },
       },
       animation: {
         slide: "slide 30s linear infinite",
+        blink: "blink 0.75s step-start infinite",
       },
       fontFamily: {
         sans: ["Inter", /*"'Basier Circle'",*/ ...defaultTheme.fontFamily.sans],

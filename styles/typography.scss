@@ -50,6 +50,18 @@
   }
 
   /*= =============== HEADINGS ================ */
+
+  .heading-pre {
+    @apply mb-2 font-semibold text-accent xl:text-lg;
+  }
+
+  .heading-hero {
+    @apply mb-3 text-5xl font-extrabold lg:mb-4 lg:text-6xl xl:text-7xl text-gray-800 tracking-tighter dark:[--color-gray-800:var(--color-gray-50)];
+    & strong {
+      @apply bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-500 bg-clip-text text-transparent font-extrabold;
+    }
+  }
+
   .heading-3xl {
     @apply mb-3 text-3xl font-bold lg:mb-4 lg:text-5xl xl:text-6xl text-gray-800 tracking-tighter dark:[--color-gray-800:var(--color-gray-50)];
   }
@@ -78,9 +90,7 @@
     @apply mb-1 font-semibold text-gray-700 text-sm dark:[--color-gray-700:var(--color-gray-300)];
   }
 
-  .heading-pre {
-    @apply mb-2 font-semibold text-accent xl:text-lg;
-  }
+
 
   /*= =============== PARAGRAPH ================ */
   .paragraph-lg {

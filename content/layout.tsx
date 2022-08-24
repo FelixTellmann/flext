@@ -8,19 +8,28 @@ export const HEADER = {
   },
   nav: [
     {
-      href: "/work",
-      title: "Work",
+      href: "/",
+      title: "Home",
+      alt: "Take me back",
+      desktop: false,
+    },
+    {
+      href: "/portfolio",
+      title: "Portfolio",
       alt: "Work I've done.",
+      desktop: true,
     },
     {
       href: "/gallery",
       title: "Gallery",
       alt: "Images and stuff",
+      desktop: true,
     },
     {
       href: "/resume",
       title: "Resume",
       alt: "My professional resume",
+      desktop: true,
     },
   ],
   profileNav: [],
