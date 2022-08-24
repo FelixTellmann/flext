@@ -1,0 +1,11 @@
+{
+
+  "compilerOptions": {
+    "isolatedModules": false,
+    "target": "ESNext"
+  },
+  "include": [
+    "content/examples",
+    "content/examples",
+  ],
+}

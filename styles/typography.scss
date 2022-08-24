@@ -1,25 +1,54 @@
 @layer components {
 
-  .button-hero {
-    @apply relative border-2 border-gray-700/10 rounded-lg bg-white/90 px-4 py-2 text-sm text-gray-500 hfa:text-gray-900 hfa:border-gray-800/20;
-    background-clip: padding-box;
+  .burger-menu {
+    @apply relative h-[var(--nav-icon-size)] w-[var(--nav-icon-size)] block;
+    > div {
+      @apply absolute w-full bg-gray-500 top-[calc(50%-var(--nav-icon-border)/2)] h-[var(--nav-icon-border)];
+      transition: background-color 0.2s, top 0.2s, left 0.2s, transform 0.2s 0.15s;
 
-    &:hover, &:focus, &:active {
-        &:before, &:after {
-          @apply opacity-80;
+      @apply before:absolute b:left-0 b:bottom-[calc(var(--nav-icon-size)/3)] b:h-[var(--nav-icon-border)] b:w-[66%] b:bg-gray-500;
+
+      &:before {
+        transition: bottom 0.2s 0.2s, left 0.1s, transform 0.2s, background-color 0.4s 0.2s;
+      }
+
+      @apply after:absolute a:right-0 a:top-[calc(var(--nav-icon-size)/3)] a:h-[var(--nav-icon-border)] a:w-[66%] a:bg-gray-500;
+
+      &:after {
+        transition: top 0.2s 0.2s, right 0.1s, transform 0.2s, background-color 0.4s 0.2s;
+      }
+    }
+
+    &.active {
+      > div {
+        @apply bg-transparent;
+
+        @apply b:bottom-0 b:left-[calc(var(--nav-icon-size)/6)] b:-rotate-45 b:bg-sky-500;
+        &:before {
+          transition: background-color 0.2s, bottom 0.2s, left 0.2s, transform 0.2s 0.15s
         }
-    }
-    &:before {
-      @apply absolute bottom-1 top-4 left-3 right-3 -z-10 blur-lg opacity-40 transition-all;
-      content: "";
-      background: linear-gradient(120deg,#ec6192,#ec4c34,#ffbd2b,#ebde56,#57c754,#53a1eb);
-    }
-    &:after {
-      @apply absolute bottom-1 top-4 left-3 right-3 -z-10 blur-lg opacity-40 transition-all;
-      content: "";
-      background: linear-gradient(70deg,#ec6192,#ec4c34,#ffbd2b,#ebde56,#57c754,#53a1eb);
+
+        @apply a:top-0 a:right-[calc(var(--nav-icon-size)/6)] a:rotate-45 a:bg-sky-500;
+        &:after {
+          transition: background-color 0.2s, top 0.2s, right 0.2s, transform 0.2s 0.15s;
+        }
+
+      }
     }
   }
+
+  .button-border {
+    @apply border-2 border-gray-600/50 rounded-md hfa:border-gray-400/30
+  }
+
+  .button-rainbow {
+    @apply button-border;
+    @apply relative bg-white/90 bg-clip-padding hfa:text-gray-900;
+    @apply before:absolute b:-inset-x-0.5 b:top-1 b:-bottom-0.5 b:-z-10 b:blur-md b:opacity-60 b:transition-all b:bg-clip-padding;
+    @apply b:bg-[linear-gradient(120deg,#ec6192,#ec4c34,#ffbd2b,#ebde56,#57c754,#53a1eb)];
+    @apply hfa:b:opacity-100 hfa:b:-inset-x-1 hfa:b:top-1 hfa:b:-bottom-0.5;
+  }
+
   /*= =============== HEADINGS ================ */
   .heading-3xl {
     @apply mb-3 text-3xl font-bold lg:mb-4 lg:text-5xl xl:text-6xl text-gray-800 tracking-tighter dark:[--color-gray-800:var(--color-gray-50)];
@@ -114,7 +143,7 @@
 @layer utilities {
   .scrollbar-none {
     scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none;  /* IE 10+ */
+    -ms-overflow-style: none; /* IE 10+ */
   }
 
   .scrollbar-none::-webkit-scrollbar {

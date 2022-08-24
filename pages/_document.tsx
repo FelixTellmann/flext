@@ -12,7 +12,7 @@ class Root extends Document {
           <Favicon />
           <Font />
         </Head>
-        <body className="color-gray--slate">
+        <body className="color-gray--slate [--line-color:theme(colors.gray.200/0.8)]">
           <Main />
           <NextScript />
         </body>
