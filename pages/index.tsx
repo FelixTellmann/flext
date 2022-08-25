@@ -1,5 +1,7 @@
 import { Link } from "_client/link";
+import { HeroIcon } from "components/dynamic-hero-icon";
 import { ReactIcon } from "components/dynamic-react-icon";
+import { useToast } from "components/toast";
 import { Code } from "components/typography/code";
 import { CODE } from "content/code";
 import { FC, useCallback, useEffect, useRef } from "react";
@@ -11,7 +13,18 @@ party.settings.respectReducedMotion = false;
 
 export const Index: FC<IndexProps> = (props) => {
   const codeContentRef = useRef<HTMLElement>();
+
   const [state, copyToClipboard] = useCopyToClipboard();
+  const { toasts, addToast } = useToast();
+
+  const handleCopyCode = useCallback(() => {
+    copyToClipboard(codeContentRef.current?.textContent);
+    addToast({
+      id: "copy-code",
+      message: "Code Copied to Clipboard",
+      timestamp: Date.now(),
+    });
+  }, [addToast, copyToClipboard]);
 
   return (
     <>
@@ -108,6 +121,13 @@ export const Index: FC<IndexProps> = (props) => {
                 >
                   <i className="flex gap-1.5">
                     <button
+                      onClick={() => {
+                        addToast({
+                          id: "copy-code2",
+                          message: "Code Copied to Clipboard2",
+                          timestamp: Date.now(),
+                        });
+                      }}
                       tabIndex={-1}
                       aria-hidden
                       className="h-3 w-3 rounded-full bg-gray-700 transition-colors h:bg-[#EC6A5F]"
@@ -129,12 +149,15 @@ export const Index: FC<IndexProps> = (props) => {
                   <div className="flex justify-end">
                     <button
                       className="text-gray-500 transition-colors hf:text-white"
-                      onClick={() => copyToClipboard(codeContentRef.current?.textContent)}
+                      onClick={handleCopyCode}
                       type="button"
                     >
-                      {state.value !== codeContentRef.current?.textContent
-                        ? <ReactIcon name="FiCopy" />
-                        : "done"}
+                      {toasts.some((notification) => notification.id === "copy-code")
+                        ? <HeroIcon
+                            name="ClipboardDocumentCheckIcon"
+                            className="h-5 w-5 text-sky-400"
+                          />
+                        : <HeroIcon name="ClipboardDocumentIcon" className="h-5 w-5" />}
                     </button>
                   </div>
                 </header>

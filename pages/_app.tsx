@@ -4,6 +4,7 @@ import { LoadInitialData } from "_client/_stores/_load-initial-data";
 
 import { Footer } from "components/layout/footer";
 import { Header } from "components/layout/header";
+import { Toast, useToast } from "components/toast";
 
 import { AppProps } from "next/app";
 import { useRouter } from "next/router";
@@ -39,6 +40,7 @@ const App = ({ pageProps, Component }: AppProps) => {
         <Component {...pageProps} />
       </main>
       <Footer />
+      <Toast />
     </Loaders>
   );
 };
