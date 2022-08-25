@@ -29,8 +29,22 @@ module.exports = {
       },
       keyframes: {
         slide: {
-          "0%, 100%": { transform: "translate3d(0,0,0)" },
+          "0%, 100%": {
+            transform: "translate3d(0,0,0)",
+          },
           "100%": { transform: "translate3d(-50%,0,0)" },
+        },
+        float: {
+          "0%, 100%": {
+            boxShadow:
+              "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(2, 132, 199, 0.2) 0px 25px 50px -12px",
+            transform: "translate(0,0)",
+          },
+          "50%": {
+            boxShadow:
+              "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(2, 132, 199, 0.2) 0px 10px 25px -3px, rgba(2, 132, 199, 0.2) 0px 4px 6px -4px",
+            transform: "translate(4px,20px)",
+          },
         },
         blink: {
           "50%": { opacity: "0" },
@@ -38,6 +52,7 @@ module.exports = {
       },
       animation: {
         slide: "slide 30s linear infinite",
+        float: "float 6s ease-in-out infinite",
         blink: "blink 0.75s step-start infinite",
       },
       fontFamily: {

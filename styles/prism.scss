@@ -26,6 +26,9 @@
     @apply text-lime-400;
   }
 
+  .token.constant {
+    @apply font-medium text-orange-400
+  }
   .token.script {
     @apply text-white font-normal;
     color: #FD971F;

@@ -58,6 +58,7 @@
     "relative-indexing-method-polyfill": "^1.0.1",
     "short-uuid": "^4.2.0",
     "superjson": "^1.9.1",
+    "twitter-api-sdk": "^1.1.0",
     "validator": "^13.7.0",
     "zod": "^3.18.0",
     "zustand": "^4.1.1"
