@@ -117,7 +117,7 @@ export const Typewriter: FC<TypewriterProps> = ({
             ref={(ref) => (contentRef.current[index] = ref)}
             key={index}
             aria-hidden
-            className="hidden after:animate-blink after:content-['|'] a:pl-2"
+            className="hidden after:animate-blink after:content-['|']"
           >
             {item}
           </span>

@@ -95,6 +95,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
         "button-border pointer-events-none absolute top-1/2 -z-10 -translate-y-1/2 select-none",
         className
       )}
+      style={{ opacity: "0" }}
     />
   );
 };

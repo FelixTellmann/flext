@@ -14,7 +14,7 @@ module.exports = {
   },
   overrides: [
     {
-      files: ["content/examples/*.tsx"],
+      files: ["content/code/*.tsx"],
       rules: {
         isolatedModules: 0,
       },

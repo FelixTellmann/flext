@@ -1,4 +1,5 @@
 @import "typography.scss";
+@import "prism.scss";
 
 @tailwind base;
 @tailwind components;

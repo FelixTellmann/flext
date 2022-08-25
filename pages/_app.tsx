@@ -1,14 +1,12 @@
 import { trpc } from "_client/_app/trpc";
 import { ContextProviders } from "_client/_stores/_context-providers";
 import { LoadInitialData } from "_client/_stores/_load-initial-data";
-import { Link } from "_client/link";
 
 import { Footer } from "components/layout/footer";
 import { Header } from "components/layout/header";
 
 import { AppProps } from "next/app";
 import { useRouter } from "next/router";
-import FlextLogo from "public/logo.svg";
 import { FC, PropsWithChildren, useEffect, useState } from "react";
 import "styles/tailwind.css";
 
@@ -33,7 +31,6 @@ const App = ({ pageProps, Component }: AppProps) => {
   if (loading) {
     return <></>;
   }
-  console.log(pageProps);
 
   return (
     <Loaders>
