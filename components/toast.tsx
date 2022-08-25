@@ -49,7 +49,7 @@ export const useToast = create<ToastStore>((set) => ({
           };
         });
       },
-      2000
+      2500
     );
   },
   removeToast: (id) => {
@@ -62,10 +62,8 @@ export const useToast = create<ToastStore>((set) => ({
 }));
 
 export const Toast: FC = ({}) => {
-  const [show, setShow] = useState(true);
   const { toasts, removeToast } = useToast();
 
-  console.log(toasts);
   return (
     <>
       <div
@@ -77,41 +75,41 @@ export const Toast: FC = ({}) => {
             const toast = toasts[index];
             return (
               <Transition
-                key={toasts[index]?.id ?? index}
-                show={!!toasts[index]?.id}
+                key={index}
+                show={!!toasts[index]}
                 as={Fragment}
-                enter="transform ease-out duration-300 transition"
-                enterFrom="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
-                enterTo="translate-y-0 opacity-100 sm:translate-x-0"
+                enter="transform ease-out duration-400 transition"
+                enterFrom="translate-y-2 opacity-0 "
+                enterTo="translate-y-0 opacity-100"
                 leave="transition ease-in duration-100"
                 leaveFrom="opacity-100"
                 leaveTo="opacity-0"
               >
-                <div className="pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5">
-                  <div className="p-4">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0">
-                        <HeroIcon
-                          name="CheckCircleIcon"
-                          className="h-6 w-6 text-green-400"
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <div className="ml-3 w-0 flex-1 pt-0.5">
-                        <p className="text-sm font-medium text-gray-900">{toast?.message}</p>
-                      </div>
-                      <div className="ml-4 flex flex-shrink-0">
-                        <button
-                          className="inline-flex rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                          onClick={() => removeToast(toast?.id)}
-                        >
-                          <span className="sr-only">Close</span>
-                          <HeroIcon name="XMarkIcon" className="h-5 w-5" aria-hidden="true" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <figure className="button-border pointer-events-auto flex w-full max-w-sm overflow-hidden rounded-lg border-gray-400/30 bg-white p-4 shadow-xl shadow-gray-500/10">
+                  {toast?.error
+                    ? <HeroIcon
+                        name="ExclamationCircleIcon"
+                        className="h-6 w-6 text-red-400"
+                        aria-hidden="true"
+                      />
+                    : <HeroIcon
+                        name="CheckCircleIcon"
+                        className="h-6 w-6 text-green-400"
+                        aria-hidden="true"
+                      />}
+
+                  <p className="ml-3 w-0 flex-1 pt-0.5 text-sm font-medium text-gray-900">
+                    {toast?.message}
+                  </p>
+
+                  <button
+                    className=" ml-4 flex inline-flex flex-shrink-0 rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    onClick={() => removeToast(toast?.id)}
+                  >
+                    <span className="sr-only">Close</span>
+                    <HeroIcon name="XMarkIcon" className="h-5 w-5" aria-hidden="true" />
+                  </button>
+                </figure>
               </Transition>
             );
           })}
