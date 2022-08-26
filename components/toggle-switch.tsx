@@ -36,7 +36,7 @@ export const ToggleSwitch: FC<ToggleSwitchProps> = ({
           )}
           style={{
             transform: enabled
-              ? `translateX(calc(${switchRef.current.clientWidth}px - 100% - 4px))`
+              ? `translateX(calc(${switchRef.current?.clientWidth}px - 100% - 4px))`
               : "translateX(0px)",
           }}
         >

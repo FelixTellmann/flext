@@ -1,4 +1,5 @@
 import { Link } from "_client/link";
+import { Badge } from "components/badge";
 import { CodeEditor } from "components/code-editor";
 import { HeroIcon } from "components/dynamic-hero-icon";
 import { ReactIcon } from "components/dynamic-react-icon";
@@ -11,7 +12,6 @@ import party from "party-js";
 import { FC } from "react";
 import { Client } from "twitter-api-sdk";
 import { findUserByUsername, TwitterResponse } from "twitter-api-sdk/dist/types";
-
 type IndexProps = {
   twitterData: TwitterResponse<findUserByUsername>["data"];
 };
@@ -109,22 +109,29 @@ export const Index: FC<IndexProps> = (props) => {
             </footer>
           </section>
           <section className="relative h-[460px]">
-            <div className="absolute left-4 top-16 flex h-full min-w-[460px] sm:left-8 sm:min-w-[660px] lg:left-6 lg:top-24 lg:min-w-[460px]">
+            <div className="absolute left-4 top-16 flex h-full min-w-[460px] flex-col gap-4 sm:left-8 sm:min-w-[660px] lg:left-6 lg:top-24 lg:min-w-[460px]">
               <CodeEditor code={CODE.hero} language="tsx" />
+              <div className="relative z-20  flex justify-end gap-1.5">
+                <Badge style="info">Hiker</Badge>
+                <Badge style="success">Chef</Badge>
+                <Badge style="warning">Runner</Badge>
+                <Badge style="accent">Mixologist</Badge>
+                <Badge style="plain">IT Guy</Badge>
+              </div>
             </div>
             <div className="absolute top-10 right-2 flex items-end gap-2">
-              <div className="inline-flex cursor-pointer select-none items-center whitespace-nowrap rounded-md bg-cyan-100 px-3 py-1 text-[13px] font-medium text-cyan-900 transition-all hfa:bg-cyan-200/90">
-                Hiker
-              </div>
-              <div className="inline-flex cursor-pointer select-none items-center whitespace-nowrap rounded-md bg-green-100 px-3 py-1 text-[13px] font-medium text-green-900 transition-all hfa:bg-green-200/90">
-                Chef
-              </div>
-              <div className="inline-flex cursor-pointer select-none items-center whitespace-nowrap rounded-md bg-orange-100 px-3 py-1 text-[13px] font-medium text-orange-900 transition-all hfa:bg-orange-200/90">
-                Trail Running
-              </div>
-              <div className="inline-flex cursor-pointer select-none items-center whitespace-nowrap rounded-md bg-pink-100 px-3 py-1 text-[13px] font-medium text-pink-900 transition-all hfa:bg-pink-200/90">
-                Mixologist
-              </div>
+              <Link
+                target="_blank"
+                href="https://www.buymeacoffee.com/felixtellmann"
+                className="group flex items-center justify-center rounded-full border-2 border-gray-400/50 bg-gray-100 bg-clip-padding py-1.5 px-3 text-sm font-medium text-gray-600 transition-all hfa:border-rose-500/30 hfa:bg-rose-500 hfa:text-white"
+              >
+                <HeroIcon
+                  name="HeartIcon"
+                  style="mini"
+                  className="mr-1 h-4 w-4 text-red-600 transition-all group-hfa:text-white"
+                />
+                Support
+              </Link>
               <ToggleSwitch
                 enabled={theme === "dark"}
                 setEnabled={(bool) => setTheme(bool ? "dark" : "light")}

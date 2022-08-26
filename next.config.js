@@ -8,7 +8,7 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 
 module.exports = withBundleAnalyzer({
   swcMinify: true,
-  reactStrictMode: true,
+  reactStrictMode: false,
   productionBrowserSourceMaps: true,
   images: {
     dangerouslyAllowSVG: true,

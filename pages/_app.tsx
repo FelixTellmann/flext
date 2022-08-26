@@ -10,6 +10,7 @@ import { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { FC, PropsWithChildren, useEffect, useState } from "react";
 import "styles/tailwind.css";
+import ReactTooltip from "react-tooltip";
 
 const Loaders: FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -40,7 +41,6 @@ const App = ({ pageProps, Component }: AppProps) => {
         <Component {...pageProps} />
       </main>
       <Footer />
-      <Toast />
     </Loaders>
   );
 };
