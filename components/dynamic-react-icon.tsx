@@ -15,7 +15,7 @@ export const ReactIcon: FC<ReactIconProps> = ({ name, ...props }) => {
         SiTailwindcss: import("@react-icons/all-files/si/SiTailwindcss"),
         SiReact: import("@react-icons/all-files/si/SiReact"),
         SiShopify: import("@react-icons/all-files/si/SiShopify"),
-        SiNodedotjs: import("@react-icons/all-files/si/SiNodedotjs"),
+        SiNodedotjs: import("@react-icons/all-files/si/SiNodeDotJs"),
         FiCopy: import("@react-icons/all-files/fi/FiCopy"),
         FaFacebook: import("@react-icons/all-files/fa/FaFacebook"),
         FaGoogle: import("@react-icons/all-files/fa/FaGoogle"),
