@@ -5,7 +5,6 @@
     "target": "ESNext"
   },
   "include": [
-    "content/examples",
-    "content/examples",
+    "content/code-blocks",
   ],
 }

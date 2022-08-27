@@ -40,7 +40,6 @@
   ],
   "exclude": [
     "node_modules",
-    "content/examples/**/*",
-    "content/examples/**/*",
+    "content/code-blocks/**/*",
   ]
 }
