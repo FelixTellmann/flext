@@ -24,8 +24,9 @@ export const DesktopNav: FC = () => {
                 <Link
                   href={link.href}
                   className={clsx(
-                    "relative z-10 flex rounded-md border-2 border-transparent py-1.5 px-4 text-gray-500 transition-all hfa:text-gray-900",
-                    isActive && "border-gray-700/5 bg-gray-50 group-hfa:bg-gray-200/10 "
+                    "relative z-10 flex rounded-md border-2 border-transparent py-1.5 px-4 text-gray-500 transition-all hfa:text-gray-900 d:text-gray-400 d:hfa:text-gray-50",
+                    isActive &&
+                      "border-gray-700/5 bg-gray-50 d:border-gray-50/10 d:bg-gray-800 group-hfa:bg-gray-200/10"
                   )}
                 >
                   <span className="text-sm font-medium ">{link.title}</span>

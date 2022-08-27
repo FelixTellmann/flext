@@ -92,7 +92,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
     <div
       ref={navHoverEffect}
       className={clsx(
-        "button-border pointer-events-none absolute top-1/2 -z-10 -translate-y-1/2 select-none",
+        "button-border pointer-events-none absolute top-1/2 -z-10 -translate-y-1/2 select-none d:border-gray-300/50",
         className
       )}
       style={{ opacity: "0" }}

@@ -10,7 +10,7 @@ export const CodeEditor = ({
   language: CodeGroupProps["language"];
 }) => {
   return (
-    <figure className="h-full w-full flex-col overflow-hidden rounded-md border-2 border-gray-200/40 bg-gray-900 p-2.5 shadow-2xl drop-shadow-lg">
+    <figure className="relative w-full flex-col overflow-hidden rounded-md border-2 border-gray-200/40 bg-gray-900 p-2.5 shadow-2xl drop-shadow-lg d:border-gray-600/40">
       <header
         className="mb-2 grid items-center border-b border-b-gray-800 pb-2"
         style={{ gridTemplateColumns: "50px 1fr 50px" }}

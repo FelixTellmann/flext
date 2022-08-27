@@ -6,6 +6,7 @@ import { ReactIcon } from "components/dynamic-react-icon";
 import ToggleSwitch from "components/toggle-switch";
 import { TwitterProfile } from "components/twitter-profile";
 import { CODE } from "content/code";
+import { HERO } from "content/sections.hero";
 import { GetStaticProps } from "next";
 import { useTheme } from "next-themes";
 import party from "party-js";
@@ -25,13 +26,11 @@ export const Index: FC<IndexProps> = (props) => {
   return (
     <>
       <section className="hero relative min-h-screen overflow-hidden">
-        <div className="mx-auto max-w-6xl grid-cols-3 gap-8 px-4 py-16 md:py-32 md:px-8 lg:grid">
+        <div className="mx-auto flex max-w-6xl grid-cols-3 flex-col gap-8 gap-y-16 px-4 py-16 md:py-32 md:px-8 lg:grid">
           <section className="col-span-2">
             <header>
-              <div className="heading-pre">Welcome to my site.</div>
-              <h1 className="heading-hero ">
-                I'm <strong>Felix Tellmann</strong>, a Fullstack developer.
-              </h1>
+              <div className="heading-pre">{HERO.pre}</div>
+              <h1 className="heading-hero ">{HERO.heading}</h1>
               {/* <h2 className="heading-hero ">
                 <Typewriter
                   loop={false}
@@ -45,106 +44,83 @@ export const Index: FC<IndexProps> = (props) => {
                 />
               </h2>*/}
               <ul className="scrollbar-none -mx-4 mb-4 flex items-center gap-6 overflow-x-auto px-4 text-[15px] font-medium">
-                <li className="flex items-center gap-2 text-gray-500">
-                  <ReactIcon name="SiReact" className="h-7 w-7 text-gray-400" />
-                  React.js
-                </li>
-                <li className="flex items-center gap-2 text-gray-500">
-                  <ReactIcon name="SiNodedotjs" className="h-7 w-7  text-gray-400" />
-                  Node.js
-                </li>
-                <li className="flex items-center gap-2 text-gray-500">
-                  <ReactIcon name="SiTailwindcss" className="h-7 w-7  text-gray-400" />
-                  Tailwind
-                </li>
-                <li className="flex items-center gap-2 text-gray-500">
-                  <ReactIcon name="SiShopify" className="h-7 w-7  text-gray-400" />
-                  Shopify
-                </li>
+                {HERO.tech.map(({ name, icon }) => (
+                  <li className="flex items-center gap-2 text-gray-500 d:text-gray-400" key={name}>
+                    <ReactIcon name={icon} className="h-7 w-7 text-gray-400 d:text-gray-300/80" />
+                    {name}
+                  </li>
+                ))}
               </ul>
             </header>
             <main>
-              <p className="mb-3 max-w-prose font-normal text-gray-500 md:text-lg md:tracking-tight">
-                I love writing code that takes things next level creating highly performant
-                websites, automated API integrations, building my own dev-tools, and creating
-                stunning user-experiences that makes you feel{" "}
-                <em
-                  className="cursor-pointer"
-                  onClick={(e) => {
-                    party.confetti(e.currentTarget, { count: 40 });
-                  }}
-                >
-                  WOW!
-                </em>
-                .
+              <p className="mb-3 max-w-prose font-normal text-gray-500 d:text-gray-400 md:text-lg md:tracking-tight">
+                {HERO.body}
               </p>
 
-              <p className="mb-3 max-w-xl font-normal text-gray-500 md:text-lg md:tracking-tight">
-                I am always keen to learn and explore new technologies, frameworks and programming
-                languages. Currently, I'm learning{" "}
-                <Link
-                  target="_blank"
-                  href="https://astro.build/"
-                  className="underline hfa:text-sky-500"
-                >
-                  Astro
-                </Link>
-                .
-              </p>
+              <p className="mb-3 max-w-xl font-normal text-gray-500 md:text-lg md:tracking-tight"></p>
             </main>
             <footer className="mt-6 flex flex-wrap gap-4 md:gap-8">
-              <Link
-                href="/contact"
-                className="button-rainbow inline-flex whitespace-nowrap bg-gray-800 px-10 py-2.5 text-sm font-medium tracking-tight text-gray-50 hfa:border-gray-300/90 hfa:bg-gray-900 hfa:text-white md:px-12"
-              >
-                Lets work
-              </Link>
+              {HERO.cta1
+                ? <Link
+                    href={HERO.cta1.href}
+                    className="button-rainbow inline-flex whitespace-nowrap bg-gray-800 px-10 py-2.5 text-sm font-medium tracking-tight text-gray-50 hfa:border-gray-300/90 hfa:bg-gray-900 hfa:text-white d:hfa:border-gray-700/30 md:px-12"
+                  >
+                    {HERO.cta1.name}
+                  </Link>
+                : null}
 
-              <Link
-                href="/resume"
-                className="button-border inline-flex whitespace-nowrap bg-white/90 px-10 py-2.5 text-sm font-medium tracking-tight text-gray-500 hfa:border-gray-900/70 hfa:bg-white/90 hfa:text-gray-900 md:px-12"
-              >
-                See Resume
-              </Link>
+              {HERO.cta2
+                ? <Link
+                    href={HERO.cta2.href}
+                    className="button-border inline-flex whitespace-nowrap bg-white/90 px-10 py-2.5 text-sm font-medium tracking-tight text-gray-500 transition-all hfa:border-gray-900/70 hfa:bg-white/90 hfa:text-gray-900 d:border-gray-700/80 d:bg-transparent d:text-gray-300 d:hfa:border-gray-200/30 d:hfa:bg-gray-900/80 d:hfa:text-gray-50 md:px-12"
+                  >
+                    {HERO.cta2.name}
+                  </Link>
+                : null}
             </footer>
           </section>
-          <section className="relative h-[460px]">
-            <div className="absolute left-4 top-16 flex h-full min-w-[460px] flex-col gap-4 sm:left-8 sm:min-w-[660px] lg:left-6 lg:top-24 lg:min-w-[460px]">
-              <CodeEditor code={CODE.hero} language="tsx" />
-              <div className="relative z-20  flex justify-end gap-1.5">
+          <section className="relative md:h-[420px]">
+            <div className="relative flex h-full min-w-[460px] flex-col gap-4 sm:min-w-[660px] lg:absolute lg:left-8 lg:top-16 lg:left-6 lg:top-24 lg:min-w-[460px]">
+              <div className="relative z-20 flex justify-end gap-1.5">
                 <Badge style="info">Hiker</Badge>
                 <Badge style="success">Chef</Badge>
                 <Badge style="warning">Runner</Badge>
                 <Badge style="accent">Mixologist</Badge>
                 <Badge style="plain">IT Guy</Badge>
               </div>
-            </div>
-            <div className="absolute top-10 right-2 flex items-end gap-2">
-              <Link
-                target="_blank"
-                href="https://www.buymeacoffee.com/felixtellmann"
-                className="group flex items-center justify-center rounded-full border-2 border-gray-400/50 bg-gray-100 bg-clip-padding py-1.5 px-3 text-sm font-medium text-gray-600 transition-all hfa:border-rose-500/30 hfa:bg-rose-500 hfa:text-white"
-              >
-                <HeroIcon
-                  name="HeartIcon"
-                  style="mini"
-                  className="mr-1 h-4 w-4 text-red-600 transition-all group-hfa:text-white"
+              <div className="relative flex h-full flex-col">
+                <CodeEditor code={CODE.hero} language="tsx" />
+                <div className="absolute -right-5 -bottom-5 -z-10 h-[calc(100%+1.25rem)] w-[calc(100%+1.25rem)] rounded-lg border border-gray-400/20 bg-gray-100/70 [mask-image:linear-gradient(-30deg,#fff_16.35%,rgb(255_255_255_/_0%)_61.66%)] d:border-gray-700/20 d:bg-gray-900/40"></div>
+              </div>
+              <div className="z-10 mt-1 flex gap-2 lg:-mt-2 lg:ml-16">
+                <Link
+                  target="_blank"
+                  href="https://www.buymeacoffee.com/felixtellmann"
+                  className="group flex items-center justify-center rounded-full border-2 border-gray-400/50 bg-gray-100 bg-clip-padding py-1.5 px-3 text-sm font-medium text-gray-600 transition-all hfa:border-rose-500/30 hfa:bg-rose-500 hfa:text-white d:bg-gray-700 d:text-gray-50 d:hfa:bg-rose-500"
+                >
+                  <HeroIcon
+                    name="HeartIcon"
+                    style="mini"
+                    className="mr-1 h-4 w-4 text-red-600 transition-all group-hfa:text-white"
+                  />
+                  Support
+                </Link>
+                <ToggleSwitch
+                  enabled={theme === "dark"}
+                  setEnabled={(bool) => setTheme(bool ? "dark" : "light")}
+                  enabledIcon={<HeroIcon name="MoonIcon" className="h-3 w-3 text-slate-400" />}
+                  disabledIcon={<HeroIcon name="SunIcon" className="h-4 w-4 text-orange-400" />}
                 />
-                Support
-              </Link>
-              <ToggleSwitch
-                enabled={theme === "dark"}
-                setEnabled={(bool) => setTheme(bool ? "dark" : "light")}
-                enabledIcon={<HeroIcon name="MoonIcon" className="h-3 w-3 text-slate-400" />}
-                disabledIcon={<HeroIcon name="SunIcon" className="h-4 w-4 text-orange-400" />}
-              />
+              </div>
             </div>
-            <div className="absolute top-full -left-64 z-20">
+            <div className="absolute hidden sm:top-24 sm:-right-5 sm:block lg:top-full lg:-left-64">
               <TwitterProfile {...props.twitterData} />
             </div>
           </section>
         </div>
-        <div className="background pointer-events-none absolute inset-0 z-0 select-none"></div>
+        <div className="background pointer-events-none absolute inset-0 z-0 select-none">
+          <div className="relative top-1/2 left-1/2 h-2/3 w-1/2 -translate-y-[30%] rounded-full bg-gradient-radial from-emerald-600/10 to-sky-600/5 blur-2xl"></div>
+        </div>
       </section>
     </>
   );

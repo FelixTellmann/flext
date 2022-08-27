@@ -138,6 +138,11 @@ module.exports = {
         tick: "url('/icons/tick.svg')",
         gradient1: `radial-gradient(at 100% 100%, rgba(7, 0, 31, 0.07), rgba(88, 5, 171, 0.01), rgba(0, 0, 0, 0)), linear-gradient(to right bottom, rgb(239, 254, 250), rgb(248, 250, 255), rgb(254, 238, 248), rgb(231, 249, 251))`,
         "gradient-stats": `radial-gradient(ellipse 75% 650px at 35% calc(100% + 100px), rgb(var(--color-accent)) 20%, rgb(var(--color-accent) / 10%), rgb(var(--color-bg) / 0))`,
+        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+        "gradient-radial-to-tr": "radial-gradient(115% 90% at 0% 100%, var(--tw-gradient-stops))",
+        "gradient-radial-to-tl": "radial-gradient(115% 90% at 100% 100%, var(--tw-gradient-stops))",
+        "gradient-radial-to-br": "radial-gradient(90% 115% at 0% 0%, var(--tw-gradient-stops))",
+        "gradient-radial-to-bl": "radial-gradient(90% 115% at 100% 0%, var(--tw-gradient-stops))",
       }),
       typography: ({ theme }) => ({
         dark: {
@@ -176,6 +181,7 @@ module.exports = {
     require("@tailwindcss/aspect-ratio"),
     require("@tailwindcss/line-clamp"),
     require("tailwind-children"),
+    require("tailwind-gradient-mask-image"),
     plugin(({ addVariant, addUtilities, addComponents }) => {
       addVariant("hfa", ["&:hover", "&:focus", "&:active"]);
       addVariant("hfva", ["&:hover", "&:focus", "&:focus-visible", "&:active"]);
