@@ -1,4 +1,3 @@
-import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
 import { Link } from "_client/link";
 import { Badge } from "components/badge";
 import { CodeEditor } from "components/code-editor";
@@ -51,7 +50,7 @@ export const Index: FC<IndexProps> = (props) => {
                   React.js
                 </li>
                 <li className="flex items-center gap-2 text-gray-500">
-                  <ReactIcon name="SiNodeDotJs" className="h-7 w-7  text-gray-400" />
+                  <ReactIcon name="SiNodedotjs" className="h-7 w-7  text-gray-400" />
                   Node.js
                 </li>
                 <li className="flex items-center gap-2 text-gray-500">
