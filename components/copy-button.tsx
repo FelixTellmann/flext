@@ -23,6 +23,7 @@ export const CopyButton = ({ content, className }: { className: string; content:
       onClick={handleCopyCode}
       type="button"
     >
+      <span className="sr-only">Copy code</span>
       {toasts.some((notification) => notification.id === "copy-code")
         ? <HeroIcon name="ClipboardDocumentCheckIcon" className="h-5 w-5 text-sky-400" />
         : <HeroIcon name="ClipboardDocumentIcon" className="h-5 w-5" />}
