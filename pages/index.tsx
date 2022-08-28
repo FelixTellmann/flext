@@ -13,6 +13,7 @@ import party from "party-js";
 import { FC } from "react";
 import { Client } from "twitter-api-sdk";
 import { findUserByUsername, TwitterResponse } from "twitter-api-sdk/dist/types";
+
 type IndexProps = {
   twitterData: TwitterResponse<findUserByUsername>["data"];
 };
@@ -100,7 +101,7 @@ export const Index: FC<IndexProps> = (props) => {
                 >
                   <HeroIcon
                     name="HeartIcon"
-                    style="mini"
+                    style="solid"
                     className="mr-1 h-4 w-4 text-red-600 transition-all group-hfa:text-white"
                   />
                   Support

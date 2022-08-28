@@ -1,4 +1,4 @@
-import { motion, useMotionValue, useTransform } from "framer-motion";
+import { m as motion, useMotionValue, useTransform } from "framer-motion";
 import { useTheme } from "next-themes";
 import { FC } from "react";
 

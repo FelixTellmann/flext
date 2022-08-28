@@ -96,7 +96,9 @@
   --color-gray-900: 28 25 23;
 }
 
-
+.__react_component_tooltip.show {
+  opacity: 1 !important;
+}
 
 
 @layer base {

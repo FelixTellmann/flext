@@ -1,4 +1,4 @@
-import { useInView } from "framer-motion";
+import { useInView } from "framer-motion/dist/es/utils/use-in-view.mjs";
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { delay } from "utils/delay";
 import { getRandomInteger } from "utils/get-random-integer";

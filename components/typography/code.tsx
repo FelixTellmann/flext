@@ -1,5 +1,6 @@
 import clsx from "clsx";
-import Prism from "prismjs";
+import { highlightAll } from "prismjs";
+
 import { FC, Fragment, useCallback, useEffect } from "react";
 
 export type CodeGroupProps = {
@@ -49,7 +50,7 @@ export const Code: FC<CodeGroupProps> = ({ language, plugins, lineHighlight, cod
       await import("prismjs/plugins/line-highlight/prism-line-highlight.js");
     }
 
-    Prism.highlightAll();
+    highlightAll();
   }, [language, lineHighlight, plugins]);
 
   useEffect(() => {

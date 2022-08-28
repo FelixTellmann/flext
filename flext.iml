@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/pages" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/styles" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/utils" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/public" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.idea" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />

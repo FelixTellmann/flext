@@ -1,6 +1,6 @@
 import dynamic from "next/dynamic";
 import { ComponentType, FC } from "react";
-import * as Icons from "react-icons/all";
+import type * as Icons from "react-icons/all";
 
 export type ReactIconProps = Omit<JSX.IntrinsicElements["svg"], "name"> & {
   name: keyof typeof Icons;
@@ -29,8 +29,10 @@ export const ReactIcon: FC<ReactIconProps> = ({ name, ...props }) => {
         });
       }
       return null;
+    },
+    {
+      ssr: false,
     }
-    // @ts-ignore
   );
 
   return <Icon {...props} />;

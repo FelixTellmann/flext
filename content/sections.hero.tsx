@@ -39,8 +39,8 @@ export const HERO = {
       >
         WOW!
       </em>
-      .<div className="mt-4" />I am always keen to learn and explore new technologies, frameworks
-      and programming languages. Currently, I'm learning{" "}
+      .<span className="mt-4 block" />I am always keen to learn and explore new technologies,
+      frameworks and programming languages. Currently, I'm learning{" "}
       <Link target="_blank" href="https://astro.build/" className="underline hfa:text-sky-500">
         Astro
       </Link>

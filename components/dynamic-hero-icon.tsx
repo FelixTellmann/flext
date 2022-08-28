@@ -8,19 +8,81 @@ type HeroIconProps = {
 };
 export const HeroIcon: FC<HeroIconProps> = ({ name, className = "", style = "solid" }) => {
   /*= =============== TODO REMOVE WHEN FIXED ================ */
-  name = name.replace("ExclamationCircleIcon", "ExclaimationCircleIcon") as IconName;
-  name = name.replace("ExclamationTriangleIcon", "ExclaimationTriangleIcon") as IconName;
 
   const Icon:
     | React.ComponentClass<React.SVGProps<SVGSVGElement>>
-    | React.FunctionComponent<React.SVGProps<SVGSVGElement>> = {
-    solid: dynamic(() => import("@heroicons/react/24/solid").then((mod) => mod[name])),
-    outline: dynamic(() => import("@heroicons/react//24/outline").then((mod) => mod[name])),
-    mini: dynamic(() => import("@heroicons/react/20/solid").then((mod) => mod[name])),
-  }[style];
+    | React.FunctionComponent<React.SVGProps<SVGSVGElement>> = dynamic(
+    () => {
+      if (style === "solid") {
+        const asyncImport = {
+          InformationCircleIcon: import("@heroicons/react/24/solid/InformationCircleIcon"),
+          XMarkIcon: import("@heroicons/react/24/solid/XMarkIcon"),
+          XCircleIcon: import("@heroicons/react/24/solid/XCircleIcon"),
+          CheckCircleIcon: import("@heroicons/react/24/solid/CheckCircleIcon"),
+          ExclamationCircleIcon: import("@heroicons/react/24/solid/ExclamationCircleIcon"),
+          Bars2Icon: import("@heroicons/react/24/solid/Bars2Icon"),
+          Bars3BottomLeftIcon: import("@heroicons/react/24/solid/Bars3BottomLeftIcon"),
+          ClipboardDocumentCheckIcon: import(
+            "@heroicons/react/24/solid/ClipboardDocumentCheckIcon"
+          ),
+          ClipboardDocumentIcon: import("@heroicons/react/24/solid/ClipboardDocumentIcon"),
+          HeartIcon: import("@heroicons/react/24/solid/HeartIcon"),
+          MoonIcon: import("@heroicons/react/24/solid/MoonIcon"),
+          SunIcon: import("@heroicons/react/24/solid/SunIcon"),
+        }[name];
+
+        return asyncImport.then((mod) => mod);
+      }
+
+      if (style === "outline") {
+        const asyncImport = {
+          InformationCircleIcon: import("@heroicons/react/24/outline/InformationCircleIcon"),
+          XMarkIcon: import("@heroicons/react/24/outline/XMarkIcon"),
+          XCircleIcon: import("@heroicons/react/24/outline/XCircleIcon"),
+          CheckCircleIcon: import("@heroicons/react/24/outline/CheckCircleIcon"),
+          ExclamationCircleIcon: import("@heroicons/react/24/outline/ExclamationCircleIcon"),
+          Bars2Icon: import("@heroicons/react/24/outline/Bars2Icon"),
+          Bars3BottomLeftIcon: import("@heroicons/react/24/outline/Bars3BottomLeftIcon"),
+          ClipboardDocumentCheckIcon: import(
+            "@heroicons/react/24/outline/ClipboardDocumentCheckIcon"
+          ),
+          ClipboardDocumentIcon: import("@heroicons/react/24/outline/ClipboardDocumentIcon"),
+          HeartIcon: import("@heroicons/react/24/outline/HeartIcon"),
+          MoonIcon: import("@heroicons/react/24/outline/MoonIcon"),
+          SunIcon: import("@heroicons/react/24/outline/SunIcon"),
+        }[name];
+
+        return asyncImport.then((mod) => mod);
+      }
+
+      if (style === "mini") {
+        const asyncImport = {
+          InformationCircleIcon: import("@heroicons/react/20/solid/InformationCircleIcon"),
+          XMarkIcon: import("@heroicons/react/20/solid/XMarkIcon"),
+          XCircleIcon: import("@heroicons/react/20/solid/XCircleIcon"),
+          CheckCircleIcon: import("@heroicons/react/20/solid/CheckCircleIcon"),
+          ExclamationCircleIcon: import("@heroicons/react/20/solid/ExclamationCircleIcon"),
+          Bars2Icon: import("@heroicons/react/20/solid/Bars2Icon"),
+          Bars3BottomLeftIcon: import("@heroicons/react/20/solid/Bars3BottomLeftIcon"),
+          ClipboardDocumentCheckIcon: import(
+            "@heroicons/react/20/solid/ClipboardDocumentCheckIcon"
+          ),
+          ClipboardDocumentIcon: import("@heroicons/react/20/solid/ClipboardDocumentIcon"),
+          HeartIcon: import("@heroicons/react/20/solid/HeartIcon"),
+          MoonIcon: import("@heroicons/react/20/solid/MoonIcon"),
+          SunIcon: import("@heroicons/react/20/solid/SunIcon"),
+        }[name];
+        return asyncImport.then((mod) => mod);
+      }
+    },
+    {
+      ssr: false,
+    }
+  );
 
   return <Icon className={className} />;
 };
+
 export type IconName =
   | "AcademicCapIcon"
   | "AdjustmentsHorizontalIcon"

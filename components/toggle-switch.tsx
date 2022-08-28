@@ -1,6 +1,5 @@
 import { Switch } from "@headlessui/react";
 import clsx from "clsx";
-import { HeroIcon } from "components/dynamic-hero-icon";
 import { FC, useRef } from "react";
 
 type ToggleSwitchProps = {

@@ -1,6 +1,4 @@
 import { Transition } from "@headlessui/react";
-import { CheckCircleIcon } from "@heroicons/react/outline";
-import { XIcon } from "@heroicons/react/solid";
 import { HeroIcon } from "components/dynamic-hero-icon";
 import produce from "immer";
 import { FC, Fragment, useState } from "react";

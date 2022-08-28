@@ -1,8 +1,7 @@
-import DarkmodeIcon from "_client/darkmode-icon";
 import { Link } from "_client/link";
 import clsx from "clsx";
+import DarkmodeIcon from "components/darkmode-icon";
 import { ReactIcon } from "components/dynamic-react-icon";
-import { SOCIAL } from "content/social";
 import { useTheme } from "next-themes";
 import { FC } from "react";
 
@@ -27,7 +26,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
         <DarkmodeIcon />
       </button>
       <Link
-        href={SOCIAL.github.href}
+        href="https://github.com/FelixTellmann"
         className={clsx(
           "rounded p-2 text-gray-500 transition-colors dark:text-white md:h:text-gray-900",
           showNav ? "h:text-gray-200" : "h:text-gray-900"

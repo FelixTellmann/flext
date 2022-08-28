@@ -22,7 +22,7 @@
     "skipLibCheck": true,
     "strict": false,
     "strictNullChecks": false,
-    "forceConsistentCasingInFileNames": true,
+    "forceConsistentCasingInFileNames": false,
     "noEmit": true,
     "incremental": true,
     "esModuleInterop": true,

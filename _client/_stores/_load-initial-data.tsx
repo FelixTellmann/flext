@@ -3,8 +3,14 @@ import { useNotifications } from "_client/_stores/notifications-store";
 import { useTooltipStore } from "_client/_stores/tooltip-store";
 
 import { Toast } from "components/toast";
+import dynamic from "next/dynamic";
 import { FC, PropsWithChildren, useEffect, useState } from "react";
-import ReactTooltip from "react-tooltip";
+// import ReactTooltip, { TooltipProps } from "react-tooltip";
+//
+
+const ReactTooltip = dynamic(() => import("react-tooltip").then((mod) => mod), {
+  ssr: false,
+});
 
 export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
   const [tooltip] = useTooltipStore();
@@ -35,10 +41,6 @@ export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    ReactTooltip.rebuild();
-  }, []);
-
-  useEffect(() => {
     setIsGloballyMounted(true);
   }, [setIsGloballyMounted]);
 
@@ -58,9 +60,9 @@ export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
             className="relative !border-none !border-transparent !p-0"
             getContent={(content) => {
               return (
-                <div className="pointer-events-auto h-[calc(100%+1px)] w-[calc(100%+1px)] select-none rounded-sm border-card bg-white py-2 px-5 text-slate-700 opacity-100 shadow-xl dark:text-gray-50">
+                <span className="pointer-events-auto block h-[calc(100%+1px)] w-[calc(100%+1px)] select-none rounded-sm border-card bg-white py-2 px-5 text-slate-700 opacity-100 shadow-xl">
                   {content}
-                </div>
+                </span>
               );
             }}
           />
