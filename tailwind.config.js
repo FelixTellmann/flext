@@ -35,6 +35,14 @@ module.exports = {
           },
           "100%": { transform: "translate3d(-50%,0,0)" },
         },
+        heartbeat: {
+          "0%, 100%": {
+            transform: "scale(100%)",
+          },
+          "50%": {
+            transform: "scale(110%)",
+          },
+        },
         float: {
           "0%, 100%": {
             boxShadow:
@@ -54,6 +62,7 @@ module.exports = {
       animation: {
         slide: "slide 30s linear infinite",
         float: "float 6s ease-in-out infinite",
+        heartbeat: "heartbeat 2s ease-in-out infinite",
         blink: "blink 0.75s step-start infinite",
       },
       fontFamily: {

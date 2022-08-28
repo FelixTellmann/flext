@@ -102,7 +102,7 @@ export const Index: FC<IndexProps> = (props) => {
                   <HeroIcon
                     name="HeartIcon"
                     style="solid"
-                    className="mr-1 h-4 w-4 text-red-600 transition-all group-hfa:text-white"
+                    className="mr-1 h-4 w-4 animate-heartbeat text-red-600 transition-all group-hfa:text-white"
                   />
                   Support
                 </Link>
