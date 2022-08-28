@@ -33,6 +33,7 @@ const MobileNavButton = ({
       className="relative z-50 p-1"
       style={{ "--nav-icon-size": size, "--nav-icon-border": border }}
     >
+      <span className="sr-only">Mobile Navigation</span>
       <i className={clsx("burger-menu", active && "active")}>
         <div></div>
       </i>
