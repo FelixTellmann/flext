@@ -18,7 +18,11 @@ export const CopyButton = ({ content, className }: { className: string; content:
   }, [addToast, content, copyToClipboard]);
 
   return (
-    <button className={clsx(className, "transition-colors")} onClick={handleCopyCode} type="button">
+    <button
+      className={clsx(className, "h-5 w-5 transition-colors")}
+      onClick={handleCopyCode}
+      type="button"
+    >
       {toasts.some((notification) => notification.id === "copy-code")
         ? <HeroIcon name="ClipboardDocumentCheckIcon" className="h-5 w-5 text-sky-400" />
         : <HeroIcon name="ClipboardDocumentIcon" className="h-5 w-5" />}

@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 import { highlightAll } from "prismjs";
 
 import { FC, Fragment, useCallback, useEffect } from "react";
