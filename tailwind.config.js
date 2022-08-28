@@ -15,6 +15,7 @@ module.exports = {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
+    "./content/**/*.{js,ts,jsx,tsx}",
     "./client/**/*.{js,ts,jsx,tsx}",
     "./_client/**/*.{js,ts,jsx,tsx}",
     "./update/**/*.{js,ts,jsx,tsx}",
