@@ -87,7 +87,7 @@ export const Index: FC<IndexProps> = (props) => {
                 <Badge style="success">Chef</Badge>
                 <Badge style="warning">Runner</Badge>
                 <Badge style="accent">Mixologist</Badge>
-                <Badge style="plain">IT Guy</Badge>
+                <Badge style="plain">Space Enthusiast</Badge>
               </div>
               <div className="relative flex h-full flex-col">
                 <CodeEditor code={CODE.hero} language="tsx" />
