@@ -50,6 +50,7 @@ export const PROJECTS = [
       TECH.prisma,
       TECH.planetscale,
       TECH.trpc,
+      TECH.jsdom,
     ],
     url: "https://apps.shopify.com/lunatag",
     repository: "",
@@ -102,73 +103,100 @@ export const PROJECTS = [
   {
     name: "Lunalemon",
     type: ["Website"],
+    tech: [
+      TECH.shopify,
+      TECH.typescript,
+      TECH.trpc,
+      TECH.tailwindcss,
+      TECH.nextjs,
+      TECH.vercel,
+      TECH.headlessui,
+      TECH.planetscale,
+    ],
   },
   {
     name: "Shopify-ftp-access",
     type: ["Devtool"],
+    tech: [TECH.typescript, TECH.swc, TECH.shopify],
   },
   {
     name: "Shopify-cms",
     type: ["Devtool"],
+    tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.tailwindcss],
   },
   {
     name: "fx-style",
     type: ["Devtool"],
+    tech: [TECH.prettier, TECH.eslint, TECH.typescript],
   },
   {
     name: "shopify-typed-node-api",
     type: ["Devtool"],
+    tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.nodejs],
   },
   {
     name: "Erply Takealot API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
   },
   {
     name: "Shopify Vend POS API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.graphql, TECH.shopify, TECH.vend],
   },
   {
     name: "Erply Egypt eInvoicing API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
   },
   {
     name: "Shopify Courier Guy API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
   },
   {
     name: "Shopify DEARsystems API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
   },
   {
     name: "Vend Takealot API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
   },
   {
     name: "Vend Shopify Omnisend API Integration",
     type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
   },
   {
     name: "Aiko",
     type: ["Ecommerce"],
+    tech: [TECH.figma, TECH.shopify, TECH.tailwindcss, TECH.typescript],
   },
   {
     name: "Zoom Printing",
     type: ["Ecommerce"],
+    tech: [TECH.shopify, TECH.typescript, TECH.tailwindcss],
   },
   {
     name: "AlphabetPIX",
     type: ["Ecommerce"],
+    tech: [TECH.shopify, TECH.javascript, TECH.sass],
   },
   {
     name: "BushScarf",
     type: ["Ecommerce"],
+    tech: [TECH.shopify, TECH.javascript, TECH.sass],
   },
   {
     name: "Broadway Jewellers",
     type: ["Ecommerce"],
+    tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
   },
   {
     name: "Waraq Health",
     type: ["Ecommerce"],
+    tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
   },
 ];
