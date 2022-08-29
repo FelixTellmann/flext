@@ -6,6 +6,8 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
   enabled: process.env.ANALYZE === "true",
 });
 
+const { env } = require("./_server/trpc/env");
+
 module.exports = withBundleAnalyzer({
   swcMinify: true,
   reactStrictMode: false,
@@ -82,5 +84,8 @@ module.exports = withBundleAnalyzer({
   env: {
     ...this.env,
     NEXT_PUBLIC_APP_VERSION: require("./package.json").version,
+  },
+  publicRuntimeConfig: {
+    NODE_ENV: env.NODE_ENV,
   },
 });

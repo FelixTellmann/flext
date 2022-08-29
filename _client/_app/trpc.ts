@@ -48,7 +48,7 @@ export const trpc = setupTRPC<TrpcRouter, SSRContext>({
     return {
       transformer: superjson,
       links: [
-        // adds pretty logs to your console in development and logs errors in production
+        // adds pretty logs to your consoley in development and logs errors in production
         /*loggerLink({
           enabled: (opts) =>
             process.env.NODE_ENV === "development" ||
@@ -57,12 +57,13 @@ export const trpc = setupTRPC<TrpcRouter, SSRContext>({
 
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
+          // maxURLLength: 2083, // a suitable size
         }),
       ],
       queryClientConfig: { defaultOptions: { queries: { staleTime: 60 } } },
     };
   },
-  // ssr: true,
+  ssr: true,
   responseMeta(opts) {
     const ctx = opts.ctx as SSRContext;
 

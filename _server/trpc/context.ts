@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import * as trpc from "@trpc/server";
 import * as trpcNext from "@trpc/server/adapters/next";
-import { DB } from "_server/trpc/prisma";
+import { prisma } from "_server/trpc/prisma";
 import { getSession } from "next-auth/react";
 
 type CreateTrpcContextOptions = {
@@ -19,7 +19,7 @@ export const createTrpcContextInner = async ({ req, res }: trpcNext.CreateNextCo
   return {
     req,
     res,
-    DB,
+    prisma,
     session,
   };
 };

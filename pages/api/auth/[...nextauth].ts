@@ -1,5 +1,5 @@
-import { DB } from "_server/trpc/prisma";
-import NextAuth from "next-auth";
+import { prisma } from "_server/trpc/prisma";
+import NextAuth, { Account, User } from "next-auth";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import TwitterProvider from "next-auth/providers/twitter";
@@ -12,10 +12,12 @@ import cuid from "cuid";
 import { isValidPassword } from "utils/validate-password";
 import validate from "validator";
 
+import { env } from "_server/trpc/env";
+
 export default NextAuth({
   // Configure one or more authentication providers
-  adapter: PrismaAdapter(DB),
-  secret: process.env.NEXTAUTH_SECRET,
+  adapter: PrismaAdapter(prisma),
+  secret: env.NEXTAUTH_SECRET,
   session: {
     maxAge: 120 * 24 * 60 * 60, // 120 days
     strategy: "jwt",
@@ -29,32 +31,32 @@ export default NextAuth({
   },
   providers: [
     GithubProvider({
-      clientId: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET,
+      clientId: env.GITHUB_ID,
+      clientSecret: env.GITHUB_SECRET,
     }),
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
     }),
     TwitterProvider({
-      clientId: process.env.TWITTER_CLIENT_ID,
-      clientSecret: process.env.TWITTER_CLIENT_SECRET,
+      clientId: env.TWITTER_CLIENT_ID,
+      clientSecret: env.TWITTER_CLIENT_SECRET,
       // version: "2.0", // opt-in to Twitter OAuth 2.0
     }),
     FacebookProvider({
-      clientId: process.env.FACEBOOK_CLIENT_ID,
-      clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
+      clientId: env.FACEBOOK_CLIENT_ID,
+      clientSecret: env.FACEBOOK_CLIENT_SECRET,
     }),
     EmailProvider({
       server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: process.env.EMAIL_SERVER_PORT,
+        host: env.EMAIL_SERVER_HOST,
+        port: env.EMAIL_SERVER_PORT,
         auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
+          user: env.EMAIL_SERVER_USER,
+          pass: env.EMAIL_SERVER_PASSWORD,
         },
       },
-      from: process.env.EMAIL_FROM,
+      from: env.EMAIL_FROM,
       maxAge: 24 * 60 * 60,
       // sendVerificationRequest: async ({ identifier: email, url, provider: { server, from } }) => {
       //   console.log({
@@ -78,6 +80,11 @@ export default NextAuth({
         marketing: { label: "Accepts Marketing", type: "checkbox" },
       },
       authorize: async (credentials, req) => {
+        if (!credentials) {
+          return {
+            incorrectPassword: true,
+          };
+        }
         /*= =============== Validate Data  ================ */
         if (
           !isValidPassword(credentials.password) ||
@@ -90,7 +97,7 @@ export default NextAuth({
         }
 
         try {
-          const user = await DB.user.findUnique({
+          const user = await prisma.user.findUnique({
             where: {
               email: credentials.email,
             },
@@ -102,7 +109,7 @@ export default NextAuth({
           if (!user) {
             const hash = await bcrypt.hash(credentials.password, 0);
 
-            return await DB.user.create({
+            return await prisma.user.create({
               data: {
                 id: cuid(),
                 name: credentials.name,
@@ -150,6 +157,11 @@ export default NextAuth({
       },
       authorize: async (credentials, req) => {
         /*= =============== Validate Data  ================ */
+        if (!credentials) {
+          return {
+            incorrectPassword: true,
+          };
+        }
         if (!isValidPassword(credentials.password) || !validate.isEmail(credentials.email)) {
           return {
             validationError: true,
@@ -157,7 +169,7 @@ export default NextAuth({
         }
 
         try {
-          const user = await DB.user.findUnique({
+          const user = await prisma.user.findUnique({
             where: {
               email: credentials.email,
             },
@@ -200,8 +212,8 @@ export default NextAuth({
   ],
 
   callbacks: {
-    signIn: async ({ user, account, profile, email, credentials }) => {
-      console.log({ user, accounts: user?.accounts, account, profile, email, credentials });
+    signIn: async ({ user: untypedUser, account, profile, email, credentials }) => {
+      const user = untypedUser as User & { accounts: Account[] };
       if (credentials) {
         if (user.validationError) {
           return "http://localhost:3000/auth/error?error=validation-error";
@@ -209,8 +221,7 @@ export default NextAuth({
 
         if (user.accountExists) {
           return `http://localhost:3000/auth/error?error=account-exists|||${user?.accounts
-            // @ts-ignore
-            ?.map((acc) => acc.provider)
+            .map((acc) => acc.provider)
             .join(",")}`;
         }
 
@@ -231,8 +242,8 @@ export default NextAuth({
         return "http://localhost:3000/auth/login?session=fetch";
       }*/
 
-      if (account && user) {
-        const fullUser = await DB.user.findUnique({
+      if (account && user && user.email) {
+        const fullUser = await prisma.user.findUnique({
           where: {
             email: user.email,
           },

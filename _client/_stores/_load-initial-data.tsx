@@ -5,12 +5,12 @@ import { useTooltipStore } from "_client/_stores/tooltip-store";
 import { Toast } from "components/toast";
 import dynamic from "next/dynamic";
 import { FC, PropsWithChildren, useEffect, useState } from "react";
-// import ReactTooltip, { TooltipProps } from "react-tooltip";
+import ReactTooltipType from "react-tooltip";
 //
 
 const ReactTooltip = dynamic(() => import("react-tooltip").then((mod) => mod), {
   ssr: false,
-});
+}) as typeof ReactTooltipType;
 
 export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
   const [tooltip] = useTooltipStore();

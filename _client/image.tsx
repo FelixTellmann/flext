@@ -5,12 +5,13 @@ import { FC, useEffect } from "react";
 import { SetRequired } from "type-fest";
 
 export const Image: FC<
-  SetRequired<ImageProps, "width" | "height"> & {
+  SetRequired<Omit<ImageProps, "src">, "width" | "height"> & {
     aspectRatio?: number;
     maxHeight?: number;
     maxWidth?: number;
     pixelDensity?: number;
     preload?: boolean;
+    src?: ImageProps["src"];
   }
 > = ({ pixelDensity = 1, preload, ...props }) => {
   const preloadImage = usePreloadImage();
@@ -24,7 +25,7 @@ export const Image: FC<
       if (preload) {
         preloadImage({
           src,
-          quality: +props.quality || 75,
+          quality: props.quality ? +props.quality : 75,
           width: maxWidth ? maxWidth : maxHeight ? maxHeight * aspect : +width,
         });
       }

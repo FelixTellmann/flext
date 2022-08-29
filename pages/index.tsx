@@ -7,15 +7,16 @@ import ToggleSwitch from "components/toggle-switch";
 import { TwitterProfile } from "components/twitter-profile";
 import { CODE } from "content/code";
 import { HERO } from "content/sections.hero";
-import { GetStaticProps } from "next";
+import { GetStaticProps, InferGetStaticPropsType } from "next";
 import { useTheme } from "next-themes";
 import party from "party-js";
 import { FC } from "react";
 import { Client } from "twitter-api-sdk";
+import { components } from "twitter-api-sdk/dist/gen/openapi-types";
 import { findUserByUsername, TwitterResponse } from "twitter-api-sdk/dist/types";
 
 type IndexProps = {
-  twitterData: TwitterResponse<findUserByUsername>["data"];
+  twitterData: components["schemas"]["User"];
 };
 
 party.settings.respectReducedMotion = false;
@@ -171,7 +172,7 @@ export const getStaticProps: GetStaticProps = async (context) => {
   });
   if (twitterData.data) {
     return {
-      props: { twitterData: twitterData.data as TwitterResponse<findUserByUsername> }, // will be passed to the page component as props
+      props: { twitterData: twitterData.data as components["schemas"]["User"] }, // will be passed to the page component as props
     };
   }
   return {

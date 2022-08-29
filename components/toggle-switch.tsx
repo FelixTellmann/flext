@@ -15,7 +15,7 @@ export const ToggleSwitch: FC<ToggleSwitchProps> = ({
   enabledIcon,
   disabledIcon,
 }) => {
-  const switchRef = useRef<HTMLButtonElement>();
+  const switchRef = useRef<HTMLButtonElement>(null);
 
   return (
     <>

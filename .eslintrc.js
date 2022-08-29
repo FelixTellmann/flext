@@ -11,6 +11,8 @@ module.exports = {
     "react/no-unescaped-entities": 0,
     "react/jsx-sort-props": 0,
     "node/no-unpublished-require": 0,
+    "sort-keys": 0,
+    "sort-keys-fix": 0,
   },
   overrides: [
     {
@@ -23,6 +25,8 @@ module.exports = {
       files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
       rules: {
         "typescript-sort-keys/interface": 0,
+        "sort-keys": 0,
+        "sort-keys-fix": 0,
       },
     },
   ],

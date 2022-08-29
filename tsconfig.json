@@ -21,8 +21,8 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,
-    "strictNullChecks": false,
-    "forceConsistentCasingInFileNames": false,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "incremental": true,
     "esModuleInterop": true,
@@ -36,6 +36,7 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "./*.js",
     "**/*.svg",
   ],
   "exclude": [

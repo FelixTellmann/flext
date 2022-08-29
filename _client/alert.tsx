@@ -169,5 +169,7 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
         </section>
       );
     }
+    default:
+      return <></>;
   }
 };

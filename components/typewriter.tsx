@@ -25,12 +25,12 @@ export const Typewriter: FC<TypewriterProps> = ({
   holdVisibleDuration = 2000,
   loop = true,
 }) => {
-  const containerRef = useRef();
+  const containerRef = useRef<HTMLSpanElement>(null);
   const inView = useInView(containerRef, { once: true });
-  const [sentences, setSentences] = useState<Sentence[]>(null);
+  const [sentences, setSentences] = useState<Sentence[]>([]);
   const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
   const [visible, setVisible] = useState("");
-  const contentRef = useRef<HTMLSpanElement[]>([]);
+  const contentRef = useRef<(HTMLSpanElement | null)[]>([]);
   const [writing, setWriting] = useState(false);
 
   const write = useCallback(
@@ -42,7 +42,7 @@ export const Typewriter: FC<TypewriterProps> = ({
       const sentence = sentences[currentIndex] ?? [];
       for (let i = 0; i < sentence.length; i++) {
         await delay(Array.isArray(speed) ? getRandomInteger(speed) : speed);
-        let nextNode = null;
+        let nextNode: any = null;
         const currentParent = sentence[i].parent;
         for (let j = i; j < sentence.length; j++) {
           if (currentParent !== sentence[j].parent) {
@@ -69,6 +69,8 @@ export const Typewriter: FC<TypewriterProps> = ({
       }
       for (let i = sentence.length; i >= 0; i--) {
         await delay(Array.isArray(deleteSpeed) ? getRandomInteger(deleteSpeed) : deleteSpeed);
+
+        // @ts-ignore
         sentence[i]?.element?.parentNode?.removeChild(sentence[i].element);
       }
 
@@ -81,8 +83,8 @@ export const Typewriter: FC<TypewriterProps> = ({
   );
 
   useEffect(() => {
-    const results = [];
-    contentRef.current.forEach((element, index) => {
+    const results: Sentence[] = [];
+    contentRef.current.forEach((element: HTMLElement, index) => {
       results[index] = results[index] ?? [];
       const parseNodes = (parentNode: Node) => {
         parentNode?.childNodes.forEach((node) => {

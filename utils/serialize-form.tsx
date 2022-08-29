@@ -4,7 +4,7 @@ export const serializeFormWithGroups = (formElement) => {
   for (const key of formData.keys()) {
     obj[key] = formData.getAll(key);
   }
-  return obj as { [T: string]: string[]; email?: string[] };
+  return obj as { [T: string]: string[] };
 };
 
 export const serializeForm = (formElement) => {
@@ -13,5 +13,5 @@ export const serializeForm = (formElement) => {
   for (const key of formData.keys()) {
     obj[key] = formData.get(key);
   }
-  return obj as { [T: string]: string[]; email?: string[] };
+  return obj as { [T: string]: string[] };
 };

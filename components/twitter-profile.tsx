@@ -1,9 +1,14 @@
 import { Image } from "_client/image";
 import { Link } from "_client/link";
+import { InferGetStaticPropsType } from "next";
+import { getStaticProps } from "pages";
 import { FC } from "react";
+import { components } from "twitter-api-sdk/dist/gen/openapi-types";
 import { findUserByUsername, TwitterResponse } from "twitter-api-sdk/dist/types";
 
-export const TwitterProfile: FC<TwitterResponse<findUserByUsername>["data"]> = ({
+type TwitterProfileProps = components["schemas"]["User"];
+
+export const TwitterProfile: FC<TwitterProfileProps> = ({
   profile_image_url,
   name,
   username,
@@ -42,11 +47,11 @@ export const TwitterProfile: FC<TwitterResponse<findUserByUsername>["data"]> = (
       <footer>
         <p className="text-[13px] text-gray-500 d:text-gray-300/90">
           <span className="font-semibold text-gray-600 d:text-gray-200">
-            {public_metrics.following_count}
+            {public_metrics?.following_count}
           </span>{" "}
           Following{" "}
           <span className="ml-2 font-semibold text-gray-600 d:text-gray-200">
-            {public_metrics.followers_count}
+            {public_metrics?.followers_count}
           </span>{" "}
           Followers
         </p>

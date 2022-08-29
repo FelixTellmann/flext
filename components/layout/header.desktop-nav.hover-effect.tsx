@@ -11,12 +11,12 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
     transition: "0.1s opacity",
     borderRadius: 0,
   });
-  const navHoverEffect = useRef<HTMLDivElement>();
+  const navHoverEffect = useRef<HTMLDivElement>(null);
 
   // const [navHover, setNavHover] = useState(initialNavPosition);
 
   const setNavHover = useCallback(({ width, left, opacity, transition, height, borderRadius }) => {
-    const element = navHoverEffect.current;
+    const element = navHoverEffect.current as HTMLDivElement;
     element.style.width = `${width}px`;
     element.style.height = `${height}px`;
     element.style.left = `${left}px`;
@@ -26,6 +26,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
   }, []);
 
   const handleNavHover = useCallback((e) => {
+    const element = navHoverEffect.current as HTMLDivElement;
     if (e.target === e.currentTarget) {
       setNavHover(initialNavPosition);
     }
@@ -39,13 +40,14 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
           left: navItemRef.offsetLeft,
           opacity: 1,
           borderRadius: getComputedStyle(navItemRef).borderRadius,
-          transition: +navHoverEffect.current.style.opacity ? "0.18s" : "0.1s opacity",
+          transition: +element.style.opacity ? "0.18s" : "0.1s opacity",
         });
       }
     }
   }, [initialNavPosition, setNavHover]);
 
   const handleNavFocus = useCallback((e) => {
+    const element = navHoverEffect.current as HTMLDivElement;
     if (!e?.currentTarget?.matches(":focus-within")) {
       setNavHover(initialNavPosition);
       return;
@@ -59,7 +61,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
         left: navItemRef.offsetLeft,
         borderRadius: getComputedStyle(navItemRef).borderRadius,
         opacity: 1,
-        transition: +navHoverEffect.current.style.opacity ? "0.18s" : "0.1s opacity",
+        transition: +element.style.opacity ? "0.18s" : "0.1s opacity",
       });
     }
   }, [initialNavPosition, setNavHover]);
@@ -69,8 +71,9 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
   }, [initialNavPosition, setNavHover]);
 
   useEffect(() => {
-    const parent = navHoverEffect.current.parentElement;
-    const links = navHoverEffect.current.parentElement.querySelectorAll("a");
+    const element = navHoverEffect.current as HTMLDivElement;
+    const parent = element.parentElement as HTMLElement;
+    const links = parent.querySelectorAll("a");
     parent.addEventListener("blur", handleNavFocus);
     parent.addEventListener("mouseover", handleNavHover);
     parent.addEventListener("mouseleave", handleNavReset);
