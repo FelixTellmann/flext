@@ -37,7 +37,7 @@ export const ReactIcon: FC<ReactIconProps> = ({ name, ...props }) => {
         aws_amplify: import("public/icons/tech-logos/aws_amplify.svg"),
         aws_lambda: import("public/icons/tech-logos/aws_lambda.svg"),
         axios: import("public/icons/tech-logos/axios.svg"),
-        babel: import("public/icons/tech-logos/babel.svg"),
+        /*babel: import("public/icons/tech-logos/babel.svg"),*/
         chrome: import("public/icons/tech-logos/chrome.svg"),
         css_3: import("public/icons/tech-logos/css_3.svg"),
         emmet: import("public/icons/tech-logos/emmet.svg"),
