@@ -18,7 +18,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
       <button
         type="button"
         className={clsx(
-          "rounded p-2 text-gray-500 transition-colors dark:text-white md:h:text-gray-900",
+          "rounded p-2 text-gray-500 transition-colors d:text-gray-300 d:h:text-gray-50 md:h:text-gray-900",
           showNav ? "h:text-gray-200" : "h:text-gray-900"
         )}
         onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -29,7 +29,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
       <Link
         href="https://github.com/FelixTellmann"
         className={clsx(
-          "rounded p-2 text-gray-500 transition-colors dark:text-white md:h:text-gray-900",
+          "rounded p-2 text-gray-500 transition-colors d:text-gray-300 d:h:text-gray-50 md:h:text-gray-900",
           showNav ? "h:text-gray-200" : "h:text-gray-900"
         )}
       >

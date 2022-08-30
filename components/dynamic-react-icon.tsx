@@ -106,10 +106,8 @@ export const ReactIcon: FC<ReactIconProps> = ({ name, ...props }) => {
         if (asyncImport) {
           // console.log(asyncImport, name);
           const mod = await asyncImport;
-          console.log(mod);
           return asyncImport?.then((mod) => {
             if (Object.keys(mod).length === 1) {
-              console.log("modkeys =1");
               return mod;
             }
             return mod[Object.keys(mod)[0]];

@@ -22,6 +22,8 @@ export const HeroIcon: FC<HeroIconProps> = ({ name, className = "", style = "sol
           ExclamationCircleIcon: import("@heroicons/react/24/solid/ExclamationCircleIcon"),
           Bars2Icon: import("@heroicons/react/24/solid/Bars2Icon"),
           Bars3BottomLeftIcon: import("@heroicons/react/24/solid/Bars3BottomLeftIcon"),
+          ArrowLongRightIcon: import("@heroicons/react/24/solid/ArrowLongRightIcon"),
+          ArrowLongLeftIcon: import("@heroicons/react/24/solid/ArrowLongLeftIcon"),
           LinkIcon: import("@heroicons/react/24/solid/LinkIcon"),
           StarIcon: import("@heroicons/react/24/solid/StarIcon"),
           ClipboardDocumentCheckIcon: import(
