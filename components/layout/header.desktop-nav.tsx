@@ -10,7 +10,7 @@ export const DesktopNav: FC = () => {
   const router = useRouter();
   return (
     <>
-      <nav className="scrollbar-none header-nav group relative isolate mt-auto hidden h-full justify-center overflow-auto px-2 md:flex">
+      <nav className="sm:scrollbar-none header-nav group relative isolate mt-auto hidden h-full justify-center overflow-auto px-2 md:flex">
         <HoverEffect />
         {HEADER.nav
           .filter(({ desktop }) => desktop)

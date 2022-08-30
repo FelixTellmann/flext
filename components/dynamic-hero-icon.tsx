@@ -22,6 +22,8 @@ export const HeroIcon: FC<HeroIconProps> = ({ name, className = "", style = "sol
           ExclamationCircleIcon: import("@heroicons/react/24/solid/ExclamationCircleIcon"),
           Bars2Icon: import("@heroicons/react/24/solid/Bars2Icon"),
           Bars3BottomLeftIcon: import("@heroicons/react/24/solid/Bars3BottomLeftIcon"),
+          LinkIcon: import("@heroicons/react/24/solid/LinkIcon"),
+          StarIcon: import("@heroicons/react/24/solid/StarIcon"),
           ClipboardDocumentCheckIcon: import(
             "@heroicons/react/24/solid/ClipboardDocumentCheckIcon"
           ),
@@ -43,6 +45,7 @@ export const HeroIcon: FC<HeroIconProps> = ({ name, className = "", style = "sol
           ExclamationCircleIcon: import("@heroicons/react/24/outline/ExclamationCircleIcon"),
           Bars2Icon: import("@heroicons/react/24/outline/Bars2Icon"),
           Bars3BottomLeftIcon: import("@heroicons/react/24/outline/Bars3BottomLeftIcon"),
+          StarIcon: import("@heroicons/react/24/outline/StarIcon"),
           ClipboardDocumentCheckIcon: import(
             "@heroicons/react/24/outline/ClipboardDocumentCheckIcon"
           ),
@@ -64,6 +67,7 @@ export const HeroIcon: FC<HeroIconProps> = ({ name, className = "", style = "sol
           ExclamationCircleIcon: import("@heroicons/react/20/solid/ExclamationCircleIcon"),
           Bars2Icon: import("@heroicons/react/20/solid/Bars2Icon"),
           Bars3BottomLeftIcon: import("@heroicons/react/20/solid/Bars3BottomLeftIcon"),
+          StarIcon: import("@heroicons/react/20/solid/StarIcon"),
           ClipboardDocumentCheckIcon: import(
             "@heroicons/react/20/solid/ClipboardDocumentCheckIcon"
           ),

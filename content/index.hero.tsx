@@ -1,6 +1,9 @@
 import { Link } from "_client/link";
 import party from "party-js";
 
+// @ts-ignore
+import heroCode from "!!raw-loader!content/code-blocks/hero.tsx"; // Adding `!!` to a request will disable all loaders specified in the configuration
+
 export const HERO = {
   pre: "Welcome to my site.",
   heading: (
@@ -32,8 +35,9 @@ export const HERO = {
       automated API integrations, building my own dev-tools, and creating stunning user-experiences
       that makes you feel{" "}
       <em
-        className="cursor-pointer"
+        className="relative cursor-pointer before:absolute b:bottom-0 b:-z-10 b:h-3 b:w-full b:-rotate-2 b:animate-hint-hint b:bg-pink-400/70 b:blur-sm d:b:bg-pink-600"
         onClick={(e) => {
+          e.currentTarget.classList.remove("before:absolute");
           party.confetti(e.currentTarget, { count: 40 });
         }}
       >
@@ -55,4 +59,5 @@ export const HERO = {
     href: "/resume",
     name: "Resume",
   },
+  code: `${heroCode}`,
 };

@@ -302,4 +302,4 @@ export const TECH = {
     name: "Yarn",
     icon: "yarn",
   },
-};
+} as const;

@@ -17,8 +17,9 @@ export const PROJECTS = [
         </p>
       </>
     ),
-    featuredImage: "",
-    date: "2017-06-01",
+    featuredImage: "https://cdn.shopify.com/s/files/1/2196/3483/files/Website-baner.jpg",
+    year: "2017",
+    background: `linear-gradient(to right, #ff758c 0%, #ff7eb3 100%)`,
   },
   {
     name: "Tellmann",
@@ -36,7 +37,7 @@ export const PROJECTS = [
       </>
     ),
     featuredImage: "",
-    date: "2020-10-01",
+    year: "2020",
   },
   {
     name: "Lunatag",
@@ -68,7 +69,7 @@ export const PROJECTS = [
       </>
     ),
     featuredImage: "",
-    date: "2022-02-01",
+    year: "2022",
   },
   {
     name: "ClickUpload",
@@ -98,7 +99,7 @@ export const PROJECTS = [
       </>
     ),
     featuredImage: "",
-    date: "2022-02-01",
+    year: "2021",
   },
   {
     name: "Lunalemon",
@@ -118,85 +119,103 @@ export const PROJECTS = [
     name: "Shopify-ftp-access",
     type: ["Devtool"],
     tech: [TECH.typescript, TECH.swc, TECH.shopify],
+    year: "2017",
   },
   {
     name: "Shopify-cms",
     type: ["Devtool"],
     tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.tailwindcss],
+    year: "2022",
   },
   {
     name: "fx-style",
     type: ["Devtool"],
     tech: [TECH.prettier, TECH.eslint, TECH.typescript],
+    year: "2020",
   },
+
   {
     name: "shopify-typed-node-api",
     type: ["Devtool"],
     tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.nodejs],
+    year: "2021",
   },
   {
     name: "Erply Takealot API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
+    year: "2021",
   },
   {
     name: "Shopify Vend POS API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.graphql, TECH.shopify, TECH.vend],
+    year: "2020",
   },
   {
     name: "Erply Egypt eInvoicing API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
+    year: "2022",
   },
   {
     name: "Shopify Courier Guy API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
+    year: "2021",
   },
   {
     name: "Shopify DEARsystems API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
+    year: "2022",
   },
   {
     name: "Vend Takealot API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
+    year: "2021",
   },
   {
     name: "Vend Shopify Omnisend API Integration",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
+    year: "2020",
   },
   {
     name: "Aiko",
     type: ["Ecommerce"],
     tech: [TECH.figma, TECH.shopify, TECH.tailwindcss, TECH.typescript],
+    year: "2022",
   },
   {
     name: "Zoom Printing",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.typescript, TECH.tailwindcss],
+    year: "2021",
   },
   {
     name: "AlphabetPIX",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.javascript, TECH.sass],
+    year: "2017",
   },
   {
     name: "BushScarf",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.javascript, TECH.sass],
+    year: "2018",
   },
   {
     name: "Broadway Jewellers",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
+    year: "2020",
   },
   {
     name: "Waraq Health",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
+    year: "2021",
   },
 ];
