@@ -1,5 +1,5 @@
+import { ClipboardDocumentCheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
-import { HeroIcon } from "components/dynamic-hero-icon";
 import { useToast } from "components/toast";
 import { useCallback } from "react";
 import { useCopyToClipboard } from "react-use";
@@ -25,8 +25,8 @@ export const CopyButton = ({ content, className }: { className: string; content:
     >
       <span className="sr-only">Copy code</span>
       {toasts.some((notification) => notification.id === "copy-code")
-        ? <HeroIcon name="ClipboardDocumentCheckIcon" className="h-5 w-5 text-sky-400" />
-        : <HeroIcon name="ClipboardDocumentIcon" className="h-5 w-5" />}
+        ? <ClipboardDocumentCheckIcon className="h-5 w-5 text-sky-400" />
+        : <ClipboardDocumentIcon className="h-5 w-5" />}
     </button>
   );
 };

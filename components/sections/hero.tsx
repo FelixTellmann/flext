@@ -1,8 +1,7 @@
+import { HeartIcon, MoonIcon, StarIcon, SunIcon } from "@heroicons/react/24/solid";
 import { Link } from "_client/link";
 import { Badge } from "components/badge";
 import { CodeEditor } from "components/code-editor";
-import { HeroIcon } from "components/dynamic-hero-icon";
-import { ReactIcon } from "components/dynamic-react-icon";
 import ToggleSwitch from "components/toggle-switch";
 import { TwitterProfile } from "components/twitter-profile";
 import { HERO } from "content/index.hero";
@@ -36,9 +35,9 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
                 />
               </h2>*/}
             <ul className="sm:scrollbar-none -mx-4 mb-4 flex items-center gap-6 overflow-x-auto px-4 text-[15px] font-medium">
-              {HERO.tech.map(({ name, icon }) => (
+              {HERO.tech.map(({ name, Icon }) => (
                 <li className="flex items-center gap-2 text-gray-500 d:text-gray-400" key={name}>
-                  <ReactIcon name={icon} className="h-7 w-7 text-gray-400 d:text-gray-300/80" />
+                  <Icon className="h-7 w-7 text-gray-400 d:text-gray-300/80" />
                   {name}
                 </li>
               ))}
@@ -91,11 +90,7 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
                 className="group flex items-center justify-center rounded-full border-2 border-gray-400/50 bg-gray-100 bg-clip-padding py-1.5 px-3 text-sm font-medium text-gray-600 transition-all hfa:border-rose-500/30 hfa:bg-rose-500 hfa:text-white d:bg-gray-700 d:text-gray-50 d:hfa:bg-rose-500"
                 data-tip="Buy me a coffee"
               >
-                <HeroIcon
-                  name="HeartIcon"
-                  style="solid"
-                  className="mr-1 h-4 w-4 animate-heartbeat text-red-600 transition-all group-hfa:text-white"
-                />
+                <HeartIcon className="mr-1 h-4 w-4 animate-heartbeat text-red-600 transition-all group-hfa:text-white" />
                 Support
               </Link>
               <Link
@@ -105,16 +100,13 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
                 data-tip="Star on Github"
               >
                 <span className="sr-only">Star on Github</span>
-                <HeroIcon
-                  name="StarIcon"
-                  className="h-4 w-4 text-yellow-500 group-hfa:text-white"
-                />
+                <StarIcon className="h-4 w-4 text-yellow-500 group-hfa:text-white" />
               </Link>
               <ToggleSwitch
                 enabled={theme === "dark"}
                 setEnabled={(bool) => setTheme(bool ? "dark" : "light")}
-                enabledIcon={<HeroIcon name="MoonIcon" className="h-3 w-3 text-slate-400" />}
-                disabledIcon={<HeroIcon name="SunIcon" className="h-4 w-4 text-orange-400" />}
+                enabledIcon={<MoonIcon className="h-3 w-3 text-slate-400" />}
+                disabledIcon={<SunIcon className="h-4 w-4 text-orange-400" />}
               />
             </div>
           </div>

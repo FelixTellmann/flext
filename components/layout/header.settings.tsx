@@ -1,7 +1,7 @@
+import { SiGithub } from "@react-icons/all-files/si/SiGithub";
 import { Link } from "_client/link";
 import clsx from "clsx";
 import DarkmodeIcon from "components/darkmode-icon";
-import { ReactIcon } from "components/dynamic-react-icon";
 import { useTheme } from "next-themes";
 import { FC } from "react";
 
@@ -34,7 +34,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
         )}
       >
         <span className="sr-only">Github</span>
-        <ReactIcon name="FaGithub" className="h-5 w-5" />
+        <SiGithub className="h-5 w-5" />
       </Link>
       <button className="button-rainbow ml-4 hidden whitespace-nowrap px-4 py-1.5 text-sm font-medium tracking-tight text-gray-500 md:flex">
         Lets work

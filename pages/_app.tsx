@@ -4,13 +4,11 @@ import { LoadInitialData } from "_client/_stores/_load-initial-data";
 
 import { Footer } from "components/layout/footer";
 import { Header } from "components/layout/header";
-import { Toast, useToast } from "components/toast";
 
 import { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { FC, PropsWithChildren, useEffect, useState } from "react";
 import "styles/tailwind.css";
-import ReactTooltip from "react-tooltip";
 
 const Loaders: FC<PropsWithChildren> = ({ children }) => {
   return (

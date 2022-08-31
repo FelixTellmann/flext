@@ -1,305 +1,256 @@
+import { IoLogoSass } from "@react-icons/all-files/io5/IoLogoSass";
+import { IoLogoVercel } from "@react-icons/all-files/io5/IoLogoVercel";
+import { SiCss3 } from "@react-icons/all-files/si/SiCss3";
+import { SiEslint } from "@react-icons/all-files/si/SiEslint";
+import { SiFacebook } from "@react-icons/all-files/si/SiFacebook";
+import { SiFigma } from "@react-icons/all-files/si/SiFigma";
+import { SiFirebase } from "@react-icons/all-files/si/SiFirebase";
+import { SiFramer } from "@react-icons/all-files/si/SiFramer";
+import { SiGit } from "@react-icons/all-files/si/SiGit";
+import { SiGithub } from "@react-icons/all-files/si/SiGithub";
+import { SiGooglechrome } from "@react-icons/all-files/si/SiGooglechrome";
+import { SiGraphql } from "@react-icons/all-files/si/SiGraphql";
+import { SiHtml5 } from "@react-icons/all-files/si/SiHtml5";
+import { SiIntellijidea } from "@react-icons/all-files/si/SiIntellijidea";
+import { SiIonic } from "@react-icons/all-files/si/SiIonic";
+import { SiJavascript } from "@react-icons/all-files/si/SiJavascript";
+import { SiJest } from "@react-icons/all-files/si/SiJest";
+import { SiMarkdown } from "@react-icons/all-files/si/SiMarkdown";
+import { SiMysql } from "@react-icons/all-files/si/SiMysql";
+import { SiNextDotJs } from "@react-icons/all-files/si/SiNextDotJs";
+import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
+import { SiPrettier } from "@react-icons/all-files/si/SiPrettier";
+import { SiReact } from "@react-icons/all-files/si/SiReact";
+import { SiRedis } from "@react-icons/all-files/si/SiRedis";
+import { SiShopify } from "@react-icons/all-files/si/SiShopify";
+import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
+import { SiTypescript } from "@react-icons/all-files/si/SiTypescript";
+import { SiWebpack } from "@react-icons/all-files/si/SiWebpack";
+import { SiYarn } from "@react-icons/all-files/si/SiYarn";
+import Aws from "public/icons/tech-logos/aws.svg";
+import AwsAmplify from "public/icons/tech-logos/aws_amplify.svg";
+import AwsLambda from "public/icons/tech-logos/aws_lambda.svg";
+import Axios from "public/icons/tech-logos/axios.svg";
+import Emmet from "public/icons/tech-logos/emmet.svg";
+import HeadlessUi from "public/icons/tech-logos/headlessui.svg";
+import Jsdom from "public/icons/tech-logos/jsdom.svg";
+import Mdx from "public/icons/tech-logos/mdx.svg";
+import PlanetScale from "public/icons/tech-logos/planetscale.svg";
+import Preact from "public/icons/tech-logos/preact.svg";
+import Prisma from "public/icons/tech-logos/prisma.svg";
+import ReactQuery from "public/icons/tech-logos/react_query.svg";
+import Remix from "public/icons/tech-logos/remix.svg";
+import Sendgrid from "public/icons/tech-logos/sendgrid.svg";
+import Stylelint from "public/icons/tech-logos/stylelint.svg";
+import Swc from "public/icons/tech-logos/swc.svg";
+import Takealot from "public/icons/tech-logos/takealot.svg";
+import Trpc from "public/icons/tech-logos/trpc.svg";
+import Turborepo from "public/icons/tech-logos/turborepo.svg";
+import Vend from "public/icons/tech-logos/vend_pos.svg";
+
 export const TECH = {
   shopify: {
     name: "Shopify",
-    icon: "SiShopify",
+    Icon: ({ className }) => <SiShopify className={className} />,
   },
   vend: {
     name: "Vend POS",
-    icon: "vend_pos",
+    Icon: ({ className }) => <Vend className={className} />,
   },
   typescript: {
     name: "Typescript",
-    icon: "SiTypescript",
+    Icon: ({ className }) => <SiTypescript className={className} />,
   },
   vercel: {
     name: "Vercel",
-    icon: "IoLogoVercel",
+    Icon: ({ className }) => <IoLogoVercel className={className} />,
   },
   sass: {
     name: "Sass",
-    icon: "IoLogoSass",
+    Icon: ({ className }) => <IoLogoSass className={className} />,
   },
   nextjs: {
     name: "Next.js",
-    icon: "SiNextdotjs",
+    Icon: ({ className }) => <SiNextDotJs className={className} />,
   },
   markdown: {
     name: "Markdown",
-    icon: "SiMarkdown",
+    Icon: ({ className }) => <SiMarkdown className={className} />,
   },
   mdx: {
-    name: "MDX",
-    icon: "SiMarkdown",
+    name: "Mdx",
+    Icon: ({ className }) => <Mdx className={className} />,
   },
   graphql: {
     name: "GraphQL",
-    icon: "SiGraphql",
+    Icon: ({ className }) => <SiGraphql className={className} />,
   },
   reactjs: {
     name: "React.js",
-    icon: "SiReact",
+    Icon: ({ className }) => <SiReact className={className} />,
   },
   tailwind: {
     name: "TailwindCSS",
-    icon: "SiTailwindcss",
+    Icon: ({ className }) => <SiTailwindcss className={className} />,
   },
   prisma: {
     name: "mdx",
-    icon: "prisma",
+    Icon: ({ className }) => <Prisma className={className} />,
   },
   planetscale: {
     name: "PlanetScale",
-    icon: "planetscale",
+    Icon: ({ className }) => <PlanetScale className={className} />,
   },
   trpc: {
     name: "Trpc",
-    icon: "trpc",
+    Icon: ({ className }) => <Trpc className={className} />,
   },
   aws: {
     name: "Amazon Web Services",
-    icon: "aws",
+    Icon: ({ className }) => <Aws className={className} />,
   },
-  amp: {
-    name: "Amp",
-    icon: "amp",
-  },
-  android: {
-    name: "Android",
-    icon: "android",
-  },
-  apple: {
-    name: "Apple",
-    icon: "apple",
-  },
-  awesome: {
-    name: "Awesome",
-    icon: "awesome",
-  },
-
   aws_amplify: {
     name: "AwsAmplify",
-    icon: "aws_amplify",
+    Icon: ({ className }) => <AwsAmplify className={className} />,
   },
   aws_lambda: {
     name: "AwsLambda",
-    icon: "aws_lambda",
+    Icon: ({ className }) => <AwsLambda className={className} />,
   },
   axios: {
     name: "Axios",
-    icon: "axios",
-  },
-  babel: {
-    name: "Babel",
-    icon: "babel",
+    Icon: ({ className }) => <Axios className={className} />,
   },
   chrome: {
     name: "Chrome",
-    icon: "chrome",
+    Icon: ({ className }) => <SiGooglechrome className={className} />,
   },
   css_3: {
     name: "Css3",
-    icon: "css_3",
+    Icon: ({ className }) => <SiCss3 className={className} />,
   },
   emmet: {
     name: "Emmet",
-    icon: "emmet",
+    Icon: ({ className }) => <Emmet className={className} />,
   },
   eslint: {
     name: "Eslint",
-    icon: "eslint",
+    Icon: ({ className }) => <SiEslint className={className} />,
   },
   facebook: {
     name: "Facebook",
-    icon: "facebook",
+    Icon: ({ className }) => <SiFacebook className={className} />,
   },
   figma: {
     name: "Figma",
-    icon: "figma",
+    Icon: ({ className }) => <SiFigma className={className} />,
   },
   firebase: {
     name: "Firebase",
-    icon: "firebase",
+    Icon: ({ className }) => <SiFirebase className={className} />,
   },
   framer: {
     name: "Framer",
-    icon: "framer",
+    Icon: ({ className }) => <SiFramer className={className} />,
   },
   git: {
     name: "Git",
-    icon: "git",
+    Icon: ({ className }) => <SiGit className={className} />,
   },
   github: {
     name: "Github",
-    icon: "github",
-  },
-  github_copilot: {
-    name: "GithubCopilot",
-    icon: "github_copilot",
-  },
-  google_analytics: {
-    name: "GoogleAnalytics",
-    icon: "google_analytics",
-  },
-  google_cloud_functions: {
-    name: "GoogleCloudFunctions",
-    icon: "google_cloud_functions",
-  },
-  google_tag_manager: {
-    name: "GoogleTagManager",
-    icon: "google_tag_manager",
-  },
-
-  grunt: {
-    name: "Grunt",
-    icon: "grunt",
-  },
-  gulp: {
-    name: "Gulp",
-    icon: "gulp",
+    Icon: ({ className }) => <SiGithub className={className} />,
   },
   headlessui: {
     name: "Headlessui",
-    icon: "headlessui",
-  },
-  heroku: {
-    name: "Heroku",
-    icon: "heroku",
+    Icon: ({ className }) => <HeadlessUi className={className} />,
   },
   html_5: {
     name: "Html5",
-    icon: "html_5",
+    Icon: ({ className }) => <SiHtml5 className={className} />,
   },
   intellij_idea: {
     name: "IntellijIdea",
-    icon: "intellij_idea",
+    Icon: ({ className }) => <SiIntellijidea className={className} />,
   },
   ionic: {
     name: "Ionic",
-    icon: "ionic",
+    Icon: ({ className }) => <SiIonic className={className} />,
   },
   javascript: {
     name: "Javascript",
-    icon: "javascript",
+    Icon: ({ className }) => <SiJavascript className={className} />,
   },
   jest: {
     name: "Jest",
-    icon: "jest",
+    Icon: ({ className }) => <SiJest className={className} />,
   },
   jsdom: {
     name: "Jsdom",
-    icon: "jsdom",
-  },
-  microsoft_windows: {
-    name: "MicrosoftWindows",
-    icon: "microsoft_windows",
+    Icon: ({ className }) => <Jsdom className={className} />,
   },
   mysql: {
     name: "Mysql",
-    icon: "mysql",
+    Icon: ({ className }) => <SiMysql className={className} />,
   },
-
   nodejs: {
     name: "Nodejs",
-    icon: "nodejs",
-  },
-  postcss: {
-    name: "Postcss",
-    icon: "postcss",
-  },
-  postgresql: {
-    name: "Postgresql",
-    icon: "postgresql",
-  },
-  postman: {
-    name: "Postman",
-    icon: "postman",
+    Icon: ({ className }) => <SiNodeDotJs className={className} />,
   },
   preact: {
     name: "Preact",
-    icon: "preact",
+    Icon: ({ className }) => <Preact className={className} />,
   },
   prettier: {
     name: "Prettier",
-    icon: "prettier",
+    Icon: ({ className }) => <SiPrettier className={className} />,
   },
   react: {
     name: "React",
-    icon: "react",
+    Icon: ({ className }) => <SiReact className={className} />,
   },
   react_query: {
     name: "ReactQuery",
-    icon: "react_query",
+    Icon: ({ className }) => <ReactQuery className={className} />,
   },
   redis: {
     name: "Redis",
-    icon: "redis",
+    Icon: ({ className }) => <SiRedis className={className} />,
   },
   remix: {
     name: "Remix",
-    icon: "remix",
+    Icon: ({ className }) => <Remix className={className} />,
   },
-
   sendgrid: {
     name: "Sendgrid",
-    icon: "sendgrid",
+    Icon: ({ className }) => <Sendgrid className={className} />,
   },
   stylelint: {
     name: "Stylelint",
-    icon: "stylelint",
-  },
-  svg: {
-    name: "Svg",
-    icon: "svg",
+    Icon: ({ className }) => <Stylelint className={className} />,
   },
   swc: {
     name: "Swc",
-    icon: "swc",
+    Icon: ({ className }) => <Swc className={className} />,
   },
   tailwindcss: {
     name: "Tailwindcss",
-    icon: "tailwindcss",
-  },
-  tailwindcss_long: {
-    name: "TailwindcssLong",
-    icon: "tailwindcss_long",
+    Icon: ({ className }) => <SiTailwindcss className={className} />,
   },
   takealot: {
     name: "Takealot",
-    icon: "takealot",
+    Icon: ({ className }) => <Takealot className={className} />,
   },
-
   turborepo: {
     name: "Turborepo",
-    icon: "turborepo",
-  },
-
-  uafrica: {
-    name: "Uafrica",
-    icon: "uafrica",
-  },
-  vend_pos: {
-    name: "VendPos",
-    icon: "vend_pos",
-  },
-
-  vercelLong: {
-    name: "VercelLong",
-    icon: "vercelLong",
-  },
-  vitejs: {
-    name: "Vitejs",
-    icon: "vitejs",
-  },
-  web_dev: {
-    name: "WebDev",
-    icon: "web_dev",
+    Icon: ({ className }) => <Turborepo className={className} />,
   },
   webpack: {
     name: "Webpack",
-    icon: "webpack",
+    Icon: ({ className }) => <SiWebpack className={className} />,
   },
   yarn: {
     name: "Yarn",
-    icon: "yarn",
+    Icon: ({ className }) => <SiYarn className={className} />,
   },
 } as const;

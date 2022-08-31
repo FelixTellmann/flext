@@ -3,7 +3,7 @@ import { DesktopNav } from "components/layout/header.desktop-nav";
 import { MobileNav } from "components/layout/header.mobile-nav";
 import { ProfileNav } from "components/layout/header.settings";
 import { HEADER } from "content/layout";
-import { FC, useCallback, useState } from "react";
+import { FC, useState } from "react";
 
 export const Header: FC = ({}) => {
   const [showNav, setShowNav] = useState(false);

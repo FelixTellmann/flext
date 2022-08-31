@@ -7,7 +7,7 @@ export const PROJECTS = [
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.vend, TECH.vercel],
     url: "https://kidsliving.co.za",
     repository: "",
-    description: `I have worked with Kids Living since 2017 as their ecommerce success partner covering everything from web development, inventory management, and marketing to custom API integrations.`,
+    description: `Large scale Ecommerce website for a South African based client with 3 brick & mortar locations and over 3000 products.`,
     content: (
       <>
         <p>
@@ -19,7 +19,6 @@ export const PROJECTS = [
     ),
     featuredImage: "https://cdn.shopify.com/s/files/1/2196/3483/files/Website-baner.jpg",
     year: "2017",
-    background: `linear-gradient(to right, #ff758c 0%, #ff7eb3 100%)`,
   },
   {
     name: "Tellmann",
@@ -133,7 +132,6 @@ export const PROJECTS = [
     tech: [TECH.prettier, TECH.eslint, TECH.typescript],
     year: "2020",
   },
-
   {
     name: "shopify-typed-node-api",
     type: ["Devtool"],

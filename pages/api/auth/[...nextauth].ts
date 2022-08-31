@@ -1,18 +1,18 @@
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+
+import { env } from "_server/trpc/env";
 import { prisma } from "_server/trpc/prisma";
+import bcrypt from "bcrypt";
+import cuid from "cuid";
 import NextAuth, { Account, User } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
+import EmailProvider from "next-auth/providers/email";
+import FacebookProvider from "next-auth/providers/facebook";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
 import TwitterProvider from "next-auth/providers/twitter";
-import FacebookProvider from "next-auth/providers/facebook";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import EmailProvider from "next-auth/providers/email";
-import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcrypt";
-import cuid from "cuid";
 import { isValidPassword } from "utils/validate-password";
 import validate from "validator";
-
-import { env } from "_server/trpc/env";
 
 export default NextAuth({
   // Configure one or more authentication providers

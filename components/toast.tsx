@@ -1,7 +1,7 @@
 import { Transition } from "@headlessui/react";
-import { HeroIcon } from "components/dynamic-hero-icon";
+import { CheckCircleIcon, ExclamationCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import produce from "immer";
-import { FC, Fragment, useState } from "react";
+import { FC, Fragment } from "react";
 import create from "zustand";
 
 type ToastType = {
@@ -85,16 +85,8 @@ export const Toast: FC = ({}) => {
               >
                 <figure className="button-border pointer-events-auto flex w-full max-w-sm overflow-hidden rounded-lg border-gray-400/30 bg-white p-4 shadow-xl shadow-gray-500/10">
                   {toast?.error
-                    ? <HeroIcon
-                        name="ExclamationCircleIcon"
-                        className="h-6 w-6 text-red-400"
-                        aria-hidden="true"
-                      />
-                    : <HeroIcon
-                        name="CheckCircleIcon"
-                        className="h-6 w-6 text-green-400"
-                        aria-hidden="true"
-                      />}
+                    ? <ExclamationCircleIcon className="h-6 w-6 text-red-400" aria-hidden="true" />
+                    : <CheckCircleIcon className="h-6 w-6 text-green-400" aria-hidden="true" />}
 
                   <p className="ml-3 w-0 flex-1 pt-0.5 text-sm font-medium text-gray-900">
                     {toast?.message}
@@ -105,7 +97,7 @@ export const Toast: FC = ({}) => {
                     onClick={() => removeToast(toast?.id)}
                   >
                     <span className="sr-only">Close</span>
-                    <HeroIcon name="XMarkIcon" className="h-5 w-5" aria-hidden="true" />
+                    <XMarkIcon className="h-5 w-5" aria-hidden="true" />
                   </button>
                 </figure>
               </Transition>

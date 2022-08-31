@@ -1,8 +1,11 @@
-import { Link } from "_client/link";
-import party from "party-js";
-
 // @ts-ignore
 import heroCode from "!!raw-loader!content/code-blocks/hero.tsx"; // Adding `!!` to a request will disable all loaders specified in the configuration
+import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
+import { SiReact } from "@react-icons/all-files/si/SiReact";
+import { SiShopify } from "@react-icons/all-files/si/SiShopify";
+import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
+import { Link } from "_client/link";
+import party from "party-js";
 
 export const HERO = {
   pre: "Welcome to my site.",
@@ -14,19 +17,19 @@ export const HERO = {
   tech: [
     {
       name: "React.js",
-      icon: "SiReact",
+      Icon: ({ className }) => <SiReact className={className} />,
     },
     {
       name: "Node.js",
-      icon: "SiNodedotjs",
+      Icon: ({ className }) => <SiNodeDotJs className={className} />,
     },
     {
       name: "Tailwind",
-      icon: "SiTailwindcss",
+      Icon: ({ className }) => <SiTailwindcss className={className} />,
     },
     {
       name: "Shopify",
-      icon: "SiShopify",
+      Icon: ({ className }) => <SiShopify className={className} />,
     },
   ] as const,
   body: (

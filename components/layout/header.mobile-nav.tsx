@@ -1,14 +1,10 @@
 import { Link } from "_client/link";
 import clsx from "clsx";
-import { Header } from "components/layout/header";
-import { DesktopNav } from "components/layout/header.desktop-nav";
-import { ProfileNav } from "components/layout/header.settings";
 import { HEADER } from "content/layout";
-import { AtRule, Property } from "csstype";
-import { FC, Fragment, MouseEventHandler, useCallback, useState } from "react";
-import Width = Property.Width;
-import Height = AtRule.Height;
+import { Property } from "csstype";
+import { FC, MouseEventHandler, useCallback } from "react";
 import BorderWidth = Property.BorderWidth;
+import Width = Property.Width;
 
 type HeaderMobileNavProps = {
   setShowNav: (value: ((prevState: boolean) => boolean) | boolean) => void;

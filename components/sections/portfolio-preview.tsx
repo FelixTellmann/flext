@@ -1,89 +1,14 @@
+import { LinkIcon } from "@heroicons/react/24/solid";
+import { FaGithub } from "@react-icons/all-files/fa/FaGithub";
 import { Image } from "_client/image";
 import { Link } from "_client/link";
 import clsx from "clsx";
-import { Badge } from "components/badge";
-import { HeroIcon } from "components/dynamic-hero-icon";
-import { ReactIcon } from "components/dynamic-react-icon";
-import { HERO } from "content/index.hero";
+import { ScrollGallery } from "components/components/scroll-gallery";
 import { PORTFOLIO } from "content/index.portfolio-preview";
 import { PROJECTS } from "content/projects";
-import { spans } from "next/dist/build/webpack/plugins/profiling-plugin";
-import { FC, PropsWithChildren, ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { scrollToX } from "utils/scroll-to";
+import { FC } from "react";
 
 type PortfolioPreviewProps = {};
-
-const ScrollGallery: FC<PropsWithChildren<{ itemWidth: string; gapWidth: string }>> = ({
-  itemWidth,
-  gapWidth,
-  children,
-}) => {
-  const scrollContainerRef = useRef<HTMLElement>(null);
-  const [scrollNavigation, setScrollNavigation] = useState({ prev: false, next: true });
-
-  const handleClickPrevious = useCallback(() => {
-    const scrollContainer = scrollContainerRef.current as HTMLDivElement;
-    scrollContainer.classList.remove("snap-x");
-    scrollToX(200, Math.max(scrollContainer?.scrollLeft - 340 - 32, 0), scrollContainer, () => {
-      scrollContainer.classList.add("snap-x");
-    });
-  }, []);
-  const handleClickNext = useCallback(() => {
-    const scrollContainer = scrollContainerRef.current as HTMLDivElement;
-    scrollContainer.classList.remove("snap-x");
-
-    scrollToX(200, scrollContainer.scrollLeft + 340 + 32, scrollContainer, () => {
-      scrollContainer.classList.add("snap-x");
-    });
-  }, []);
-
-  useEffect(() => {
-    const scrollContainer = scrollContainerRef.current as HTMLDivElement;
-    const updateScrollNavigation = () => {
-      setScrollNavigation(() => ({
-        prev: scrollContainer?.scrollLeft > 0,
-        next:
-          scrollContainer.children[scrollContainer.children.length - 1]?.getBoundingClientRect()
-            .right > window.innerWidth,
-      }));
-    };
-
-    scrollContainer?.addEventListener("scroll", updateScrollNavigation);
-    return () => {
-      scrollContainer?.removeEventListener("scroll", updateScrollNavigation);
-    };
-  }, []);
-
-  return (
-    <>
-      <div className="relative">
-        <main
-          className="sm:scrollbar-none relative flex snap-x snap-mandatory scroll-pl-4 gap-8 overflow-x-auto py-12 px-4 md:scroll-pl-8 md:px-8"
-          ref={scrollContainerRef}
-        >
-          {children}
-        </main>
-        <button
-          className="absolute left-10 bottom-0 hidden items-center gap-2 py-2 px-4 text-sm text-gray-500 transition-all duration-75 disabled:text-gray-300 h:text-gray-900 disabled:h:text-gray-300 d:text-gray-300 d:disabled:text-gray-700 d:hfa:text-gray-50 d:disabled:hfa:text-gray-700 sm:flex"
-          onClick={handleClickPrevious}
-          disabled={!scrollNavigation.prev}
-        >
-          <HeroIcon name="ArrowLongLeftIcon" className="mt-0.5 h-5 w-5" />
-          prev
-        </button>
-
-        <button
-          className="absolute right-10 bottom-0 hidden items-center gap-2 py-2 px-4 text-sm text-gray-500 transition-all duration-75 disabled:text-gray-300 h:text-gray-900 h:text-gray-900 disabled:h:text-gray-300 d:text-gray-300 d:disabled:text-gray-700 d:hfa:text-gray-50 d:disabled:hfa:text-gray-700 md:flex"
-          onClick={handleClickNext}
-          disabled={!scrollNavigation.next}
-        >
-          next
-          <HeroIcon name="ArrowLongRightIcon" className="mt-0.5 h-5 w-5" />
-        </button>
-      </div>
-    </>
-  );
-};
 
 export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
   return (
@@ -94,13 +19,15 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
           <h1 className="heading-2xl -ml-1">The work I've done over the years.</h1>
           <div>Filter by tag list</div>
         </header>
-        <ScrollGallery itemWidth="340px" gapWidth="32px">
+        <ScrollGallery itemWidth={340} gapWidth={32}>
           {PROJECTS.map((project, index) => {
             return (
               <section
                 key={project.name}
                 className={clsx(
-                  "h-[380px] w-[340px] min-w-[340px] snap-start rounded-xl border-2 border-gray-700/30 bg-clip-padding p-4 shadow-xl spacing-0 d:border-white/20",
+                  "/*hfa:rotate-0*/ h-[380px] w-[340px] min-w-[340px] snap-start rounded-xl border-2 border-gray-700/30 bg-clip-padding p-4 shadow-xl spacing-0 d:border-white/20",
+                  index % 2 === 0 && "sm:rotate-[1.5deg]",
+                  index % 2 === 1 && "sm:rotate-[-1.5deg]",
                   index % 8 === 0 &&
                     "shadow-[currentBg] bg-[linear-gradient(40deg,var(--tw-gradient-stops))] from-pink-300/80 to-violet-500/40 shadow-violet-500/20",
                   index % 8 === 1 &&
@@ -118,16 +45,13 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                   index % 8 === 7 &&
                     "bg-[linear-gradient(140deg,var(--tw-gradient-stops))] from-cyan-400/80 to-indigo-600/95 shadow-indigo-600/20"
                 )}
-                style={{
-                  transform: index % 2 === 0 ? `rotate(1.5deg)` : `rotate(-1.5deg)`,
-                }}
               >
                 <figure className="relative flex aspect-2 w-full">
                   <Image
                     src={project.featuredImage}
                     alt={project.name}
                     width={400}
-                    height={400}
+                    height={200}
                     className="rounded-t-lg object-cover object-center [mask-image:linear-gradient(180deg,#fff_16.35%,rgb(255_255_255_/_0%)_91.66%)]"
                   />
                 </figure>
@@ -135,25 +59,27 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                   <h2 className="text-2xl font-bold tracking-tighter text-gray-800 d:text-white">
                     {project.name}
                   </h2>
-                  <div className="mb-2 mt-1 flex flex-wrap items-center gap-2 tracking-tight text-gray-600 d:text-gray-200">
-                    {project.tech?.map((tech, i) => {
-                      if (i > 2) return null;
+                  <div className="mt-0.5 -ml-0.5 flex items-center gap-2 tracking-tight text-gray-600 d:text-gray-200">
+                    {project.tech?.map(({ name, Icon }, i) => {
+                      if (i > 3) return null;
                       return (
                         <div
-                          key={tech.name}
-                          className="flex select-none items-center gap-1 rounded border border-gray-700/10 bg-gray-200/30 py-[3px] px-2 text-[13px] font-medium hfa:bg-gray-200/60 d:bg-gray-900/20 d:text-gray-50/60 d:hfa:bg-gray-900/30"
+                          key={name}
+                          className="flex select-none items-center gap-1 whitespace-nowrap rounded border border-gray-700/10 bg-gray-200/30 py-[2px] px-1.5 text-[13px] font-medium hfa:bg-gray-200/60 d:bg-gray-900/20 d:text-gray-50/80 d:hfa:bg-gray-900/30"
                         >
-                          <ReactIcon name={tech.icon} className="h-3 w-3 " />
-                          {tech.name}
+                          {name}
                         </div>
                       );
                     })}
                   </div>
                 </header>
-                <main className="mt-1 text-[15px] tracking-tight text-gray-600 d:text-gray-200 ">
+                <main className="mt-2 text-[15px] tracking-tight text-gray-600 d:text-gray-200 ">
                   <p className="line-clamp-4">{project.description}</p>
                 </main>
-                <footer className="absolute bottom-3 right-3 mt-auto flex justify-end gap-2">
+                <footer className="absolute bottom-3 left-0 mt-auto flex w-full items-end justify-end gap-2 px-4">
+                  <div className="mr-auto text-sm font-semibold text-gray-700/80 d:text-gray-300/80">
+                    {project.year}
+                  </div>
                   {project.repository
                     ? <Link
                         href={project.repository}
@@ -161,7 +87,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                         data-tip="View repository"
                       >
                         <span className="sr-only">Link to Github repository</span>
-                        <ReactIcon name="FaGithub" className="h-5 w-5 " />
+                        <FaGithub className="h-5 w-5 " />
                       </Link>
                     : null}
                   {project.url
@@ -171,7 +97,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                         data-tip="View site"
                       >
                         <span className="sr-only">Link to Project</span>
-                        <HeroIcon name="LinkIcon" className="h-5 w-5 " />
+                        <LinkIcon className="h-5 w-5 " />
                       </Link>
                     : null}
                 </footer>

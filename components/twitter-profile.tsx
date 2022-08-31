@@ -1,10 +1,7 @@
 import { Image } from "_client/image";
 import { Link } from "_client/link";
-import { InferGetStaticPropsType } from "next";
-import { getStaticProps } from "pages";
 import { FC } from "react";
 import { components } from "twitter-api-sdk/dist/gen/openapi-types";
-import { findUserByUsername, TwitterResponse } from "twitter-api-sdk/dist/types";
 
 type TwitterProfileProps = components["schemas"]["User"];
 
