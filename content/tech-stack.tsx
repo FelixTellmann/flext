@@ -58,7 +58,7 @@ export const TECH = {
     Icon: ({ className }) => <Vend className={className} />,
   },
   typescript: {
-    name: "Typescript",
+    name: "TypeScript",
     Icon: ({ className }) => <SiTypescript className={className} />,
   },
   vercel: {
@@ -94,7 +94,7 @@ export const TECH = {
     Icon: ({ className }) => <SiTailwindcss className={className} />,
   },
   prisma: {
-    name: "mdx",
+    name: "Mdx",
     Icon: ({ className }) => <Prisma className={className} />,
   },
   planetscale: {
@@ -106,15 +106,15 @@ export const TECH = {
     Icon: ({ className }) => <Trpc className={className} />,
   },
   aws: {
-    name: "Amazon Web Services",
+    name: "AWS",
     Icon: ({ className }) => <Aws className={className} />,
   },
   aws_amplify: {
-    name: "AwsAmplify",
+    name: "Aws Amplify",
     Icon: ({ className }) => <AwsAmplify className={className} />,
   },
   aws_lambda: {
-    name: "AwsLambda",
+    name: "Aws Lambda",
     Icon: ({ className }) => <AwsLambda className={className} />,
   },
   axios: {
@@ -126,7 +126,7 @@ export const TECH = {
     Icon: ({ className }) => <SiGooglechrome className={className} />,
   },
   css_3: {
-    name: "Css3",
+    name: "CSS",
     Icon: ({ className }) => <SiCss3 className={className} />,
   },
   emmet: {
@@ -162,15 +162,15 @@ export const TECH = {
     Icon: ({ className }) => <SiGithub className={className} />,
   },
   headlessui: {
-    name: "Headlessui",
+    name: "Headless Ui",
     Icon: ({ className }) => <HeadlessUi className={className} />,
   },
   html_5: {
-    name: "Html5",
+    name: "HTML5",
     Icon: ({ className }) => <SiHtml5 className={className} />,
   },
   intellij_idea: {
-    name: "IntellijIdea",
+    name: "Intellij Idea",
     Icon: ({ className }) => <SiIntellijidea className={className} />,
   },
   ionic: {
@@ -178,7 +178,7 @@ export const TECH = {
     Icon: ({ className }) => <SiIonic className={className} />,
   },
   javascript: {
-    name: "Javascript",
+    name: "JavaScript",
     Icon: ({ className }) => <SiJavascript className={className} />,
   },
   jest: {
@@ -194,7 +194,7 @@ export const TECH = {
     Icon: ({ className }) => <SiMysql className={className} />,
   },
   nodejs: {
-    name: "Nodejs",
+    name: "Node.js",
     Icon: ({ className }) => <SiNodeDotJs className={className} />,
   },
   preact: {
@@ -206,11 +206,11 @@ export const TECH = {
     Icon: ({ className }) => <SiPrettier className={className} />,
   },
   react: {
-    name: "React",
+    name: "React.js",
     Icon: ({ className }) => <SiReact className={className} />,
   },
   react_query: {
-    name: "ReactQuery",
+    name: "React Query",
     Icon: ({ className }) => <ReactQuery className={className} />,
   },
   redis: {
@@ -222,7 +222,7 @@ export const TECH = {
     Icon: ({ className }) => <Remix className={className} />,
   },
   sendgrid: {
-    name: "Sendgrid",
+    name: "SendGrid",
     Icon: ({ className }) => <Sendgrid className={className} />,
   },
   stylelint: {
@@ -230,11 +230,11 @@ export const TECH = {
     Icon: ({ className }) => <Stylelint className={className} />,
   },
   swc: {
-    name: "Swc",
+    name: "SWC",
     Icon: ({ className }) => <Swc className={className} />,
   },
   tailwindcss: {
-    name: "Tailwindcss",
+    name: "TailwindCSS",
     Icon: ({ className }) => <SiTailwindcss className={className} />,
   },
   takealot: {
