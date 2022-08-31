@@ -43,7 +43,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                   index % 8 === 6 &&
                     "bg-[linear-gradient(70deg,var(--tw-gradient-stops))] from-emerald-400/80 to-teal-600/40 shadow-teal-600/20",
                   index % 8 === 7 &&
-                    "bg-[linear-gradient(140deg,var(--tw-gradient-stops))] from-cyan-400/80 to-indigo-600/95 shadow-indigo-600/20"
+                    "bg-[linear-gradient(140deg,var(--tw-gradient-stops))] from-cyan-400/80 to-indigo-700/50 shadow-indigo-700/20"
                 )}
               >
                 <figure className="relative flex aspect-2 w-full">
