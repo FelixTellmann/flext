@@ -1,65 +1,28 @@
 import { TECH } from "content/tech-stack";
-import KidsLiving from "public/images/projects/Kidsliving.jpg";
-import Tellmann from "public/images/projects/Tellmann.jpg";
-import Lunatag from "public/images/projects/Lunatag.jpg";
+import Aiko from "public/images/projects/Aiko.jpg";
+import AlphabetPIX from "public/images/projects/AlphabetPix.jpg";
+import BroadwayJewellers from "public/images/projects/BroadwayJewellers.jpg";
+import BushScarf from "public/images/projects/BushScarf.jpg";
 import ClickUpload from "public/images/projects/ClickUpload.jpg";
-import Lunalemon from "public/images/projects/Lunalemon.jpg";
-import ShopifyFtp from "public/images/projects/shopify-ftp.png";
-import ShopifyCms from "public/images/projects/Shopify-cms.png";
-import FxStyle from "public/images/projects/fx-style.png";
-import ShopifyTypedNodeApi from "public/images/projects/shopify-typed-node-api.png";
-import ErplyTakealot from "public/images/projects/Erply Takealot.png";
-import ShopifyVend from "public/images/projects/Shopify Vend.png";
 import ErplyEgypt from "public/images/projects/Erply Egypt.png";
+import ErplyTakealot from "public/images/projects/Erply Takealot.png";
+import FxStyle from "public/images/projects/fx-style.png";
+import KidsLiving from "public/images/projects/Kidsliving.jpg";
+import Lunalemon from "public/images/projects/Lunalemon.jpg";
+import Lunatag from "public/images/projects/Lunatag.jpg";
 import ShopifyCourierGuy from "public/images/projects/Shopify CourierGuy.png";
 import ShopifyDear from "public/images/projects/Shopify Dear Systems.png";
-import VendTakealot from "public/images/projects/Vend Takealot.png";
 import VendShopifyOmnisend from "public/images/projects/Shopify Vend Omnisend.png";
-import Aiko from "public/images/projects/Aiko.jpg";
-import ZoomPrinting from "public/images/projects/ZoomPringing.jpg";
-import AlphabetPIX from "public/images/projects/AlphabetPix.jpg";
-import BushScarf from "public/images/projects/BushScarf.jpg";
-import BroadwayJewellers from "public/images/projects/BroadwayJewellers.jpg";
+import ShopifyVend from "public/images/projects/Shopify Vend.png";
+import ShopifyCms from "public/images/projects/Shopify-cms.png";
+import ShopifyFtp from "public/images/projects/shopify-ftp.png";
+import ShopifyTypedNodeApi from "public/images/projects/shopify-typed-node-api.png";
+import Tellmann from "public/images/projects/Tellmann.jpg";
+import VendTakealot from "public/images/projects/Vend Takealot.png";
 import WaraqHealth from "public/images/projects/Waraq.jpg";
+import ZoomPrinting from "public/images/projects/ZoomPringing.jpg";
 
 export const PROJECTS = [
-  {
-    name: "Kids Living",
-    type: ["ecommerce", "integration"],
-    tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.vend, TECH.vercel],
-    url: "https://kidsliving.co.za",
-    repository: "",
-    description: `Large scale Ecommerce website for a South African based client with 3 brick & mortar locations and over 3000 products.`,
-    content: (
-      <>
-        <p>
-          I have worked with Kids Living since 2017 as their Ecommerce success partner covering
-          everything from web development, inventory management, and marketing to custom API
-          integrations.
-        </p>
-      </>
-    ),
-    featuredImage: KidsLiving,
-    year: "2017",
-  },
-  {
-    name: "Tellmann",
-    type: ["website"],
-    tech: [TECH.typescript, TECH.vercel, TECH.nextjs, TECH.reactjs],
-    url: "https://tellmann.co.za",
-    repository: "https://github.com/FelixTellmann/tellmann.co.za",
-    description: `Tellmann Shopify Ecommerce Agency Website. I've built the site to establish a basis to find new Web Development projects and promote Shopify services.`,
-    content: (
-      <>
-        <p>
-          I have create the Tellmann Shopify Ecommerce Agency Website in 2020 to establish a basis
-          to find new Web Development projects.
-        </p>
-      </>
-    ),
-    featuredImage: Tellmann,
-    year: "2020",
-  },
   {
     name: "Lunatag",
     type: ["Shopify App"],
@@ -92,6 +55,25 @@ export const PROJECTS = [
     featuredImage: Lunatag,
     year: "2022",
   },
+
+  {
+    name: "Tellmann",
+    type: ["website"],
+    tech: [TECH.typescript, TECH.vercel, TECH.nextjs, TECH.reactjs],
+    url: "https://tellmann.co.za",
+    repository: "https://github.com/FelixTellmann/tellmann.co.za",
+    description: `Tellmann Shopify Ecommerce Agency Website. I've built the site to establish a basis to find new Web Development projects and promote Shopify services.`,
+    content: (
+      <>
+        <p>
+          I have create the Tellmann Shopify Ecommerce Agency Website in 2020 to establish a basis
+          to find new Web Development projects.
+        </p>
+      </>
+    ),
+    featuredImage: Tellmann,
+    year: "2020",
+  },
   {
     name: "ClickUpload",
     type: ["Shopify App"],
@@ -123,6 +105,25 @@ export const PROJECTS = [
     year: "2021",
   },
   {
+    name: "Kids Living",
+    type: ["ecommerce", "integration"],
+    tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.vend, TECH.vercel],
+    url: "https://kidsliving.co.za",
+    repository: "",
+    description: `Large scale Ecommerce website for a South African based client with 3 brick & mortar locations and over 3000 products.`,
+    content: (
+      <>
+        <p>
+          I have worked with Kids Living since 2017 as their Ecommerce success partner covering
+          everything from web development, inventory management, and marketing to custom API
+          integrations.
+        </p>
+      </>
+    ),
+    featuredImage: KidsLiving,
+    year: "2017",
+  },
+  {
     name: "Lunalemon",
     type: ["Website"],
     tech: [
@@ -149,51 +150,6 @@ export const PROJECTS = [
     featuredImage: ShopifyFtp,
   },
   {
-    name: "shopify-cms",
-    type: ["Devtool"],
-    tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.tailwindcss],
-    year: "2022",
-    description:
-      "Shopify-cms is another Open Source CLI that I've built. The package helps building a site with the Shopify Theme Editor as a Headless CMS and get fully typed data.",
-    featuredImage: ShopifyCms,
-  },
-  {
-    name: "fx-style",
-    type: ["Devtool"],
-    tech: [TECH.prettier, TECH.eslint, TECH.typescript],
-    year: "2020",
-    description:
-      "I've created fx-style as a package to standardize my own code style across all projects, while minimizing devDependencies for each project.",
-    featuredImage: FxStyle,
-  },
-  {
-    name: "shopify-typed-node-api",
-    type: ["Devtool"],
-    tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.nodejs],
-    year: "2021",
-    description:
-      "Shopify-typed-node-api is an extension to the popular shopify-node-api, adding typescript support for all Rest & GraphQL endpoints provided by Shopify.",
-    featuredImage: ShopifyTypedNodeApi,
-  },
-  {
-    name: "Erply Takealot sales API",
-    type: ["Integration"],
-    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
-    year: "2021",
-    description:
-      "I've built an API integration to process inventory levels and sales between the two POS/Ecommerce platforms for an internal client.",
-    featuredImage: ErplyTakealot,
-  },
-  {
-    name: "Shopify Vend product API",
-    type: ["Integration"],
-    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.graphql, TECH.shopify, TECH.vend],
-    year: "2020",
-    description:
-      "A custom integration, ensuring that relevant product data is kept synchronized between Vend POS and Shopify, based on a webhook architecture to push updates.",
-    featuredImage: ShopifyVend,
-  },
-  {
     name: "Erply Egypt eInvoicing API",
     type: ["Integration"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
@@ -201,51 +157,6 @@ export const PROJECTS = [
     description:
       "This custom App runs on 5 min Cron Job to process any incoming sales data for a retail chain in Egypt, processing each invoice on the eInvoicing portal. The app includes an internal dashboard for any manual processing required.",
     featuredImage: ErplyEgypt,
-  },
-  {
-    name: "Shopify Courier Guy API",
-    type: ["Integration"],
-    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
-    year: "2021",
-    description:
-      "An integration to connect sales directly to the popular shipping provided Courier Guy, reducing the need to manually process incoming orders for fulfillment.",
-    featuredImage: ShopifyCourierGuy,
-  },
-  {
-    name: "Shopify DearSystems API",
-    type: ["Integration"],
-    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
-    year: "2022",
-    description:
-      "This integration allows my client to effectively synchronize their inventory between Dear and Shopify with multiple store locations and a complex VAT setup.",
-    featuredImage: ShopifyDear,
-  },
-  {
-    name: "Vend Takealot API",
-    type: ["Integration"],
-    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
-    year: "2021",
-    description:
-      "Similar to the Erply Takealot integration, this app runs a scheduled script to ensure that sales & inventory levels are synchronized between two sales channels.",
-    featuredImage: VendTakealot,
-  },
-  {
-    name: "Vend Shopify Omnisend API",
-    type: ["Integration"],
-    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
-    year: "2020",
-    description:
-      "A custom integration to collect & update customer information for OmniSend email marketing, utilizing in-store (via QR code) and online sign-ups.",
-    featuredImage: VendShopifyOmnisend,
-  },
-  {
-    name: "Aiko",
-    type: ["Ecommerce"],
-    tech: [TECH.figma, TECH.shopify, TECH.tailwindcss, TECH.typescript],
-    year: "2022",
-    description:
-      "I built a fully custom designed Shopify site, utilizing shopify-cms in a non-headless way, to ensure type safety throughout the project using Shopify Liquid templates.",
-    featuredImage: Aiko,
   },
   {
     name: "Zoom Printing",
@@ -257,6 +168,51 @@ export const PROJECTS = [
     featuredImage: ZoomPrinting,
   },
   {
+    name: "Vend Takealot API",
+    type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
+    year: "2021",
+    description:
+      "Similar to the Erply Takealot integration, this app runs a scheduled script to ensure that sales & inventory levels are synchronized between two sales channels.",
+    featuredImage: VendTakealot,
+  },
+  {
+    name: "Aiko",
+    type: ["Ecommerce"],
+    tech: [TECH.figma, TECH.shopify, TECH.tailwindcss, TECH.typescript],
+    year: "2022",
+    description:
+      "I built a fully custom designed Shopify site, utilizing shopify-cms in a non-headless way, to ensure type safety throughout the project using Shopify Liquid templates.",
+    featuredImage: Aiko,
+  },
+  {
+    name: "Shopify Courier Guy API",
+    type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
+    year: "2021",
+    description:
+      "An integration to connect sales directly to the popular shipping provided Courier Guy, reducing the need to manually process incoming orders for fulfillment.",
+    featuredImage: ShopifyCourierGuy,
+  },
+  {
+    name: "shopify-cms",
+    type: ["Devtool"],
+    tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.tailwindcss],
+    year: "2022",
+    description:
+      "Shopify-cms is another Open Source CLI that I've built. The package helps building a site with the Shopify Theme Editor as a Headless CMS and get fully typed data.",
+    featuredImage: ShopifyCms,
+  },
+  {
+    name: "Erply Takealot sales API",
+    type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
+    year: "2021",
+    description:
+      "I've built an API integration to process inventory levels and sales between the two POS/Ecommerce platforms for an internal client.",
+    featuredImage: ErplyTakealot,
+  },
+  {
     name: "AlphabetPIX",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.javascript, TECH.sass],
@@ -264,6 +220,24 @@ export const PROJECTS = [
     description:
       "Custom build Shopify-site / Web-app that allows customers to create their own named picture frame and generate image files on the fly for their checkout.",
     featuredImage: AlphabetPIX,
+  },
+  {
+    name: "shopify-typed-node-api",
+    type: ["Devtool"],
+    tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.nodejs],
+    year: "2021",
+    description:
+      "Shopify-typed-node-api is an extension to the popular shopify-node-api, adding typescript support for all Rest & GraphQL endpoints provided by Shopify.",
+    featuredImage: ShopifyTypedNodeApi,
+  },
+  {
+    name: "Shopify Vend product API",
+    type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.graphql, TECH.shopify, TECH.vend],
+    year: "2020",
+    description:
+      "A custom integration, ensuring that relevant product data is kept synchronized between Vend POS and Shopify, based on a webhook architecture to push updates.",
+    featuredImage: ShopifyVend,
   },
   {
     name: "BushScarf",
@@ -284,6 +258,24 @@ export const PROJECTS = [
     featuredImage: BroadwayJewellers,
   },
   {
+    name: "fx-style",
+    type: ["Devtool"],
+    tech: [TECH.prettier, TECH.eslint, TECH.typescript],
+    year: "2020",
+    description:
+      "I've created fx-style as a package to standardize my own code style across all projects, while minimizing devDependencies for each project.",
+    featuredImage: FxStyle,
+  },
+  {
+    name: "Shopify DearSystems API",
+    type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
+    year: "2022",
+    description:
+      "This integration allows my client to effectively synchronize their inventory between Dear and Shopify with multiple store locations and a complex VAT setup.",
+    featuredImage: ShopifyDear,
+  },
+  {
     name: "Waraq Health",
     type: ["Ecommerce"],
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
@@ -291,5 +283,14 @@ export const PROJECTS = [
     description:
       "I worked with Waraq to successfully develop their Shopify site, covering aspects from product image editing and content research and creation.",
     featuredImage: WaraqHealth,
+  },
+  {
+    name: "Vend Shopify Omnisend API",
+    type: ["Integration"],
+    tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
+    year: "2020",
+    description:
+      "A custom integration to collect & update customer information for OmniSend email marketing, utilizing in-store (via QR code) and online sign-ups.",
+    featuredImage: VendShopifyOmnisend,
   },
 ];
