@@ -48,6 +48,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
               >
                 <figure className="relative flex aspect-2 w-full">
                   <Image
+                    preload
                     src={project.featuredImage}
                     alt={project.name}
                     width={400}
