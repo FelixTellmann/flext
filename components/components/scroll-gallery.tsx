@@ -1,5 +1,4 @@
 import { ArrowLongLeftIcon, ArrowLongRightIcon } from "@heroicons/react/24/solid";
-import clsx from "clsx";
 import { FC, PropsWithChildren, useCallback, useEffect, useRef, useState } from "react";
 import { scrollToX } from "utils/scroll-to";
 
