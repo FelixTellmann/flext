@@ -1,3 +1,4 @@
 export const PORTFOLIO = {
-  pre: "Projects i've done",
+  pre: "Portfolio",
+  heading: "Checkout my work.",
 };

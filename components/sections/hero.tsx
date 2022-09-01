@@ -16,7 +16,7 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
   const { theme, setTheme } = useTheme();
 
   return (
-    <section className="hero relative overflow-hidden pb-16">
+    <section className="hero relative overflow-hidden pb-40">
       <div className="relative mx-auto flex max-w-6xl grid-cols-3 flex-col gap-8 gap-y-16 px-4 py-16 md:py-32 md:px-8 lg:grid">
         <section className="col-span-2">
           <header>

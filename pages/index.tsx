@@ -16,7 +16,6 @@ export const Index: FC<IndexProps> = (props) => {
   return (
     <>
       <Hero twitterData={props.twitterData} />
-      <div className="mt-24"></div>
       <PortfolioPreview />
     </>
   );

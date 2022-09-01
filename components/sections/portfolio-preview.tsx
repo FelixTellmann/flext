@@ -6,28 +6,58 @@ import clsx from "clsx";
 import { ScrollGallery } from "components/components/scroll-gallery";
 import { PORTFOLIO } from "content/index.portfolio-preview";
 import { PROJECTS } from "content/projects";
-import { FC } from "react";
+import { FC, useCallback, useState } from "react";
 
 type PortfolioPreviewProps = {};
 
 export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
+  const [filter, setFilter] = useState("All Projects");
+
   return (
     <>
-      <section className="portfolio-preview min-h-full spacing-8">
+      <section className="portfolio-preview min-h-full spacing-4">
         <header className="mx-auto w-full max-w-6xl px-4 md:px-8">
           <div className="heading-pre">{PORTFOLIO.pre}</div>
-          <h1 className="heading-2xl -ml-1">The work I've done over the years.</h1>
-          <div>Filter by tag list</div>
+          <h1 className="heading-2xl -ml-1">{PORTFOLIO.heading}</h1>
+          <fieldset
+            className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2"
+            onChange={(e) => setFilter((e.target as HTMLInputElement).value)}
+          >
+            <legend className="sr-only">Filter by Tag</legend>
+            {["All Projects", ...new Set(PROJECTS.map((p) => p.type).flat())].map((type, index) => {
+              return (
+                <label key={type}>
+                  <input
+                    type="radio"
+                    className="peer hidden"
+                    defaultChecked={index === 0}
+                    name="Tag Filter"
+                    value={type}
+                  />
+                  <div className="cursor-pointer appearance-none whitespace-nowrap rounded-full border border-gray-200 bg-gray-400/10 py-1 px-3 text-[13px] font-medium text-gray-400 transition-colors peer-checked:text-gray-900 hfa:text-gray-500 d:border-gray-700 d:peer-checked:text-gray-50 d:hfa:text-gray-300">
+                    {type}
+                  </div>
+                </label>
+              );
+            })}
+          </fieldset>
         </header>
         <ScrollGallery itemWidth={340} gapWidth={32}>
           {PROJECTS.map((project, index) => {
+            const rotationIndex = PROJECTS.filter(
+              ({ type }) => filter === "All Projects" || type.includes(filter)
+            ).findIndex(({ name }) => project.name === name);
+
             return (
               <section
                 key={project.name}
                 className={clsx(
-                  "/*hfa:rotate-0*/ h-[380px] w-[340px] min-w-[340px] snap-start rounded-xl border-2 border-gray-700/30 bg-clip-padding p-4 shadow-xl spacing-0 d:border-white/20",
-                  index % 2 === 0 && "sm:rotate-[1.5deg]",
-                  index % 2 === 1 && "sm:rotate-[-1.5deg]",
+                  "/*hfa:rotate-0*/ relative h-[380px] w-[340px] min-w-[340px] snap-start rounded-xl border-2 border-gray-700/30 bg-clip-padding p-4 shadow-xl transition-[min-width,width,margin-left,opacity] duration-300 spacing-0 d:border-white/20",
+                  filter === "All Projects" || project.type.includes(filter)
+                    ? "flex"
+                    : "-ml-8 !w-0 !min-w-0 !overflow-hidden !border-0 !px-0 opacity-20",
+                  rotationIndex % 2 === 0 && "sm:rotate-[1.5deg]",
+                  rotationIndex % 2 === 1 && "sm:rotate-[-1.5deg]",
                   index % 8 === 0 &&
                     "shadow-[currentBg] bg-[linear-gradient(40deg,var(--tw-gradient-stops))] from-pink-300/80 to-violet-500/40 shadow-violet-500/20",
                   index % 8 === 1 &&

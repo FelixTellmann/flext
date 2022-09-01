@@ -25,7 +25,7 @@ import ZoomPrinting from "../public/images/projects/ZoomPringing.jpg";
 export const PROJECTS = [
   {
     name: "Lunatag",
-    type: ["Shopify App"],
+    type: ["Shopify Apps"],
     tech: [
       TECH.typescript,
       TECH.vercel,
@@ -55,10 +55,9 @@ export const PROJECTS = [
     featuredImage: Lunatag,
     year: "2022",
   },
-
   {
     name: "Tellmann",
-    type: ["website"],
+    type: ["Marketing Sites"],
     tech: [TECH.typescript, TECH.vercel, TECH.nextjs, TECH.reactjs],
     url: "https://tellmann.co.za",
     repository: "https://github.com/FelixTellmann/tellmann.co.za",
@@ -76,7 +75,7 @@ export const PROJECTS = [
   },
   {
     name: "ClickUpload",
-    type: ["Shopify App"],
+    type: ["Shopify Apps"],
     tech: [
       TECH.typescript,
       TECH.vercel,
@@ -106,7 +105,7 @@ export const PROJECTS = [
   },
   {
     name: "Kids Living",
-    type: ["ecommerce", "integration"],
+    type: ["Ecommerce Sites", "Integrations"],
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.vend, TECH.vercel],
     url: "https://kidsliving.co.za",
     repository: "",
@@ -125,7 +124,7 @@ export const PROJECTS = [
   },
   {
     name: "Lunalemon",
-    type: ["Website"],
+    type: ["Marketing Sites"],
     tech: [
       TECH.shopify,
       TECH.typescript,
@@ -139,19 +138,23 @@ export const PROJECTS = [
     description:
       "Headless Web agency site utilizing Shopify's theme editor as a custom CMS. The site showcases my client oriented projects and promotes web development services.",
     featuredImage: Lunalemon,
+    year: "2022",
+    url: "https://kidsliving.co.za",
+    repository: "https://github.com/FelixTellmann/lunalemon.dev",
   },
   {
     name: "shopify-ftp-access",
-    type: ["Devtool"],
+    type: ["Devtools"],
     tech: [TECH.typescript, TECH.swc, TECH.shopify],
     year: "2017",
+    repository: "https://github.com/FelixTellmann/shopify-ftp-access",
     description:
       "Shopify-ftp-access is an Open Source utility which acts as a proxy that allows you to use any FTP program while running the CLI to connect upload/download any shopify Theme files",
     featuredImage: ShopifyFtp,
   },
   {
     name: "Erply Egypt eInvoicing API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
     year: "2022",
     description:
@@ -160,16 +163,17 @@ export const PROJECTS = [
   },
   {
     name: "Zoom Printing",
-    type: ["Ecommerce"],
+    type: ["Ecommerce Sites"],
     tech: [TECH.shopify, TECH.typescript, TECH.tailwindcss],
     year: "2021",
+    url: "https://www.zoomprinting.ca/",
     description:
       "I've built the Shopify site based on the Warehouse theme, with lots of custom integrations to enable up to 1000 product variants and add-on sales. I've migrated the client from a old legacy self-hosted server, building my own web-scrapers along the way.",
     featuredImage: ZoomPrinting,
   },
   {
     name: "Vend Takealot API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
     year: "2021",
     description:
@@ -178,16 +182,17 @@ export const PROJECTS = [
   },
   {
     name: "Aiko",
-    type: ["Ecommerce"],
+    type: ["Ecommerce Sites"],
     tech: [TECH.figma, TECH.shopify, TECH.tailwindcss, TECH.typescript],
     year: "2022",
+    url: "https://aikoplanet.com/",
     description:
       "I built a fully custom designed Shopify site, utilizing shopify-cms in a non-headless way, to ensure type safety throughout the project using Shopify Liquid templates.",
     featuredImage: Aiko,
   },
   {
     name: "Shopify Courier Guy API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
     year: "2021",
     description:
@@ -196,16 +201,17 @@ export const PROJECTS = [
   },
   {
     name: "shopify-cms",
-    type: ["Devtool"],
+    type: ["Devtools"],
     tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.tailwindcss],
     year: "2022",
+    repository: "https://github.com/FelixTellmann/shopify-cms",
     description:
       "Shopify-cms is another Open Source CLI that I've built. The package helps building a site with the Shopify Theme Editor as a Headless CMS and get fully typed data.",
     featuredImage: ShopifyCms,
   },
   {
     name: "Erply Takealot sales API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios],
     year: "2021",
     description:
@@ -214,25 +220,27 @@ export const PROJECTS = [
   },
   {
     name: "AlphabetPIX",
-    type: ["Ecommerce"],
+    type: ["Ecommerce Sites"],
     tech: [TECH.shopify, TECH.javascript, TECH.sass],
     year: "2017",
+    url: "https://alphabetpix.com/",
     description:
       "Custom build Shopify-site / Web-app that allows customers to create their own named picture frame and generate image files on the fly for their checkout.",
     featuredImage: AlphabetPIX,
   },
   {
     name: "shopify-typed-node-api",
-    type: ["Devtool"],
+    type: ["Devtools"],
     tech: [TECH.shopify, TECH.typescript, TECH.graphql, TECH.reactjs, TECH.nodejs],
     year: "2021",
+    repository: "https://github.com/FelixTellmann/shopify-typed-node-api/",
     description:
       "Shopify-typed-node-api is an extension to the popular shopify-node-api, adding typescript support for all Rest & GraphQL endpoints provided by Shopify.",
     featuredImage: ShopifyTypedNodeApi,
   },
   {
     name: "Shopify Vend product API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.graphql, TECH.shopify, TECH.vend],
     year: "2020",
     description:
@@ -241,34 +249,37 @@ export const PROJECTS = [
   },
   {
     name: "BushScarf",
-    type: ["Ecommerce"],
+    type: ["Ecommerce Sites"],
     tech: [TECH.shopify, TECH.javascript, TECH.sass],
     year: "2016",
+    url: "https://originalthings-za.myshopify.com/",
     description:
       "I worked with Bushscarf to develop their Shopify Website covering aspects from product photography, product image editing and product content creation.",
     featuredImage: BushScarf,
   },
   {
     name: "Broadway Jewellers",
-    type: ["Ecommerce"],
+    type: ["Ecommerce Sites"],
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
     year: "2020",
+    url: "https://broadwayjewellers.co.za/",
     description:
       "My work with Broadway Jewellers started with migrating their site form WordPress to Shopify, I also covered an array of aspects from inventory management, digital marketing, SEO web solutions, web design upgrade to custom API solutions.",
     featuredImage: BroadwayJewellers,
   },
   {
     name: "fx-style",
-    type: ["Devtool"],
+    type: ["Devtools"],
     tech: [TECH.prettier, TECH.eslint, TECH.typescript],
     year: "2020",
+    repository: "https://github.com/FelixTellmann/fx-style",
     description:
       "I've created fx-style as a package to standardize my own code style across all projects, while minimizing devDependencies for each project.",
     featuredImage: FxStyle,
   },
   {
     name: "Shopify DearSystems API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.shopify],
     year: "2022",
     description:
@@ -277,16 +288,17 @@ export const PROJECTS = [
   },
   {
     name: "Waraq Health",
-    type: ["Ecommerce"],
+    type: ["Ecommerce Sites"],
     tech: [TECH.shopify, TECH.typescript, TECH.sass, TECH.aws],
     year: "2021",
+    url: "https://waraqhealth.com/",
     description:
       "I worked with Waraq to successfully develop their Shopify site, covering aspects from product image editing and content research and creation.",
     featuredImage: WaraqHealth,
   },
   {
     name: "Vend Shopify Omnisend API",
-    type: ["Integration"],
+    type: ["Integrations"],
     tech: [TECH.nextjs, TECH.aws_lambda, TECH.axios, TECH.vend],
     year: "2020",
     description:
