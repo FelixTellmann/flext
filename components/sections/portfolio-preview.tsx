@@ -113,6 +113,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                   </div>
                   {project.repository
                     ? <Link
+                        target="_blank"
                         href={project.repository}
                         className="p-1 text-gray-700/80 transition-all hfa:text-gray-900 d:text-gray-300/80 d:hfa:text-gray-50"
                         data-tip="View repository"
@@ -123,6 +124,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                     : null}
                   {project.url
                     ? <Link
+                        target="_blank"
                         href={project.url}
                         className="p-1 text-gray-700/80 transition-all hfa:text-gray-900 d:text-gray-300/80 d:hfa:text-gray-50"
                         data-tip="View site"
