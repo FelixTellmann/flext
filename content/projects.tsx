@@ -7,7 +7,7 @@ import ClickUpload from "../public/images/projects/ClickUpload.jpg";
 import ErplyEgypt from "../public/images/projects/Erply Egypt.png";
 import ErplyTakealot from "../public/images/projects/Erply Takealot.png";
 import FxStyle from "../public/images/projects/fx-style.png";
-import KidsLiving from "../public/images/projects/Kidsliving.jpg";
+import KidsLiving from "../public/images/projects/kidsliving.jpg";
 import Lunalemon from "../public/images/projects/Lunalemon.jpg";
 import Lunatag from "../public/images/projects/Lunatag.jpg";
 import ShopifyCourierGuy from "../public/images/projects/Shopify CourierGuy.png";
