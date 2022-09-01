@@ -42,7 +42,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
             })}
           </fieldset>
         </header>
-        <ScrollGallery itemWidth={340} gapWidth={32}>
+        <ScrollGallery itemWidth={340} gapWidth={32} filter={filter}>
           {PROJECTS.map((project, index) => {
             const rotationIndex = PROJECTS.filter(
               ({ type }) => filter === "All Projects" || type.includes(filter)
@@ -52,7 +52,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
               <section
                 key={project.name}
                 className={clsx(
-                  "/*hfa:rotate-0*/ relative h-[380px] w-[340px] min-w-[340px] snap-start rounded-xl border-2 border-gray-700/30 bg-clip-padding p-4 shadow-xl transition-[min-width,width,margin-left,opacity] duration-300 spacing-0 d:border-white/20",
+                  "relative h-[380px] w-[340px] min-w-[340px] snap-start rounded-xl border-2 border-gray-700/30 bg-clip-padding p-4 shadow-xl transition-[min-width,width,margin-left,opacity] duration-300 spacing-0 d:border-white/20",
                   filter === "All Projects" || project.type.includes(filter)
                     ? "flex"
                     : "-ml-8 !w-0 !min-w-0 !overflow-hidden !border-0 !px-0 opacity-20",

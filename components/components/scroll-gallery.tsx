@@ -1,12 +1,11 @@
 import { ArrowLongLeftIcon, ArrowLongRightIcon } from "@heroicons/react/24/solid";
+import clsx from "clsx";
 import { FC, PropsWithChildren, useCallback, useEffect, useRef, useState } from "react";
 import { scrollToX } from "utils/scroll-to";
 
-export const ScrollGallery: FC<PropsWithChildren<{ itemWidth: number; gapWidth: number }>> = ({
-  itemWidth,
-  gapWidth,
-  children,
-}) => {
+export const ScrollGallery: FC<
+  PropsWithChildren<{ itemWidth: number; gapWidth: number; filter }>
+> = ({ itemWidth, gapWidth, children, filter }) => {
   const scrollContainerRef = useRef<HTMLElement>(null);
   const [scrollNavigation, setScrollNavigation] = useState({ prev: false, next: true });
   const [isScrolling, setIsScrolling] = useState(false);
@@ -36,7 +35,7 @@ export const ScrollGallery: FC<PropsWithChildren<{ itemWidth: number; gapWidth: 
       setIsScrolling(false);
       scrollContainer.classList.add("snap-x");
     });
-  }, [isScrolling]);
+  }, [gapWidth, isScrolling, itemWidth]);
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current as HTMLDivElement;
@@ -55,11 +54,21 @@ export const ScrollGallery: FC<PropsWithChildren<{ itemWidth: number; gapWidth: 
     };
   }, []);
 
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current as HTMLDivElement;
+    scrollContainer.classList.remove("snap-x");
+    setIsScrolling(true);
+    scrollToX(200, 0, scrollContainer, () => {
+      setIsScrolling(false);
+      scrollContainer.classList.add("snap-x");
+    });
+  }, [filter, gapWidth, itemWidth]);
+
   return (
     <>
       <div className="relative">
         <main
-          className="sm:scrollbar-none group relative flex snap-x snap-mandatory scroll-pl-4 gap-8 overflow-x-auto py-12 px-4 md:scroll-pl-8 md:px-8"
+          className="sm:scrollbar-none group relative flex snap-x snap-mandatory scroll-pl-[max(var(--slider-padding),calc((100%-72rem)/2+var(--slider-padding)))] gap-8 overflow-x-auto py-12 px-[max(var(--slider-padding),calc((100%-72rem)/2+var(--slider-padding)))] [--slider-padding:2rem]"
           ref={scrollContainerRef}
         >
           {children}
