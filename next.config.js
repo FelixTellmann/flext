@@ -14,7 +14,7 @@ module.exports = withBundleAnalyzer({
   productionBrowserSourceMaps: true,
   images: {
     dangerouslyAllowSVG: true,
-    deviceSizes: [460, 540, 640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    deviceSizes: [320, 460, 540, 640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     domains: [
       "assets.vercel.com",
       "avatars1.githubusercontent.com",

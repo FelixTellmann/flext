@@ -83,6 +83,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                     alt={project.name}
                     width={400}
                     height={200}
+                    maxWidth={320}
                     className="rounded-t-lg object-cover object-center [mask-image:linear-gradient(180deg,#fff_16.35%,rgb(255_255_255_/_0%)_91.66%)]"
                   />
                 </figure>
