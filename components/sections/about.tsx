@@ -1,6 +1,6 @@
 import { useTooltipStore } from "_client/_stores/tooltip-store";
 import { Image } from "_client/image";
-import { ABOUT } from "content/index.about";
+import { ABOUT } from "content/about";
 import { FC, useCallback, useRef, useState } from "react";
 
 type AboutProps = {};
@@ -70,7 +70,7 @@ export const About: FC<AboutProps> = (props) => {
               key={alt}
               width={2000}
               height={1500}
-              sizes="400, 640"
+              sizes="(min-width: 580px) 540px, 400px"
               preload
               priority={index === 0}
               className="absolute left-0 top-0 rounded-xl border-2 border-gray-50/80 object-cover shadow-lg shadow-gray-700/5 transition-all duration-300 d:border-gray-600/80"

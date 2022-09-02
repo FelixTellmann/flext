@@ -4,7 +4,7 @@ import { Image } from "_client/image";
 import { Link } from "_client/link";
 import clsx from "clsx";
 import { ScrollGallery } from "components/components/scroll-gallery";
-import { PORTFOLIO } from "content/index.portfolio-preview";
+import { PORTFOLIO } from "content/portfolio-preview";
 import { PROJECTS } from "content/projects";
 import { FC, useCallback, useState } from "react";
 

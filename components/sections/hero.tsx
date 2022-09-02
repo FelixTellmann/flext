@@ -4,7 +4,7 @@ import { Badge } from "components/badge";
 import { CodeEditor } from "components/code-editor";
 import ToggleSwitch from "components/toggle-switch";
 import { TwitterProfile } from "components/twitter-profile";
-import { HERO } from "content/index.hero";
+import { HERO } from "content/hero";
 import { useTheme } from "next-themes";
 import { FC } from "react";
 import { components } from "twitter-api-sdk/dist/gen/openapi-types";
