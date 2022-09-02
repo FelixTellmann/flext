@@ -138,8 +138,6 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
             );
           })}
         </ScrollGallery>
-
-        <footer>Show more button</footer>
       </section>
     </>
   );

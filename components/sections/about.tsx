@@ -101,14 +101,14 @@ export const About: FC<AboutProps> = (props) => {
                 <span className="bg-gradient-to-r from-cyan-500 to-blue-400 bg-clip-text text-4xl font-extrabold tracking-tighter text-transparent">
                   {statistic}
                 </span>
-                <figcaption className="text-[15px] font-semibold tracking-tight text-gray-400">
+                <figcaption className="text-[15px] font-semibold tracking-tight text-gray-400 d:text-gray-300/80">
                   {caption}
                 </figcaption>
               </figure>
             );
           })}
         </header>
-        <main className="tracking tight max-w-3xl leading-relaxed text-gray-500 [&>p+p]:mt-4">
+        <main className="tracking tight max-w-3xl leading-relaxed text-gray-500 d:text-gray-100/70 [&>p+p]:mt-4">
           {ABOUT.description}
         </main>
       </section>
