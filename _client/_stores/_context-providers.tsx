@@ -1,6 +1,7 @@
 import { GloballyMountedProvider } from "_client/_stores/is-globally-mounted-store";
 import { NotificationsProvider } from "_client/_stores/notifications-store";
 import { PreloadedImagesProvider } from "_client/_stores/preloaded-images-store";
+import { TooltipProvider } from "_client/_stores/tooltip-store";
 import { ThemeProvider } from "next-themes";
 import { FC, PropsWithChildren } from "react";
 import { LazyMotion, domAnimation } from "framer-motion";
@@ -11,7 +12,9 @@ export const ContextProviders: FC<PropsWithChildren<any>> = ({ children }) => {
       <GloballyMountedProvider>
         <NotificationsProvider>
           <ThemeProvider attribute="class">
-            <LazyMotion features={domAnimation}>{children}</LazyMotion>
+            <LazyMotion features={domAnimation}>
+              <TooltipProvider>{children}</TooltipProvider>
+            </LazyMotion>
           </ThemeProvider>
         </NotificationsProvider>
       </GloballyMountedProvider>

@@ -1,3 +1,4 @@
+import { About } from "components/sections/about";
 import { Hero } from "components/sections/hero";
 import { PortfolioPreview } from "components/sections/portfolio-preview";
 import { GetStaticProps } from "next";
@@ -16,6 +17,7 @@ export const Index: FC<IndexProps> = (props) => {
   return (
     <>
       <Hero twitterData={props.twitterData} />
+      <About />
       <PortfolioPreview />
     </>
   );

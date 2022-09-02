@@ -48,7 +48,7 @@ export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
     <>
       {children}
       <Toast />
-      {isGloballyMounted
+      {isGloballyMounted && tooltip
         ? <ReactTooltip
             place="bottom"
             effect="solid"
