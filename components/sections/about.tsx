@@ -70,6 +70,7 @@ export const About: FC<AboutProps> = (props) => {
               key={alt}
               width={2000}
               height={1500}
+              sizes="400, 640"
               preload
               priority={index === 0}
               className="absolute left-0 top-0 rounded-xl border-2 border-gray-50/80 object-cover shadow-lg shadow-gray-700/5 transition-all duration-300 d:border-gray-600/80"
