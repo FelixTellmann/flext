@@ -64,7 +64,7 @@ export const About: FC<AboutProps> = (props) => {
         {images.map(({ src, alt }, index) => {
           return (
             <Image
-              maxWidth={600}
+              maxWidth={540}
               src={src}
               alt={alt}
               key={alt}
