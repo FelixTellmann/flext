@@ -280,7 +280,138 @@ export const TIMELINE = [
   {
     date: "2017-08-01",
     icon: ({ className }) => <SignalIcon className={className} />,
-    heading: "Liquix.io",
+    heading: "Shopify Dev",
     description: "Partnered up to start a small Shopify E-commerce web design studio.",
+  },
+  {
+    date: "2018-01-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "First Custom Project",
+    description:
+      "I've built AlphabetPIX for a client as my first web-app, learning tons on a new tech domain.",
+  },
+  {
+    date: "2018-02-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Move to Knysna",
+    description:
+      "My Wife and I made the decision to move to Knysna on the Garden Route to open a Restaurant.",
+  },
+  {
+    date: "2018-05-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Start-up Funding",
+    description:
+      "The first experience acquiring start-up funding for our restaurant. You gotta move early and fast, as everyone else will slow you down.",
+  },
+  {
+    date: "2018-05-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "The Burger Exchange",
+    description:
+      "Its always been a dream Now we took the steps to make it a reality. A 200 seater Restaurant with our own concept of a trendy upmarket Burger Joint.",
+  },
+  {
+    date: "2019-05-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Namibia Holidays",
+    description:
+      "We survived our first holiday season at the restaurant and took a one week holiday which was simply mind blowing.",
+  },
+  {
+    date: "2019-05-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Restaurant Upgrade",
+    description:
+      "We upgraded the concept to the fit market environment & shifted focus to also include a variety of wood fired grills. 🥩🔥",
+  },
+  {
+    date: "2019-05-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Smart-Up 2.0",
+    description:
+      "I took a data driven approach to create new training material for Smart-Up Online, and to use internally at the restaurant. Including a deep dive into MySQL & Oracle DB.",
+  },
+  {
+    date: "2020-01-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Season 2",
+    description:
+      "We grew the restaurant consistently, with the best season and a blast of a staff party to finish off the holiday times.",
+  },
+  {
+    date: "2020-02-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Covid 19",
+    description:
+      "From a successful restaurant to closing our doors in a matter of weeks. Its been a great journey, the uncertainty of corona and the lockdown have clarified major life-changing questions. Answering them became easy overnight.",
+  },
+  {
+    date: "2020-04-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Back to Web Dev",
+    description:
+      "I restarted my freelancing Web dev and got back in touch with clients, jumping into the booming ecommerce train.",
+  },
+  {
+    date: "2020-07-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "felixtellmann.com",
+    description:
+      "Finally after a few months of design & redesigns, and other projects in the background, I got my new (now old) page up and running.",
+  },
+  {
+    date: "2021-01-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Dev tools",
+    description: "fx-style - shopify-ftp",
+  },
+  {
+    date: "2021-04-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Otter Trail",
+    description: "45 km hike april",
+  },
+  {
+    date: "2021-06-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "New Office",
+    description: "Bree Street",
+  },
+  {
+    date: "2021-08-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "ClickUpload",
+    description: "First Shopify App",
+  },
+  {
+    date: "2021-11-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "shopify-typed-node-api",
+    description: "dev tool",
+  },
+  {
+    date: "2021-02-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "backend integrations",
+    description: "dev tool",
+  },
+  {
+    date: "2022-01-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "LunaTag",
+    description: "Second Shopify App",
+  },
+  {
+    date: "2022-02-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Lunalemon",
+    description: "International Agency",
+  },
+  {
+    date: "2022-02-01",
+    icon: ({ className }) => <SignalIcon className={className} />,
+    heading: "Shopify-cms",
+    description: "Shopify Cms",
   },
 ];
