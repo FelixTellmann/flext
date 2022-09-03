@@ -16,31 +16,35 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
   return (
     <>
       <section className="portfolio-preview min-h-full spacing-4">
-        <header className="mx-auto w-full max-w-6xl px-4 md:px-8">
+        <header className="mx-auto grid w-full max-w-6xl px-4 md:px-8">
           <div className="heading-pre">{PORTFOLIO.pre}</div>
           <h1 className="heading-2xl -ml-1">{PORTFOLIO.heading}</h1>
-          <fieldset
-            className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2"
-            onChange={(e) => setFilter((e.target as HTMLInputElement).value)}
-          >
-            <legend className="sr-only">Filter by Tag</legend>
-            {["All Projects", ...new Set(PROJECTS.map((p) => p.type).flat())].map((type, index) => {
-              return (
-                <label key={type}>
-                  <input
-                    type="radio"
-                    className="peer hidden"
-                    defaultChecked={index === 0}
-                    name="Tag Filter"
-                    value={type}
-                  />
-                  <div className="cursor-pointer appearance-none whitespace-nowrap rounded-full border border-gray-200 bg-gray-400/10 py-1 px-3 text-[13px] font-medium text-gray-400 transition-colors peer-checked:text-gray-900 hfa:text-gray-500 d:border-gray-700 d:peer-checked:text-gray-50 d:hfa:text-gray-300">
-                    {type}
-                  </div>
-                </label>
-              );
-            })}
-          </fieldset>
+          <div className="relative -mx-4 overflow-x-auto px-4 pb-2">
+            <fieldset
+              className="flex gap-3"
+              onChange={(e) => setFilter((e.target as HTMLInputElement).value)}
+            >
+              <legend className="sr-only">Filter by Tag</legend>
+              {["All Projects", ...new Set(PROJECTS.map((p) => p.type).flat())].map(
+                (type, index) => {
+                  return (
+                    <label key={type} className="flex">
+                      <input
+                        type="radio"
+                        className="peer hidden"
+                        defaultChecked={index === 0}
+                        name="Tag Filter"
+                        value={type}
+                      />
+                      <div className="cursor-pointer appearance-none whitespace-nowrap rounded-full border border-gray-200 bg-gray-400/10 py-1 px-3 text-[13px] font-medium text-gray-400 transition-colors peer-checked:text-gray-900 hfa:text-gray-500 d:border-gray-700 d:peer-checked:text-gray-50 d:hfa:text-gray-300">
+                        {type}
+                      </div>
+                    </label>
+                  );
+                }
+              )}
+            </fieldset>
+          </div>
         </header>
         <ScrollGallery itemWidth={340} gapWidth={32} filter={filter}>
           {PROJECTS.map((project, index) => {

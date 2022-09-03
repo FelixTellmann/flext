@@ -220,6 +220,8 @@ module.exports = {
       addVariant("hfaa", ["&:hover", "&:focus", "&:active, &.active"]);
       addVariant("hfvaa", ["&:hover", "&:focus", "&:focus-visible", "&:active, &.active"]);
       addVariant("group-hfa", [".group:hover &", ".group:focus &", ".group:active &"]);
+      addVariant("selected", [".selected &", ".selected &", ".selected &"]);
+      addVariant("peer-hfa", [".peer:hover ~ &", ".peer:focus ~ &", ".peer:active ~ &"]);
       addVariant("group-hfva", [
         ".group:hover &",
         ".group:focus &",

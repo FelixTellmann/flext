@@ -66,6 +66,7 @@ export const Code: FC<CodeGroupProps> = ({ language, plugins, lineHighlight, cod
         className
       )}
       data-line={lineHighlight}
+      tabIndex={-1}
     >
       {(Array.isArray(code) ? code : [code]).map((code, index) => {
         return (

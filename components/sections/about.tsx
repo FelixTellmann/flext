@@ -6,6 +6,7 @@ import { FC, useCallback, useRef, useState } from "react";
 type AboutProps = {};
 
 export const About: FC<AboutProps> = (props) => {
+  const imageRef = useRef<HTMLImageElement[]>([]);
   const [focusImageIndex, setFocusImageIndex] = useState(0);
   const [images, setImages] = useState(ABOUT.images);
   const [tooltip, setTooltip] = useTooltipStore();
@@ -51,10 +52,10 @@ export const About: FC<AboutProps> = (props) => {
   }, [focusImageIndex, images.length, setTooltip]);
 
   return (
-    <section className="mx-auto flex max-w-6xl flex-col justify-center gap-16 px-4 pb-32 md:px-8 lg:grid lg:grid-cols-[540px_auto] lg:pt-16">
+    <section className="mx-auto flex max-w-6xl flex-col justify-center gap-16 overflow-hidden px-4 pb-32 md:px-8 lg:grid lg:grid-cols-[540px_auto] lg:pt-16">
       <button
         ref={buttonRef}
-        className="relative mx-auto mb-12 aspect-3/2 max-h-[405px] w-full max-w-[540px] flex-1 lg:mb-auto lg:-ml-4 lg:mr-0 lg:aspect-4/3"
+        className="group relative mx-auto mb-12 aspect-3/2 max-h-[405px] w-full max-w-[540px] flex-1 hfa:outline-none lg:mb-auto lg:-ml-4 lg:mr-0 lg:aspect-4/3"
         onClick={handleImageClick}
         type="button"
         data-event="mouseover"
@@ -73,7 +74,13 @@ export const About: FC<AboutProps> = (props) => {
               sizes="(min-width: 580px) 540px, 400px"
               preload
               priority={index === 0}
-              className="absolute left-0 top-0 rounded-xl border-2 border-gray-50/80 object-cover shadow-lg shadow-gray-700/5 transition-all duration-300 d:border-gray-600/80"
+              className="absolute left-0 top-0 rounded-xl border-2 border-gray-50/80 object-cover !opacity-0 shadow-lg shadow-gray-700/5 transition-all duration-300 group-focus-visible:border-sky-500 d:border-gray-600/80"
+              data-about-image-index={index}
+              onLoadingComplete={() =>
+                document
+                  .querySelectorAll(`[data-about-image-index="${index}"]`)
+                  .forEach((img) => img.classList.remove("!opacity-0"))
+              }
               style={{
                 transform:
                   focusImageIndex > index
