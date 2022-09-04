@@ -34,7 +34,7 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
                   ]}
                 />
               </h2>*/}
-            <ul className="sm:scrollbar-none -mx-4 mb-4 flex items-center gap-6 overflow-x-auto px-4 text-[15px] font-medium">
+            <ul className="sm:scrollbar-none -mx-4 mb-2 flex items-center gap-6 overflow-x-auto px-4 pb-2 text-[15px] font-medium">
               {HERO.tech.map(({ name, Icon }) => (
                 <li className="flex items-center gap-2 text-gray-500 d:text-gray-400" key={name}>
                   <Icon className="h-7 w-7 text-gray-400 d:text-gray-300/80" />
