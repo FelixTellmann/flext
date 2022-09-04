@@ -21,7 +21,7 @@ export const ABOUT = {
   stats: [
     {
       statistic: `${
-        new Date(Date.now() - new Date("1986-01-08 01:30").getTime()).getUTCFullYear() - 1970
+        new Date(Date.now() - new Date("1986-01-08 01:30").getTime()).getFullYear() - 1970
       }`,
       tooltip: `${Math.round(
         (Date.now() - new Date("1986-01-08 01:30").getTime()) / 1000
