@@ -52,7 +52,7 @@ export const About: FC<AboutProps> = (props) => {
   }, [focusImageIndex, images.length, setTooltip]);
 
   return (
-    <section className="mx-auto -mt-8 flex max-w-6xl flex-col justify-center gap-16 overflow-hidden px-4 pb-32 pt-8 md:px-8 lg:grid lg:grid-cols-[540px_auto] lg:pt-16">
+    <section className="mx-auto -mt-12 flex max-w-6xl flex-col justify-center gap-16 overflow-hidden px-4 pb-16 pt-12 md:px-8 lg:grid lg:grid-cols-[540px_auto] lg:pt-16">
       <button
         ref={buttonRef}
         className="group relative mx-auto mb-12 aspect-3/2 max-h-[405px] w-full max-w-[540px] flex-1 hfa:outline-none lg:mb-auto lg:-ml-4 lg:mr-0 lg:aspect-4/3"

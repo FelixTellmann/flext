@@ -60,7 +60,7 @@ export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
             className="relative !border-none !border-transparent !p-0"
             getContent={(content) => {
               return (
-                <span className="pointer-events-auto block h-[calc(100%+1px)] w-[calc(100%+1px)] select-none rounded-sm border-card bg-white py-2 px-5 text-slate-700 opacity-100 shadow-xl">
+                <span className="pointer-events-auto block h-[calc(100%+1px)] w-[calc(100%+1px)] max-w-[calc(100vw-32px)] select-none rounded-sm border-card bg-white py-2 px-5 text-slate-700 opacity-100 shadow-xl">
                   {content}
                 </span>
               );

@@ -47,9 +47,13 @@ export const HERO = {
         WOW!
       </em>
       .<span className="mt-4 block" />I am always keen to learn and explore new technologies,
-      frameworks and programming languages. Currently, I'm learning{" "}
+      frameworks and programming languages. Currently, I'm learning about{" "}
       <Link target="_blank" href="https://astro.build/" className="underline hfa:text-sky-500">
         Astro
+      </Link>{" "}
+      and{" "}
+      <Link href="https://replicache.dev" target="_blank">
+        Replicache
       </Link>
       .
     </>

@@ -422,57 +422,66 @@ export const TIMELINEOBJECT = {
     {
       date: "2021-01-01",
       heading: "Dev tools",
-      description: "fx-style - shopify-ftp",
+      description:
+        "I created created and maintain two open source dev tools: fx-style and shopify-ftp-access.",
       Icon: ({ className = "" }) => <CodeBracketSquareIcon className={className} />,
     },
     {
       date: "2021-04-01",
       heading: "Otter Trail",
-      description: "45 km hike april",
+      description:
+        "I went on a 5 day adventure hike carrying 15kg of gear & provisions for 45km on the Garden Route",
       Icon: ({ className = "" }) => <RiWalkFill className={className} />,
     },
     {
       date: "2021-06-01",
       heading: "New Office",
-      description: "Bree Street",
+      description:
+        "We moved into our new office on Bree street with a stunning balcony and some great neighbours.",
       Icon: ({ className = "" }) => <BuildingOffice2Icon className={className} />,
     },
     {
       date: "2021-08-01",
       heading: "ClickUpload",
-      description: "First Shopify App",
+      description:
+        "I lead the creation of ClickUpload, a public Shopify app that allows users to upload files with their orders.",
       Icon: ({ className = "" }) => <SiShopify className={className} />,
     },
     {
       date: "2021-11-01",
       heading: "shopify-typed-node-api",
-      description: "dev tool",
+      description:
+        "I upgraded shopify-node-api to be fully typesafe and published it as an alternative to the non TS version.",
       Icon: ({ className = "" }) => <CodeBracketIcon className={className} />,
     },
     {
       date: "2021-02-01",
       heading: "backend integrations",
-      description: "dev tool",
+      description:
+        "Over the year I got heavily involved in some backend custom integrations, building solutions with AWS for our clients.",
       Icon: ({ className = "" }) => <StarIcon className={className} />,
     },
   ],
   "2022": [
     {
       date: "2022-01-01",
-      heading: "LunaTag",
-      description: "Second Shopify App",
-      Icon: ({ className = "" }) => <SiShopify className={className} />,
-    },
-    {
-      date: "2022-02-01",
       heading: "Lunalemon",
-      description: "International Agency",
+      description:
+        "We've launched LunaLemon as a brand to reach a more international audience for app & headless ecommerce solutions.",
       Icon: ({ className = "" }) => <ComputerDesktopIcon className={className} />,
     },
     {
       date: "2022-02-01",
+      heading: "LunaTag",
+      description:
+        "The second Shopify App that's published in the App store allows marchants to Tag their product on any image on their store.",
+      Icon: ({ className = "" }) => <SiShopify className={className} />,
+    },
+    {
+      date: "2022-02-01",
       heading: "Shopify-cms",
-      description: "Shopify Cms",
+      description:
+        "I always wanted to create a Shopify Theme that was fully React based, I finally figured it out and build shopify-cms along the way.",
       Icon: ({ className = "" }) => <CodeBracketSquareIcon className={className} />,
     },
   ],
