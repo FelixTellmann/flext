@@ -504,7 +504,35 @@ export const CV = {
       country: "South Africa",
       company: "Liquix (Pty) Ltd. – Web Agency",
       title: "Senior Front-end Developer",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Developing Shopify themes for clients using Liquid, Javascript, HTML5 & CSS",
+          type: ["Web Development"],
+        },
+        {
+          content: "Assisted in the hiring of new developers",
+          type: ["Management"],
+        },
+        {
+          content:
+            "Developed the Agency marketing site using React.js and Shopify as a headless cms",
+          type: ["Web Development"],
+        },
+        {
+          content:
+            "Mentored more junior engineers through pair programming, code reviews and 1-on-1s",
+          type: ["Web Development"],
+        },
+        {
+          content: "Created documentation & coding standards for internal use across all projects",
+          type: ["Web Development"],
+        },
+        {
+          content:
+            "Handled large scale data migrations, using direct database access and developed web-scrapers for legacy systems",
+          type: ["Web Development"],
+        },
+      ],
     },
     {
       dateFrom: "2018-07-01",
@@ -513,7 +541,38 @@ export const CV = {
       country: "South Africa",
       company: "The Burger Exchange (Pty) Ltd",
       title: "Co-Founder, Managing Director",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content:
+            "Co-founded a new 200 seater restaurant in Knysna based on our own concept & design",
+          type: ["Entrepreneur"],
+        },
+        {
+          content: "Developing & providing Strategy & direction for the team",
+          type: ["Entrepreneur"],
+        },
+        {
+          content:
+            "Project management, shop fitting, operations and establishing a team of 25+ employees",
+          type: ["Management"],
+        },
+        {
+          content: "Handling of all Legal, IT & Financial responsibilities",
+          type: ["Management"],
+        },
+        {
+          content: "Designed & created the restaurant website",
+          type: ["Web Development"],
+        },
+        {
+          content: "Involved in all marketing & day-to-day operations",
+          type: ["Management"],
+        },
+        {
+          content: "Properly closing of the business & retrenching of all employees in March 2018",
+          type: ["Management"],
+        },
+      ],
     },
     {
       dateFrom: "2018-07-01",
@@ -522,7 +581,31 @@ export const CV = {
       country: "South Africa",
       company: "Tellmann – Web Design Studio",
       title: "Founder & Principal Full-Stack Web Developer",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content:
+            "Founded Tellmann Ecommerce studio to provide high quality Shopify development services.",
+          type: ["Entrepreneur"],
+        },
+        {
+          content: "Responsible for finding & on-boarding new clients and handling business growth",
+          type: ["Entrepreneur"],
+        },
+        {
+          content:
+            "Design email marketing campaigns, track week-over-week analytics to measure impact and reach.",
+          type: ["Design", "Web Development"],
+        },
+        {
+          content:
+            "Developed and maintained all client projects from based on design & data briefs.",
+          type: ["Web Development"],
+        },
+        {
+          content: "Providing of web-, data-, tech- and on-site support to clients.",
+          type: ["Web Development"],
+        },
+      ],
     },
   ],
   development: [
