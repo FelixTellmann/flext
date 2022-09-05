@@ -21,10 +21,10 @@ export const ABOUT = {
   stats: [
     {
       statistic: `${
-        new Date(Date.now() - new Date("1986-01-08 01:30").getTime()).getFullYear() - 1970
+        new Date(Date.now() - new Date("1986-01-08T01:30:00").getTime()).getFullYear() - 1970
       }`,
       tooltip: `${Math.round(
-        (Date.now() - new Date("1986-01-08 01:30").getTime()) / 1000
+        (Date.now() - new Date("1986-01-08T01:30:00").getTime()) / 1000
       )} seconds`,
       caption: "Years Old",
     },

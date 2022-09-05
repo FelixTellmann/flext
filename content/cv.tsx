@@ -5,8 +5,8 @@ export const CV = {
   mobile: "+27760313590",
   eduction: [
     {
-      dateFrom: "1992",
-      dateTo: "1996",
+      dateFrom: "1992-08-01",
+      dateTo: "1996-08-01",
       city: "Mönchengladbach",
       country: "Germany",
       institution: "Primary School Gertraudenstraße",
@@ -14,8 +14,8 @@ export const CV = {
       level: "School",
     },
     {
-      dateFrom: "1996",
-      dateTo: "2002",
+      dateFrom: "1996-08-01",
+      dateTo: "2002-08-01",
       city: "Mönchengladbach",
       country: "Germany",
       institution: "Comprehensive School Espenstraße",
@@ -23,8 +23,8 @@ export const CV = {
       level: "School",
     },
     {
-      dateFrom: "2002",
-      dateTo: "2004",
+      dateFrom: "2002-08-01",
+      dateTo: "2004-08-01",
       city: "Mönchengladbach",
       country: "Germany",
       institution: "Vocational College of Technology and Media",
@@ -32,8 +32,8 @@ export const CV = {
       level: "School",
     },
     {
-      dateFrom: "2008",
-      dateTo: "2008",
+      dateFrom: "2008-01-01",
+      dateTo: "2008-07-01",
       city: "Cape Town",
       country: "South Africa",
       institution: "International Hotel School",
@@ -41,8 +41,8 @@ export const CV = {
       level: "Higher Education",
     },
     {
-      dateFrom: "2009",
-      dateTo: "2012",
+      dateFrom: "2009-07-01",
+      dateTo: "2012-07-01",
       city: "Cape Town",
       country: "South Africa",
       institution: "International Hotel School",
@@ -50,8 +50,8 @@ export const CV = {
       level: "Higher Education",
     },
     {
-      dateFrom: "2009",
-      dateTo: "2012",
+      dateFrom: "2009-07-01",
+      dateTo: "2012-07-01",
       city: "Cape Town",
       country: "South Africa",
       institution: "International Hotel School",
@@ -59,8 +59,8 @@ export const CV = {
       level: "Higher Education",
     },
     {
-      dateFrom: "2013",
-      dateTo: "2013",
+      dateFrom: "2013-01-01",
+      dateTo: "2013-07-01",
       city: "Cape Town",
       country: "South Africa",
       institution: "International Hotel School",
@@ -68,8 +68,8 @@ export const CV = {
       level: "Higher Education",
     },
     {
-      dateFrom: "2015",
-      dateTo: "2015",
+      dateFrom: "2015-01-01",
+      dateTo: "2015-12-01",
       city: "Cape Town",
       country: "South Africa",
       institution: "University of Cape Town",
@@ -79,161 +79,419 @@ export const CV = {
   ],
   experience: [
     {
-      dateFrom: "2005/01",
-      dateTo: "2005/07",
+      dateFrom: "2005-01-01",
+      dateTo: "2005-07-01",
       city: "Mönchengladbach",
       country: "Germany",
-      company: "Internet Café Matrix",
+      company: "Internet Cafe Matrix",
       title: "IT Technical Assistant",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Assisted in hardware infrastructure & wired network installation",
+          type: ["Dev Ops"],
+        },
+        {
+          content: "Created automated on-demand user-profile setup using Windows XP",
+          type: ["Dev Ops"],
+        },
+        {
+          content: "Programmed Windows XP user access roles to restrict sensitive file access",
+          type: ["Dev Ops"],
+        },
+        {
+          content: "Handling of day-to-day user queries & requests",
+          type: ["IT Support"],
+        },
+      ],
     },
     {
-      dateFrom: "2005/07",
-      dateTo: "2006/03",
+      dateFrom: "2005-07-01",
+      dateTo: "2006-03-01",
       city: "Mönchengladbach",
       country: "Germany",
       company: "Social Holding Mönchengladbach",
-      title: "Volunteer Delivery Driver",
-      responsibilities: [],
+      title: "Civilian Alternative Service",
+      responsibilities: [
+        {
+          content: "Delivery of food for elderly people",
+          type: ["Social Impact"],
+        },
+        {
+          content: "Caregiver to disabled individuals",
+          type: ["Social Impact"],
+        },
+      ],
     },
     {
-      dateFrom: "2006/05",
-      dateTo: "2007/06",
+      dateFrom: "2006-05-01",
+      dateTo: "2007-06-01",
       city: "Mönchengladbach",
       country: "Germany",
       company: "Schröder & Tellmann Design Agency",
       title: "Internship in Media & Graphic Design",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Assisted in the creation of print advertisements",
+          type: ["Design"],
+        },
+        {
+          content: "Handling client service & communicating project requirements",
+          type: ["IT Support"],
+        },
+      ],
     },
     {
-      dateFrom: "2008/01",
-      dateTo: "2008/07",
+      dateFrom: "2008-01-01",
+      dateTo: "2008-07-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Cape Milner Hotel",
       title: "Front-Office, Housekeeping and Food & Beverage Training",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Handling daily Check-ins/Check-outs",
+          type: ["Service"],
+        },
+        {
+          content: "Assisted in scheduling & managing the housekeeping team",
+          type: ["Service", "Management"],
+        },
+        {
+          content: "Provided all waiter related service duties",
+          type: ["Service"],
+        },
+        {
+          content: "Worked in all waiter related duties",
+          type: ["Service"],
+        },
+      ],
     },
     {
-      dateFrom: "2008/08",
-      dateTo: "2008/12",
+      dateFrom: "2008-08-01",
+      dateTo: "2008-12-01",
       city: "Düsseldorf",
       country: "Germany",
       company: "Monkey's Gastronomy",
       title: "Apprenticeship as a Chef",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Demi-chef de Partie in the cold kitchen",
+          type: ["Cheffing"],
+        },
+        {
+          content: "Developed daily menu specials together with the Executive Chef",
+          type: ["Cheffing"],
+        },
+        {
+          content: "Supervised an outsourced team of 10 staff for events",
+          type: ["Management"],
+        },
+        {
+          content: "Planned and organized setup of the outside area and for functions",
+          type: ["Management"],
+        },
+        {
+          content: "Inventory management, including purchasing and control",
+          type: ["Cheffing", "Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2009/02",
-      dateTo: "2009/06",
+      dateFrom: "2009-02-01",
+      dateTo: "2009-06-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Cape Milner Hotel",
       title: "Assistant Front-Office Manager",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Assisted with reservations and booking of functions",
+          type: ["Service", "Management"],
+        },
+        {
+          content: "Handling guest queries and complaints",
+          type: ["Service"],
+        },
+        {
+          content: "Prepared reports for the Rooms division manager",
+          type: ["Service", "Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2009/07",
-      dateTo: "2010/06",
+      dateFrom: "2009-07-01",
+      dateTo: "2010-06-01",
       city: "Cape Town",
       country: "South Africa",
       company: "The Winchester Mansion Hotel",
       title: "Junior Chef de Partie",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Training as Saucier, Entremetier, Garde-manger, and Pâtissier",
+          type: ["Cheffing"],
+        },
+        {
+          content: "Involved with the training of new staff",
+          type: ["Cheffing"],
+        },
+        {
+          content: "Helped developing menus for special events",
+          type: ["Cheffing"],
+        },
+        {
+          content: "Improved existing set-up and breakdown work procedures",
+          type: ["Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2010/02",
-      dateTo: "2018/01",
+      dateFrom: "2010-02-01",
+      dateTo: "2018-01-01",
       city: "Cape Town",
       country: "South Africa",
       company: "33 Degrees - Catering & Events",
       title: "Founder & Caterer",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Founded the business to cater for small scale catering needs",
+          type: ["Entrepreneur"],
+        },
+        {
+          content:
+            "Event management from planning, purchasing, production, venue setup to on-the-day coordination.",
+          type: ["Management"],
+        },
+        {
+          content: "Menu planning, development and costing, creating standardized recipe cards.",
+          type: ["Cheffing", "Management"],
+        },
+        {
+          content: "Hired & trained part-time employees for on the day event execution",
+          type: ["Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2010/07",
-      dateTo: "2011/06",
+      dateFrom: "2010-07-01",
+      dateTo: "2011-06-01",
       city: "Cape Town",
       country: "South Africa",
       company: "The Mount Restaurant",
       title: "Chef de Partie / Junior Sous-Chef",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Responsible for the smooth progress of work in the kitchen",
+          type: ["Management"],
+        },
+        {
+          content: "Involved in the development of monthly specials",
+          type: ["Cheffing"],
+        },
+        {
+          content:
+            "Created standard recipe files for all menu items and daily production worksheets",
+          type: ["Cheffing", "Management"],
+        },
+        {
+          content: "Assisted in purchasing and inventory management",
+          type: ["Cheffing", "Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2011/11",
-      dateTo: "2012/05",
+      dateFrom: "2011-11-01",
+      dateTo: "2012-05-01",
       city: "Cape Town",
       country: "South Africa",
       company: "The Yachts of Seabourn – Six-Star Cruise Line",
       title: "Waiter / Buffet Manager",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Providing personalized restaurant service to guests",
+          type: ["Service"],
+        },
+        {
+          content: "Responsible for the buffet for breakfast and lunch",
+          type: ["Management"],
+        },
+        {
+          content: "Training of new hired employees",
+          type: ["Management"],
+        },
+        {
+          content: "Assisted in all other areas of the service operation",
+          type: ["Service"],
+        },
+        {
+          content: "Setup and preparation of service areas",
+          type: ["Service"],
+        },
+      ],
     },
     {
-      dateFrom: "2012/08",
-      dateTo: "2013/05",
+      dateFrom: "2012-08-01",
+      dateTo: "2013-05-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Salt Restaurant",
       title: "Assistant Restaurant Manager",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Managing a team of 20 employees",
+          type: ["Management"],
+        },
+        {
+          content: "Responsible for recruiting, training, performance reviews and team motivation",
+          type: ["Management"],
+        },
+        {
+          content: "Ensured tight inventory management & cost control",
+          type: ["Management"],
+        },
+        {
+          content: "Coordinated all in-house functions and events",
+          type: ["Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2013/07",
-      dateTo: "2015/01",
+      dateFrom: "2013-07-01",
+      dateTo: "2015-01-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Kitima Restaurant",
       title: "Restaurant Manager",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Managing a team of 50 employees",
+          type: ["Management"],
+        },
+        {
+          content: "Helped achieve high levels of revenue through effective staffing & training",
+          type: ["Management"],
+        },
+        {
+          content: "Ensured service standards were maintained at the highest level",
+          type: ["Management"],
+        },
+        {
+          content: "Programming & troubleshooting of Micros POS computer system",
+          type: ["IT Support"],
+        },
+        {
+          content: "Developed the restaurants website using Wordpress",
+          type: ["Web development"],
+        },
+        {
+          content:
+            "In charge of daily service operation, assisting waiters and filling in where needed",
+          type: ["Service"],
+        },
+      ],
     },
     {
-      dateFrom: "2015/02",
-      dateTo: "2015/10",
+      dateFrom: "2015-02-01",
+      dateTo: "2015-10-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Kitima Restaurant",
       title: "Consulting Manager",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Creating & maintaining training programs.",
+          type: ["Management"],
+        },
+        {
+          content: "Created information systems involving all food/beverage production.",
+          type: ["Management"],
+        },
+        {
+          content: "Web design, Micros POS programming, IT solutions",
+          type: ["IT Support"],
+        },
+      ],
     },
     {
-      dateFrom: "2015/02",
-      dateTo: "2015/10",
+      dateFrom: "2015-02-01",
+      dateTo: "2015-10-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Simply Stuck - Vinyl Accessories",
-      title: "Co-Founder & Product Development Lead",
-      responsibilities: [],
+      title: "Co-Founder, CFO & Product Development Lead",
+      responsibilities: [
+        {
+          content: "Starting of new business venture in visual marketing products",
+          type: ["Entrepreneur"],
+        },
+        {
+          content: "Managing of all financial information and reporting",
+          type: ["Management"],
+        },
+        {
+          content: "Designing of new artworks for production according to vinyl specifications",
+          type: ["Design"],
+        },
+      ],
     },
     {
-      dateFrom: "2015/11",
-      dateTo: "2016/05",
+      dateFrom: "2015-11-01",
+      dateTo: "2016-05-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Raya Kitchen by Kitima",
       title: "General Manager",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Development & opening of a new restaurant",
+          type: ["Management"],
+        },
+        {
+          content: "Project Management - Overseeing Construction",
+          type: ["Management"],
+        },
+        {
+          content: "Creating new operational systems and service procedures",
+          type: ["Management"],
+        },
+        {
+          content: "Hiring, training & development of the entire service team",
+          type: ["Management"],
+        },
+        {
+          content: "Created the restaurants website using Wordpress",
+          type: ["Web Development"],
+        },
+        {
+          content: "Setup & programming of the POS system & office computers",
+          type: ["Dev Ops"],
+        },
+        {
+          content: "Menu development & costing for the food & beverage operations",
+          type: ["Management"],
+        },
+      ],
     },
     {
-      dateFrom: "2016/06",
-      dateTo: "2017/03",
+      dateFrom: "2016-06-01",
+      dateTo: "2017-03-01",
       city: "Cape Town",
       country: "South Africa",
       company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
-      title: "Co-Founder & Managing Director / Lead Engineer",
+      title: "Co-Founder & Managing Director / Web Developer",
       responsibilities: [],
     },
     {
-      dateFrom: "2017/03",
-      dateTo: "2018/06",
+      dateFrom: "2017-03-01",
+      dateTo: "2018-06-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Liquix (Pty) Ltd. – Web Design Studio",
-      title: "Co-Founder, Managing Director / Lead Engineer",
+      title: "Co-Founder, Managing Director / Web Developer",
       responsibilities: [],
     },
     {
-      dateFrom: "2018/07",
-      dateTo: "2020/04",
+      dateFrom: "2018-07-01",
+      dateTo: "2020-04-01",
       city: "Knysna",
       country: "South Africa",
       company: "The Burger Exchange (Pty) Ltd",
@@ -241,12 +499,12 @@ export const CV = {
       responsibilities: [],
     },
     {
-      dateFrom: "2018/07",
-      dateTo: "2020/04",
+      dateFrom: "2018-07-01",
+      dateTo: "2020-04-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Tellmann – Web Design Studio",
-      title: "Founder & Principal Full-Stack Engineer",
+      title: "Founder & Principal Full-Stack Web Developer",
       responsibilities: [],
     },
   ],
