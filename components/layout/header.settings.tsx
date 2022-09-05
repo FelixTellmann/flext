@@ -36,9 +36,13 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
         <span className="sr-only">Github</span>
         <SiGithub className="h-5 w-5" />
       </Link>
-      <button className="button-rainbow ml-4 hidden whitespace-nowrap px-4 py-1.5 text-sm font-medium tracking-tight text-gray-500 md:flex">
+      <Link
+        target="_blank"
+        href="mailto:hello@flext.dev"
+        className="button-rainbow ml-4 hidden whitespace-nowrap px-4 py-1.5 text-sm font-medium tracking-tight text-gray-500 md:flex"
+      >
         Lets work
-      </button>
+      </Link>
     </nav>
   );
 };

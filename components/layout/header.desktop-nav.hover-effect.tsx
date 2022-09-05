@@ -40,7 +40,9 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
           left: navItemRef.offsetLeft,
           opacity: 1,
           borderRadius: getComputedStyle(navItemRef).borderRadius,
-          transition: +element.style.opacity ? "0.18s" : "0.1s opacity",
+          transition: +element.style.opacity
+            ? "0.18s all, 0.1s opacity"
+            : "0s all, 0.1s 0.0.2s opacity",
         });
       }
     }
@@ -61,7 +63,9 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
         left: navItemRef.offsetLeft,
         borderRadius: getComputedStyle(navItemRef).borderRadius,
         opacity: 1,
-        transition: +element.style.opacity ? "0.18s" : "0.1s opacity",
+        transition: +element.style.opacity
+          ? "0.18s all, 0.1s opacity"
+          : "0s all, 0.1s 0.0.2s opacity",
       });
     }
   }, [initialNavPosition, setNavHover]);

@@ -59,7 +59,7 @@ export const HERO = {
     </>
   ),
   cta1: {
-    href: "/contact",
+    href: "mailto:hello@flext.dev",
     name: "Let's Work",
   },
   cta2: {

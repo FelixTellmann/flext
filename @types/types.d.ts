@@ -24,6 +24,14 @@ declare module "react" {
   }
 }
 
+declare global {
+  namespace React {
+    interface HTMLAttributes<T> extends Omit<React.HTMLAttributes<T>, "className"> {
+      className?: string;
+    }
+  }
+}
+
 export type InputAutocomplete =
   | "off"
   | "name"
