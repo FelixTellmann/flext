@@ -4,9 +4,7 @@ import clsx from "clsx";
 import { HoverEffect } from "components/layout/header.desktop-nav.hover-effect";
 import { CV } from "content/cv";
 import { FC, useEffect, useRef } from "react";
-import ProfilePic from "public/images/about/portrait.jpg";
-import ProfilePic2 from "public/images/about/profile-rotated.jpg";
-import ProfilePic3 from "public/images/about/profile-rotated-zoom.jpg";
+import ProfilePic from "public/images/about/resume-profile.jpg";
 
 type ResumeProps = {};
 
@@ -207,12 +205,12 @@ export const Resume: FC<ResumeProps> = (props) => {
         <aside className="sticky top-[144px] mb-auto max-h-min spacing-8">
           <section className="h-64">
             <figure className="relative -top-2 z-0 h-56 w-44 rotate-6">
-              <div className="absolute -inset-x-12 top-0 h-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
-              <div className="absolute -inset-y-12 right-0 w-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
-              <div className="absolute -inset-x-12 bottom-0 h-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
-              <div className="absolute -inset-y-12 left-0 w-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-x-10 top-0 h-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-y-10 right-0 w-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-x-10 bottom-0 h-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-y-10 left-0 w-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
               <div className="absolute bottom-full right-0 -mb-px flex h-8 items-end overflow-hidden">
-                <div className="-mb-px flex h-[2px] w-60 -scale-x-100">
+                <div className="-mb-px flex h-[2px] w-44 -scale-x-100">
                   <div className="w-full flex-none blur-sm [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]" />
                   <div className="-ml-[100%] w-full flex-none blur-[1px] [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]" />
                 </div>
@@ -225,8 +223,8 @@ export const Resume: FC<ResumeProps> = (props) => {
               </div>
               <div className="flex h-full items-center justify-center px-2">
                 <Image
-                  src={ProfilePic3}
-                  className="rounded-sm shadow-2xl"
+                  src={ProfilePic}
+                  className="rounded-sm shadow-xl shadow-sky-400/10"
                   alt="Felix Tellmann Profile Pic"
                   width="176"
                   height="224"
