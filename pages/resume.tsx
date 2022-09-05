@@ -29,7 +29,7 @@ export const Resume: FC<ResumeProps> = (props) => {
               {[...new Array(2)].map((_, index) => {
                 return (
                   <section className="relative flex" key={index}>
-                    <aside className="absolute left-4 top-1.5 h-full">
+                    <aside className="absolute left-4 top-1 h-full">
                       <div className="absolute left-0 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gray-200">
                         <h3 className="absolute top-0 right-full mr-6 text-right text-[13px] font-medium leading-[16px] text-gray-500">
                           2022
@@ -39,8 +39,18 @@ export const Resume: FC<ResumeProps> = (props) => {
                       <i className="absolute left-0 top-4 h-[calc(100%+24px-1.375rem)] w-0.5 -translate-x-1/2 bg-gray-200" />
                     </aside>
 
-                    <main className="ml-12">
-                      <p className="bg-gradient-to-b from-red-500 to-green-400 bg-clip-text leading-relaxed text-gray-600">
+                    <main className="ml-12 spacing-1">
+                      <header className="flex gap-2 text-[15px]">
+                        <h4 className=" font-semibold text-gray-900">Job Title</h4>{" "}
+                        <div className="text-gray-300">/</div>
+                        <h4 className=" tracking-tight text-gray-600">
+                          <span className="font-semibold">Tellmann Web development</span>
+                          {" - "}
+                          <span className="">Cape Town, South Africa</span>
+                        </h4>
+                      </header>
+
+                      <p className="leading-relaxed text-gray-600">
                         Lorem ipsum dolor sit amet, consectetur adipisicing elit. Aperiam,
                         consequatur dicta dolorum eligendi fugiat iste laudantium odio odit pariatur
                         placeat provident quam quos rerum! Aperiam hic id ipsum libero non optio,
