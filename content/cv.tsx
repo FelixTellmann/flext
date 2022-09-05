@@ -85,6 +85,7 @@ export const CV = {
       country: "Germany",
       company: "Internet Cafe Matrix",
       title: "IT Technical Assistant",
+      description: "",
       responsibilities: [
         {
           content: "Assisted in hardware infrastructure & wired network installation",
@@ -575,12 +576,12 @@ export const CV = {
       ],
     },
     {
-      dateFrom: "2018-07-01",
-      dateTo: "2020-04-01",
+      dateFrom: "2020-04-01",
+      dateTo: "2022-07-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Tellmann – Web Design Studio",
-      title: "Founder & Principal Full-Stack Web Developer",
+      title: "Founder & Fullstack Developer",
       responsibilities: [
         {
           content:

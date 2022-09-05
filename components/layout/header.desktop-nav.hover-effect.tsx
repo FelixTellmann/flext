@@ -7,6 +7,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
     width: 0,
     height: 0,
     left: 0,
+    top: 0,
     opacity: 0,
     transition: "0.1s opacity",
     borderRadius: 0,
@@ -15,15 +16,19 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
 
   // const [navHover, setNavHover] = useState(initialNavPosition);
 
-  const setNavHover = useCallback(({ width, left, opacity, transition, height, borderRadius }) => {
-    const element = navHoverEffect.current as HTMLDivElement;
-    element.style.width = `${width}px`;
-    element.style.height = `${height}px`;
-    element.style.left = `${left}px`;
-    element.style.transition = transition;
-    element.style.opacity = opacity;
-    element.style.borderRadius = borderRadius;
-  }, []);
+  const setNavHover = useCallback(
+    ({ width, top, left, opacity, transition, height, borderRadius }) => {
+      const element = navHoverEffect.current as HTMLDivElement;
+      element.style.width = `${width}px`;
+      element.style.height = `${height}px`;
+      element.style.left = `${left}px`;
+      element.style.top = `${top}px`;
+      element.style.transition = transition;
+      element.style.opacity = opacity;
+      element.style.borderRadius = borderRadius;
+    },
+    []
+  );
 
   const handleNavHover = useCallback((e) => {
     const element = navHoverEffect.current as HTMLDivElement;
@@ -38,6 +43,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
           width: navItemRef.offsetWidth,
           height: navItemRef.offsetHeight,
           left: navItemRef.offsetLeft,
+          top: navItemRef.offsetTop,
           opacity: 1,
           borderRadius: getComputedStyle(navItemRef).borderRadius,
           transition: +element.style.opacity
@@ -61,6 +67,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
         width: navItemRef.offsetWidth,
         height: navItemRef.offsetHeight,
         left: navItemRef.offsetLeft,
+        top: navItemRef.offsetTop,
         borderRadius: getComputedStyle(navItemRef).borderRadius,
         opacity: 1,
         transition: +element.style.opacity
@@ -99,7 +106,7 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
     <div
       ref={navHoverEffect}
       className={clsx(
-        "button-border pointer-events-none absolute top-1/2 -z-10 -translate-y-1/2 select-none d:border-gray-300/50",
+        "button-border /*-translate-y-1/2*/ pointer-events-none absolute -z-10 select-none d:border-gray-300/50",
         className
       )}
       style={{ opacity: "0" }}
