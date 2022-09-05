@@ -224,6 +224,7 @@ export const Resume: FC<ResumeProps> = (props) => {
               <div className="flex h-full items-center justify-center px-2">
                 <Image
                   src={ProfilePic}
+                  priority
                   className="rounded-sm shadow-xl shadow-sky-400/10"
                   alt="Felix Tellmann Profile Pic"
                   width="176"
