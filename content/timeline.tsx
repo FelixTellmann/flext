@@ -15,6 +15,7 @@ import { GiBigDiamondRing } from "@react-icons/all-files/gi/GiBigDiamondRing";
 import { GiOppositeHearts } from "@react-icons/all-files/gi/GiOppositeHearts";
 import { GiShipBow } from "@react-icons/all-files/gi/GiShipBow";
 import { GiSoccerBall } from "@react-icons/all-files/gi/GiSoccerBall";
+import { GiSouthAfrica } from "@react-icons/all-files/gi/GiSouthAfrica";
 import { GiSuspensionBridge } from "@react-icons/all-files/gi/GiSuspensionBridge";
 import { GrRestaurant } from "@react-icons/all-files/gr/GrRestaurant";
 import { IoMdRestaurant } from "@react-icons/all-files/io/IoMdRestaurant";
@@ -124,7 +125,7 @@ export const TIMELINEOBJECT = {
       heading: "Second visit to SA",
       description:
         "I visited South Africa for the second time. This time, exploring Cape Town and I totally fell in love with it.",
-      Icon: ({ className = "" }) => <GiAfrica className={className} />,
+      Icon: ({ className = "" }) => <GiSouthAfrica className={className} />,
     },
   ],
   "2007": [
@@ -137,7 +138,7 @@ export const TIMELINEOBJECT = {
     },
     {
       date: "2007-05-01",
-      heading: "Movie to South Africa",
+      heading: "Move to South Africa",
       description:
         "I decided to pack up my things in Germany and start my Career in Hospitality in Cape Town, to gain international experience. ",
       Icon: ({ className = "" }) => <FaPlaneDeparture className={className} />,
@@ -161,7 +162,7 @@ export const TIMELINEOBJECT = {
       date: "2008-06-01",
       heading: "Germany vs South Africa",
       description: "I moved back to Germany in july 2008, to start an apprenticeship as a Chef.",
-      Icon: ({ className = "" }) => <SignalIcon className={className} />,
+      Icon: ({ className = "" }) => <FaPlaneDeparture className={className} />,
     },
     {
       date: "2008-09-01",
@@ -456,7 +457,7 @@ export const TIMELINEOBJECT = {
     },
     {
       date: "2021-02-01",
-      heading: "backend integrations",
+      heading: "Backend API integrations",
       description:
         "Over the year I got heavily involved in some backend custom integrations, building solutions with AWS for our clients.",
       Icon: ({ className = "" }) => <StarIcon className={className} />,

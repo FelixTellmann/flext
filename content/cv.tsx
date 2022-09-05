@@ -478,15 +478,32 @@ export const CV = {
       country: "South Africa",
       company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
       title: "Co-Founder & Managing Director / Web Developer",
-      responsibilities: [],
+      responsibilities: [
+        {
+          content: "Start-up of a SAAS restaurant training platform",
+          type: ["Entrepreneur"],
+        },
+        {
+          content: "In charge of all Front-end & Back-end development",
+          type: ["Web Development"],
+        },
+        {
+          content: "Management & art direction for content creation",
+          type: ["Management", "Design"],
+        },
+        {
+          content: "Management & art direction for content creation",
+          type: ["Management", "Design"],
+        },
+      ],
     },
     {
       dateFrom: "2017-03-01",
       dateTo: "2018-06-01",
       city: "Cape Town",
       country: "South Africa",
-      company: "Liquix (Pty) Ltd. – Web Design Studio",
-      title: "Co-Founder, Managing Director / Web Developer",
+      company: "Liquix (Pty) Ltd. – Web Agency",
+      title: "Senior Front-end Developer",
       responsibilities: [],
     },
     {

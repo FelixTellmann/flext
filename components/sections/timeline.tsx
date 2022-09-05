@@ -80,7 +80,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
       <div className="-mx-4 flex h-96 overflow-x-auto py-4 px-6 xl:mx-0" ref={scrollContainerRef}>
         {Object.entries(TIMELINEOBJECT).map(([year, events], yearIndex, years) => (
           <div key={year} className="relative">
-            <header className="absolute left-0 -translate-x-1/2 text-xs font-semibold text-gray-400">
+            <header className="absolute left-0 -translate-x-1/2 select-none text-xs font-semibold text-gray-400">
               {year}
             </header>
             <div
@@ -94,7 +94,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
                     className={clsx("relative", selected === `${year}-${index}` && "selected")}
                   >
                     <button
-                      className="absolute flex -translate-x-1/2 flex-col items-center px-3 hfa:outline-none"
+                      className=" absolute flex -translate-x-1/2 flex-col items-center px-3 hfa:outline-none"
                       onMouseOver={() => {
                         setAutoScroll(false);
                         setSelected(`${year}-${index}`);
@@ -118,7 +118,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
                     <div className="absolute top-0 left-px h-2.5 w-[119px] bg-[image:linear-gradient(90deg,transparent_0px,transparent_9px,var(--line-color)_10px,var(--line-color)_10px)] bg-[length:10px_10px] [--line-color:theme(colors.gray.500)]"></div>
                     <main
                       className={clsx(
-                        "relative mt-32 w-[17rem] opacity-0 transition-opacity selected:opacity-100",
+                        "pointer-events-none relative mt-32 w-[17rem] opacity-0 transition-opacity  selected:pointer-events-auto selected:opacity-100",
                         yearIndex === 0 && index === 0 ? "" : "-translate-x-1/2 text-center"
                       )}
                     >
