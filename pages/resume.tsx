@@ -1,8 +1,12 @@
+import { Image } from "_client/image";
 import { Link } from "_client/link";
 import clsx from "clsx";
 import { HoverEffect } from "components/layout/header.desktop-nav.hover-effect";
 import { CV } from "content/cv";
 import { FC, useEffect, useRef } from "react";
+import ProfilePic from "public/images/about/portrait.jpg";
+import ProfilePic2 from "public/images/about/profile-rotated.jpg";
+import ProfilePic3 from "public/images/about/profile-rotated-zoom.jpg";
 
 type ResumeProps = {};
 
@@ -201,7 +205,36 @@ export const Resume: FC<ResumeProps> = (props) => {
           </section>
         </main>
         <aside className="sticky top-[144px] mb-auto max-h-min spacing-8">
-          <section className="h-64 rounded-md border-2 border-gray-200 p-2"></section>
+          <section className="h-64">
+            <figure className="relative -top-2 z-0 h-56 w-44 rotate-6">
+              <div className="absolute -inset-x-12 top-0 h-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-y-12 right-0 w-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-x-12 bottom-0 h-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute -inset-y-12 left-0 w-px bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+              <div className="absolute bottom-full right-0 -mb-px flex h-8 items-end overflow-hidden">
+                <div className="-mb-px flex h-[2px] w-60 -scale-x-100">
+                  <div className="w-full flex-none blur-sm [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]" />
+                  <div className="-ml-[100%] w-full flex-none blur-[1px] [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]" />
+                </div>
+              </div>
+              <div className="absolute top-[calc(100%-1px)] left-2 -mb-px flex h-8 items-start overflow-hidden">
+                <div className="-mt-px flex h-[2px] w-44 -scale-x-100">
+                  <div className="w-full flex-none blur-sm [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]"></div>
+                  <div className="-ml-[100%] w-full flex-none blur-[1px] [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]"></div>
+                </div>
+              </div>
+              <div className="flex h-full items-center justify-center px-2">
+                <Image
+                  src={ProfilePic3}
+                  className="rounded-sm shadow-2xl"
+                  alt="Felix Tellmann Profile Pic"
+                  width="176"
+                  height="224"
+                  pixelDensity={2}
+                />
+              </div>
+            </figure>
+          </section>
           <section className="">
             <nav className="relative whitespace-nowrap text-[15px] font-medium text-gray-400 spacing-0">
               <HoverEffect className="border-none bg-gray-100" />
