@@ -12,7 +12,12 @@ export const Header: FC = ({}) => {
     <>
       <header className="fixed inset-x-0 top-0 z-50 h-20 w-full bg-white/50 backdrop-blur d:bg-gray-900/40">
         <div className="mx-auto flex h-full max-w-6xl grid-cols-[210px_1fr_210px] items-center gap-1 px-4 md:grid md:gap-4 md:px-8">
-          <Link href="/" className="z-10 w-min">
+          <Link
+            href="/"
+            className="z-10 w-min"
+            data-tip={"Hi, I'm Felix. Welcome to my site."}
+            data-delay-show={2000}
+          >
             <span className="sr-only">Flext.dev Logo</span>
             {HEADER.logo.title}
           </Link>
