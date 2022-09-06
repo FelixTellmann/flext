@@ -29,6 +29,8 @@ type ResumeSectionInViewStore = {
     centerVisible: boolean,
     fullyVisible: boolean
   ) => void;
+  toggleSectionShowing: (id: keyof ResumeSectionInViewStore["sections"]) => void;
+  showSection: (id: keyof ResumeSectionInViewStore["sections"]) => void;
 };
 
 export const useResumeSectionInView = create<ResumeSectionInViewStore>((set) => ({
@@ -46,6 +48,21 @@ export const useResumeSectionInView = create<ResumeSectionInViewStore>((set) => 
       })
     );
   },
+  toggleSectionShowing: (id) => {
+    set(
+      produce((state) => {
+        state.sections[id].showing = !state.sections[id].showing;
+      })
+    );
+  },
+
+  showSection: (id) => {
+    set(
+      produce((state) => {
+        state.sections[id].showing = true;
+      })
+    );
+  },
 }));
 
 type ResumeProps = {};
@@ -54,11 +71,12 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
   const sectionContentRef = useRef<HTMLElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const [contentHeight, setContentHeight] = useState<number>(0);
-  const [showSection, setShowSection] = useState(true);
   const centerVisible = useInView(sectionRef, { margin: "-40% 0px -40% 0px" });
   const fullyVisible = useInView(sectionRef, { amount: 0.9 });
   const { width } = useWindowSize();
-  const { updateSection } = useResumeSectionInView();
+  const { sections, updateSection, toggleSectionShowing, showSection } = useResumeSectionInView();
+  const key = toKebabCase(title) as keyof ResumeSectionInViewStore["sections"];
+  const section = sections[key];
 
   useEffect(() => {
     if (sectionContentRef.current) {
@@ -70,7 +88,7 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
 
   useEffect(() => {
     const element = sectionContentRef.current;
-    if (showSection && element) {
+    if (section.showing && element) {
       setTimeout(
         () => {
           element.style.maxHeight = "";
@@ -84,7 +102,7 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
         500
       );
     }
-  }, [showSection]);
+  }, [key, sections]);
 
   useEffect(() => {
     const element = sectionContentRef.current;
@@ -96,11 +114,11 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
   useEffect(() => {
     updateSection(
       toKebabCase(title) as keyof ResumeSectionInViewStore["sections"],
-      showSection,
+      section.showing,
       centerVisible,
       fullyVisible
     );
-  }, [centerVisible, fullyVisible, showSection, title, updateSection]);
+  }, [centerVisible, fullyVisible, section.showing, title, updateSection]);
 
   return (
     <section id={toKebabCase(title)} className="scroll-mt-[122px] spacing-4" ref={sectionRef}>
@@ -108,17 +126,17 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
         <h2 className="flex items-baseline justify-between">
           <span
             className="text-3xl font-bold tracking-tight text-gray-800"
-            onClick={() => setShowSection(true)}
+            onClick={() => showSection(key)}
           >
             {title}
           </span>
           <button
             className="group mr-2 rounded p-2 text-gray-400/90 transition-colors hfa:outline-none hf:bg-gray-100 hf:text-gray-900 "
-            onClick={() => setShowSection((current) => !current)}
+            onClick={() => toggleSectionShowing(key)}
           >
             <span className="sr-only">Toggle Section Visibility</span>
             <ChevronDownIcon
-              className={clsx("h-4 w-4 transition-all", showSection ? "" : "rotate-180")}
+              className={clsx("h-4 w-4 transition-all", section.showing ? "" : "rotate-180")}
             />
           </button>
         </h2>
@@ -128,7 +146,7 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
         ref={sectionContentRef}
         className={clsx(
           "transition-all duration-200 ease-linear",
-          !showSection && "!max-h-0 overflow-hidden opacity-0"
+          !section.showing && "!max-h-0 overflow-hidden opacity-0"
         )}
       >
         <div className="transition-[all,height] delay-[0s,0.2s]"></div>
@@ -139,7 +157,7 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
 };
 
 export const Resume: FC<ResumeProps> = (props) => {
-  const { sections } = useResumeSectionInView();
+  const { sections, showSection } = useResumeSectionInView();
   const [inView, setInView] = useState("intro");
 
   useEffect(() => {
@@ -514,6 +532,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
                   inView === "intro" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
+                onClick={() => showSection("intro")}
                 href="#intro"
               >
                 Intro
@@ -523,6 +542,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
                   inView === "experience" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
+                onClick={() => showSection("experience")}
                 href="#experience"
               >
                 Experience
@@ -532,6 +552,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
                   inView === "education" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
+                onClick={() => showSection("education")}
                 href="#education"
               >
                 Education
@@ -541,24 +562,27 @@ export const Resume: FC<ResumeProps> = (props) => {
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
                   inView === "tech-skills" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
+                onClick={() => showSection("tech-skills")}
                 href="#tech-skills"
               >
                 Tech Skills
               </Link>
-              <Link
+              {/* <Link
                 className={clsx(
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
                   inView === "skills" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
+                onClick={() => showSection("skills")}
                 href="#skills"
               >
                 Certifications
-              </Link>
+              </Link>*/}
               <Link
                 className={clsx(
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
                   inView === "references" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
+                onClick={() => showSection("references")}
                 href="#references"
               >
                 References
