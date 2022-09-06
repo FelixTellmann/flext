@@ -21,7 +21,7 @@ export const Header: FC = ({}) => {
             <span className="sr-only">Flext.dev Logo</span>
             {HEADER.logo.title}
           </Link>
-          <DesktopNav /> {/* md:flex */}
+          <DesktopNav />
           <ProfileNav showNav={showNav} />
           <MobileNav showNav={showNav} setShowNav={setShowNav} /> {/* md:hidden */}
         </div>
