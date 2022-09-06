@@ -1,3 +1,4 @@
+import { SiJavascript } from "@react-icons/all-files/si/SiJavascript";
 import { TECH } from "content/tech-stack";
 
 export const CV = {
@@ -612,7 +613,17 @@ export const CV = {
       ],
     },
   ],
-  skills: {
+  capabilities: {
+    languages: [
+      {
+        name: "German - native",
+        Icon: null,
+      },
+      {
+        name: "English - bilingual",
+        Icon: null,
+      },
+    ],
     programmingLanguages: [
       TECH.javascript,
       TECH.html_5,
@@ -661,6 +672,8 @@ export const CV = {
       TECH.figma,
       TECH.postman,
       TECH.ftp,
+      TECH.office,
+      TECH.dev_tools,
     ],
   },
   development: [

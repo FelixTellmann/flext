@@ -17,11 +17,7 @@ import create from "zustand";
 
 type ResumeSectionInViewStore = {
   sections: {
-    intro: { showing: boolean; centerVisible: boolean; fullyVisible: boolean };
-    experience: { showing: boolean; centerVisible: boolean; fullyVisible: boolean };
-    education: { showing: boolean; centerVisible: boolean; fullyVisible: boolean };
-    "tech-skills": { showing: boolean; centerVisible: boolean; fullyVisible: boolean };
-    references: { showing: boolean; centerVisible: boolean; fullyVisible: boolean };
+    [T: string]: { showing: boolean; centerVisible: boolean; fullyVisible: boolean };
   };
   updateSection: (
     id: keyof ResumeSectionInViewStore["sections"],
@@ -38,7 +34,7 @@ export const useResumeSectionInView = create<ResumeSectionInViewStore>((set) => 
     intro: { showing: true, centerVisible: false, fullyVisible: false },
     experience: { showing: true, centerVisible: false, fullyVisible: false },
     education: { showing: true, centerVisible: false, fullyVisible: false },
-    "tech-skills": { showing: true, centerVisible: false, fullyVisible: false },
+    capabilities: { showing: true, centerVisible: false, fullyVisible: false },
     references: { showing: true, centerVisible: false, fullyVisible: false },
   },
   updateSection: (id, showing, centerVisible, fullyVisible) => {
@@ -71,7 +67,7 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
   const sectionContentRef = useRef<HTMLElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const [contentHeight, setContentHeight] = useState<number>(0);
-  const centerVisible = useInView(sectionRef, { margin: "-40% 0px -40% 0px" });
+  const centerVisible = useInView(sectionRef, { margin: "-45% 0px -25% 0px" });
   const fullyVisible = useInView(sectionRef, { amount: 0.9 });
   const { width } = useWindowSize();
   const { sections, updateSection, toggleSectionShowing, showSection } = useResumeSectionInView();
@@ -354,14 +350,24 @@ export const Resume: FC<ResumeProps> = (props) => {
             </div>
           </ResumeSection>
 
-          <ResumeSection title="Tech Skills">
+          <ResumeSection title="Capabilities">
             <div className="spacing-8">
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">Languages</strong>{" "}
+                  <strong className="text-[17px] font-bold text-gray-900">Languages</strong>
                 </h3>
                 <p className="text-sm text-gray-500 marker:text-gray-400">
-                  {CV.skills.programmingLanguages
+                  {CV.capabilities.languages.map((language, index) => language.name).join(", ")}
+                </p>
+              </section>
+              <section className="relative max-w-prose spacing-1">
+                <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
+                  <strong className="text-[17px] font-bold text-gray-900">
+                    Programming Languages
+                  </strong>
+                </h3>
+                <p className="text-sm text-gray-500 marker:text-gray-400">
+                  {CV.capabilities.programmingLanguages
                     .map((language, index) => language.name)
                     .join(", ")}
                 </p>
@@ -370,10 +376,12 @@ export const Resume: FC<ResumeProps> = (props) => {
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                   <strong className="text-[17px] font-bold text-gray-900">
                     Libraries & Frameworks
-                  </strong>{" "}
+                  </strong>
                 </h3>
                 <p className="text-sm text-gray-500 marker:text-gray-400">
-                  {CV.skills.librariesFrameworks.map((language, index) => language.name).join(", ")}
+                  {CV.capabilities.librariesFrameworks
+                    .map((language, index) => language.name)
+                    .join(", ")}
                 </p>
               </section>
               <section className="relative max-w-prose spacing-1">
@@ -381,7 +389,9 @@ export const Resume: FC<ResumeProps> = (props) => {
                   <strong className="text-[17px] font-bold text-gray-900">Service Providers</strong>{" "}
                 </h3>
                 <p className="text-sm text-gray-500 marker:text-gray-400">
-                  {CV.skills.serviceProviders.map((language, index) => language.name).join(", ")}
+                  {CV.capabilities.serviceProviders
+                    .map((language, index) => language.name)
+                    .join(", ")}
                 </p>
               </section>
               <section className="relative max-w-prose spacing-1">
@@ -389,7 +399,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   <strong className="text-[17px] font-bold text-gray-900">Content Platforms</strong>{" "}
                 </h3>
                 <p className="text-sm text-gray-500 marker:text-gray-400">
-                  {CV.skills.dataProviders.map((language, index) => language.name).join(", ")}
+                  {CV.capabilities.dataProviders.map((language, index) => language.name).join(", ")}
                 </p>
               </section>
               <section className="relative max-w-prose spacing-1">
@@ -397,20 +407,20 @@ export const Resume: FC<ResumeProps> = (props) => {
                   <strong className="text-[17px] font-bold text-gray-900">Tools</strong>{" "}
                 </h3>
                 <p className="text-sm text-gray-500 marker:text-gray-400">
-                  {CV.skills.tools.map((language, index) => language.name).join(", ")}
+                  {CV.capabilities.tools.map((language, index) => language.name).join(", ")}
                 </p>
               </section>
             </div>
           </ResumeSection>
 
-          {/*<ResumeSection title="Tech Skills">
+          {/*<ResumeSection title="Tech Capabilities">
             <div className="spacing-8">
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                   <strong className="text-[17px] font-bold text-gray-900">Languages</strong>{" "}
                 </h3>
                 <p className="flex flex-wrap gap-2 text-xs font-medium text-gray-500 marker:text-gray-400">
-                  {CV.skills.programmingLanguages.map(({ name, Icon }, index) => (
+                  {CV.capabilities.programmingLanguages.map(({ name, Icon }, index) => (
                     <div
                       key={name}
                       className="flex select-none items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-0.5 h:border-gray-200 h:bg-gray-300/40"
@@ -428,7 +438,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   </strong>{" "}
                 </h3>
                 <p className="flex flex-wrap gap-2 text-xs font-medium text-gray-500 marker:text-gray-400">
-                  {CV.skills.librariesFrameworks.map(({ name, Icon }, index) => (
+                  {CV.capabilities.librariesFrameworks.map(({ name, Icon }, index) => (
                     <div
                       key={name}
                       className="flex select-none items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-0.5 h:border-gray-200 h:bg-gray-300/40"
@@ -444,7 +454,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   <strong className="text-[17px] font-bold text-gray-900">Service Providers</strong>{" "}
                 </h3>
                 <p className="flex flex-wrap gap-2 text-xs font-medium text-gray-500 marker:text-gray-400">
-                  {CV.skills.serviceProviders.map(({ name, Icon }, index) => (
+                  {CV.capabilities.serviceProviders.map(({ name, Icon }, index) => (
                     <div
                       key={name}
                       className="flex select-none items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-0.5 h:border-gray-200 h:bg-gray-300/40"
@@ -460,7 +470,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   <strong className="text-[17px] font-bold text-gray-900">Content Platforms</strong>{" "}
                 </h3>
                 <p className="flex flex-wrap gap-2 text-xs font-medium text-gray-500 marker:text-gray-400">
-                  {CV.skills.dataProviders.map(({ name, Icon }, index) => (
+                  {CV.capabilities.dataProviders.map(({ name, Icon }, index) => (
                     <div
                       key={name}
                       className="flex select-none items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-0.5 h:border-gray-200 h:bg-gray-300/40"
@@ -476,7 +486,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                   <strong className="text-[17px] font-bold text-gray-900">Tools</strong>{" "}
                 </h3>
                 <p className="flex flex-wrap gap-2 text-xs font-medium text-gray-500 marker:text-gray-400">
-                  {CV.skills.tools.map(({ name, Icon }, index) => (
+                  {CV.capabilities.tools.map(({ name, Icon }, index) => (
                     <div
                       key={name}
                       className="flex select-none items-center gap-2 rounded border border-gray-100 bg-gray-50 px-2 py-0.5 h:border-gray-200 h:bg-gray-300/40"
@@ -560,20 +570,20 @@ export const Resume: FC<ResumeProps> = (props) => {
               <Link
                 className={clsx(
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
-                  inView === "tech-skills" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
+                  inView === "capabilities" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
-                onClick={() => showSection("tech-skills")}
-                href="#tech-skills"
+                onClick={() => showSection("capabilities")}
+                href="#capabilities"
               >
-                Tech Skills
+                Capabilities
               </Link>
               {/* <Link
                 className={clsx(
                   "w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
-                  inView === "skills" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
+                  inView === "capabilities" ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
                 )}
-                onClick={() => showSection("skills")}
-                href="#skills"
+                onClick={() => showSection("capabilities")}
+                href="#capabilities"
               >
                 Certifications
               </Link>*/}

@@ -3,6 +3,7 @@ import { FaAws } from "@react-icons/all-files/fa/FaAws";
 import { ImUpload } from "@react-icons/all-files/im/ImUpload";
 import { IoLogoSass } from "@react-icons/all-files/io5/IoLogoSass";
 import { IoLogoVercel } from "@react-icons/all-files/io5/IoLogoVercel";
+import { MdDesktopMac } from "@react-icons/all-files/md/MdDesktopMac";
 import { SiAdobeillustrator } from "@react-icons/all-files/si/SiAdobeillustrator";
 import { SiAdobephotoshop } from "@react-icons/all-files/si/SiAdobephotoshop";
 import { SiCss3 } from "@react-icons/all-files/si/SiCss3";
@@ -21,6 +22,7 @@ import { SiIonic } from "@react-icons/all-files/si/SiIonic";
 import { SiJavascript } from "@react-icons/all-files/si/SiJavascript";
 import { SiJest } from "@react-icons/all-files/si/SiJest";
 import { SiMarkdown } from "@react-icons/all-files/si/SiMarkdown";
+import { SiMicrosoftoffice } from "@react-icons/all-files/si/SiMicrosoftoffice";
 import { SiMysql } from "@react-icons/all-files/si/SiMysql";
 import { SiNetlify } from "@react-icons/all-files/si/SiNetlify";
 import { SiNextDotJs } from "@react-icons/all-files/si/SiNextDotJs";
@@ -234,6 +236,14 @@ export const TECH = {
   react: {
     name: "React.js",
     Icon: ({ className }) => <SiReact className={className} />,
+  },
+  dev_tools: {
+    name: "Dev Tools",
+    Icon: ({ className }) => <MdDesktopMac className={className} />,
+  },
+  office: {
+    name: "MS Office",
+    Icon: ({ className }) => <SiMicrosoftoffice className={className} />,
   },
   react_query: {
     name: "React Query",
