@@ -1,8 +1,11 @@
+import { TECH } from "content/tech-stack";
+
 export const CV = {
   name: "Felix Tellmann",
   address: "Cape Town, Vredehoek 8001, South Africa",
   email: "hello@flext.dev",
   mobile: "+27760313590",
+  intro: `Welcome I'm Felix Tellmann, I am looking for work to do this and that Lorem ipsum dolor sit amet, consectetur adipisicing elit. Accusamus architecto cum, enim error est, et fuga hic iusto maiores modi numquam, quas rem sit unde veritatis? Dolore illo iure natus? A blanditiis cumque ducimus facilis incidunt iure nemo officiis voluptatibus?`,
   eduction: [
     {
       dateFrom: "1992-08-01",
@@ -110,7 +113,7 @@ export const CV = {
       dateTo: "2006-03-01",
       city: "Mönchengladbach",
       country: "Germany",
-      company: "Social Holding Mönchengladbach",
+      company: "Social Holding MG",
       title: "Civilian Alternative Service",
       responsibilities: [
         {
@@ -302,8 +305,8 @@ export const CV = {
     {
       dateFrom: "2011-11-01",
       dateTo: "2012-05-01",
-      city: "Cape Town",
-      country: "South Africa",
+      city: "",
+      country: "Caribbean & Mediterranean Sea",
       company: "The Yachts of Seabourn – Six-Star Cruise Line",
       title: "Waiter / Buffet Manager",
       responsibilities: [
@@ -577,7 +580,7 @@ export const CV = {
     },
     {
       dateFrom: "2020-04-01",
-      dateTo: "2022-07-01",
+      dateTo: "2022-12-01",
       city: "Cape Town",
       country: "South Africa",
       company: "Tellmann – Web Design Studio",
@@ -609,6 +612,57 @@ export const CV = {
       ],
     },
   ],
+  skills: {
+    programmingLanguages: [
+      TECH.javascript,
+      TECH.html_5,
+      TECH.css_3,
+      TECH.sass,
+      TECH.typescript,
+      TECH.graphql,
+      TECH.markdown,
+      TECH.liquid,
+      TECH.sql,
+      TECH.ruby,
+      TECH.php,
+    ],
+    librariesFrameworks: [
+      TECH.react,
+      TECH.tailwind,
+      TECH.nextjs,
+      TECH.trpc,
+      TECH.prisma,
+      TECH.react_query,
+      TECH.remix,
+      TECH.jest,
+      TECH.turborepo,
+      TECH.nodejs,
+      TECH.express,
+      TECH.webpack,
+      TECH.framer,
+      TECH.redis,
+    ],
+    serviceProviders: [
+      TECH.vercel,
+      TECH.aws,
+      TECH.firebase,
+      TECH.netlify,
+      TECH.planetscale,
+      TECH.github,
+    ],
+    dataProviders: [TECH.shopify, TECH.vend, TECH.erply, TECH.dear, TECH.micros, TECH.wordpress],
+    tools: [
+      TECH.intellij_idea,
+      TECH.git,
+      TECH.yarn,
+      TECH.npm,
+      TECH.illustrator,
+      TECH.photoshop,
+      TECH.figma,
+      TECH.postman,
+      TECH.ftp,
+    ],
+  },
   development: [
     {
       date: "",
@@ -637,6 +691,5 @@ export const CV = {
       proficiency: "Basic",
     },
   ],
-  skills: [{}],
   frameworks: [{}],
 };

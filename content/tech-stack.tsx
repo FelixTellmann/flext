@@ -1,5 +1,10 @@
+import { AiOutlineConsoleSql } from "@react-icons/all-files/ai/AiOutlineConsoleSql";
+import { FaAws } from "@react-icons/all-files/fa/FaAws";
+import { ImUpload } from "@react-icons/all-files/im/ImUpload";
 import { IoLogoSass } from "@react-icons/all-files/io5/IoLogoSass";
 import { IoLogoVercel } from "@react-icons/all-files/io5/IoLogoVercel";
+import { SiAdobeillustrator } from "@react-icons/all-files/si/SiAdobeillustrator";
+import { SiAdobephotoshop } from "@react-icons/all-files/si/SiAdobephotoshop";
 import { SiCss3 } from "@react-icons/all-files/si/SiCss3";
 import { SiEslint } from "@react-icons/all-files/si/SiEslint";
 import { SiFacebook } from "@react-icons/all-files/si/SiFacebook";
@@ -17,17 +22,23 @@ import { SiJavascript } from "@react-icons/all-files/si/SiJavascript";
 import { SiJest } from "@react-icons/all-files/si/SiJest";
 import { SiMarkdown } from "@react-icons/all-files/si/SiMarkdown";
 import { SiMysql } from "@react-icons/all-files/si/SiMysql";
+import { SiNetlify } from "@react-icons/all-files/si/SiNetlify";
 import { SiNextDotJs } from "@react-icons/all-files/si/SiNextDotJs";
 import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
+import { SiNpm } from "@react-icons/all-files/si/SiNpm";
+import { SiPhp } from "@react-icons/all-files/si/SiPhp";
+import { SiPostman } from "@react-icons/all-files/si/SiPostman";
 import { SiPrettier } from "@react-icons/all-files/si/SiPrettier";
 import { SiReact } from "@react-icons/all-files/si/SiReact";
 import { SiRedis } from "@react-icons/all-files/si/SiRedis";
+import { SiRuby } from "@react-icons/all-files/si/SiRuby";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
 import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
 import { SiTypescript } from "@react-icons/all-files/si/SiTypescript";
 import { SiWebpack } from "@react-icons/all-files/si/SiWebpack";
+import { SiWordpress } from "@react-icons/all-files/si/SiWordpress";
 import { SiYarn } from "@react-icons/all-files/si/SiYarn";
-import Aws from "public/icons/tech-logos/aws.svg";
+
 import AwsAmplify from "public/icons/tech-logos/aws_amplify.svg";
 import AwsLambda from "public/icons/tech-logos/aws_lambda.svg";
 import Axios from "public/icons/tech-logos/axios.svg";
@@ -47,6 +58,9 @@ import Takealot from "public/icons/tech-logos/takealot.svg";
 import Trpc from "public/icons/tech-logos/trpc.svg";
 import Turborepo from "public/icons/tech-logos/turborepo.svg";
 import Vend from "public/icons/tech-logos/vend_pos.svg";
+import NextJs from "public/icons/tech-logos/nextjs.svg";
+import Express from "public/icons/tech-logos/express.svg";
+import Liquid from "public/icons/tech-logos/liquid.svg";
 
 export const TECH = {
   shopify: {
@@ -65,13 +79,21 @@ export const TECH = {
     name: "Vercel",
     Icon: ({ className }) => <IoLogoVercel className={className} />,
   },
+  netlify: {
+    name: "Netlify",
+    Icon: ({ className }) => <SiNetlify className={className} />,
+  },
   sass: {
     name: "Sass",
     Icon: ({ className }) => <IoLogoSass className={className} />,
   },
+  liquid: {
+    name: "Liquid",
+    Icon: ({ className }) => <Liquid className={className} />,
+  },
   nextjs: {
     name: "Next.js",
-    Icon: ({ className }) => <SiNextDotJs className={className} />,
+    Icon: ({ className }) => <NextJs className={className} />,
   },
   markdown: {
     name: "Markdown",
@@ -106,8 +128,8 @@ export const TECH = {
     Icon: ({ className }) => <Trpc className={className} />,
   },
   aws: {
-    name: "AWS",
-    Icon: ({ className }) => <Aws className={className} />,
+    name: "Amazon Web Services (AWS)",
+    Icon: ({ className }) => <FaAws className={className} />,
   },
   aws_amplify: {
     name: "Aws Amplify",
@@ -166,7 +188,7 @@ export const TECH = {
     Icon: ({ className }) => <HeadlessUi className={className} />,
   },
   html_5: {
-    name: "HTML5",
+    name: "HTML",
     Icon: ({ className }) => <SiHtml5 className={className} />,
   },
   intellij_idea: {
@@ -196,6 +218,10 @@ export const TECH = {
   nodejs: {
     name: "Node.js",
     Icon: ({ className }) => <SiNodeDotJs className={className} />,
+  },
+  express: {
+    name: "Express",
+    Icon: ({ className }) => <Express className={className} />,
   },
   preact: {
     name: "Preact",
@@ -252,5 +278,53 @@ export const TECH = {
   yarn: {
     name: "Yarn",
     Icon: ({ className }) => <SiYarn className={className} />,
+  },
+  npm: {
+    name: "NPM",
+    Icon: ({ className }) => <SiNpm className={className} />,
+  },
+  sql: {
+    name: "SQL",
+    Icon: ({ className }) => <AiOutlineConsoleSql className={className} />,
+  },
+  ruby: {
+    name: "Ruby",
+    Icon: ({ className }) => <SiRuby className={className} />,
+  },
+  php: {
+    name: "PHP",
+    Icon: ({ className }) => <SiPhp className={className} />,
+  },
+  illustrator: {
+    name: "Illustrator",
+    Icon: ({ className }) => <SiAdobeillustrator className={className} />,
+  },
+  photoshop: {
+    name: "Photoshop",
+    Icon: ({ className }) => <SiAdobephotoshop className={className} />,
+  },
+  postman: {
+    name: "Postman",
+    Icon: ({ className }) => <SiPostman className={className} />,
+  },
+  erply: {
+    Icon: null,
+    name: "Erply POS",
+  },
+  dear: {
+    Icon: null,
+    name: "Dear POS",
+  },
+  micros: {
+    Icon: null,
+    name: "Micros POS",
+  },
+  wordpress: {
+    name: "Wordpress",
+    Icon: ({ className }) => <SiWordpress className={className} />,
+  },
+  ftp: {
+    name: "Ftp",
+    Icon: ({ className }) => <ImUpload className={className} />,
   },
 } as const;
