@@ -4,7 +4,7 @@ export const SEO = {
   description:
     "I'm a self-taught Full-stack Engineer, writer and entrepreneur living in Cape Town. I enjoy creating things that live on the internet, whether that be websites, applications, or anything in between. My goal is to always build products that provide real value to its users.",
   siteName: "Flext.dev",
-  github: "https://github.com/FelixTellmann/flext.dev",
+  github: "https://github.com/FelixTellmann/flext",
   avatar: "https://avatars.githubusercontent.com/u/22034038",
   author: "Felix Tellmann",
   twitter: {

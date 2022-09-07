@@ -52,8 +52,8 @@ export const About: FC<AboutProps> = (props) => {
   }, [focusImageIndex, images.length, setTooltip]);
 
   return (
-    <div className="-mt-12 overflow-hidden pt-12">
-      <section className="mx-auto flex max-w-6xl flex-col justify-center gap-16 px-4 pb-16 md:px-8 lg:grid lg:grid-cols-[540px_auto] lg:pt-16">
+    <section id="about" className="-mt-12 overflow-hidden pt-12">
+      <div className="mx-auto flex max-w-6xl flex-col justify-center gap-16 px-4 pb-16 md:px-8 lg:grid lg:grid-cols-[540px_auto] lg:pt-16">
         <button
           ref={buttonRef}
           className="group relative mx-auto mb-12 aspect-3/2 max-h-[405px] w-full max-w-[540px] flex-1 hfa:outline-none lg:mb-auto  lg:mr-0 lg:aspect-4/3"
@@ -121,7 +121,7 @@ export const About: FC<AboutProps> = (props) => {
             {ABOUT.description}
           </main>
         </section>
-      </section>
-    </div>
+      </div>
+    </section>
   );
 };

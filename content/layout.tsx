@@ -10,21 +10,27 @@ export const HEADER = {
     {
       href: "/",
       title: "Home",
-      alt: "Take me back",
+      alt: "Country roads..",
       desktop: false,
     },
     {
-      href: "/portfolio",
+      href: "/#about",
+      title: "About",
+      alt: "More about me.",
+      desktop: true,
+    },
+    {
+      href: "/#portfolio",
       title: "Portfolio",
       alt: "Work I've done.",
       desktop: true,
-    },
+    } /*
     {
       href: "/gallery",
       title: "Gallery",
       alt: "Images and stuff",
       desktop: true,
-    },
+    },*/,
     {
       href: "/resume",
       title: "Resume",
