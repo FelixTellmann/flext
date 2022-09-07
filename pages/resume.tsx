@@ -721,7 +721,9 @@ export const Resume: FC<ResumeProps> = (props) => {
             </nav>
           </section>
           <section className="spacing-2">
-            <div className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</h4>
+            <div className="text-[13px] font-medium text-gray-700 d:text-gray-300">
+              Filter view:
+            </div>
             <nav className="flex flex-wrap gap-1.5">
               {(
                 [
