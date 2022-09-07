@@ -333,7 +333,7 @@ const ResumeFooter = () => {
       </button>
       <section className="relative z-10 mt-8 grid grid-cols-2 pb-4">
         <section className="spacing-2">
-          <h4 className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</h4>
+          <div className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</div>
           <nav className="flex flex-wrap gap-1.5">
             {(
               [
@@ -721,7 +721,7 @@ export const Resume: FC<ResumeProps> = (props) => {
             </nav>
           </section>
           <section className="spacing-2">
-            <h4 className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</h4>
+            <div className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</h4>
             <nav className="flex flex-wrap gap-1.5">
               {(
                 [
