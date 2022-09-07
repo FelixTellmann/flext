@@ -318,7 +318,11 @@ const ResumeFooter = () => {
         style={{
           backgroundImage: `radial-gradient(circle 24px at calc(50%) calc(0%),transparent 30px,var(--resume-footer-bg) 0)`,
         }}
-      />
+      >
+        <div className="absolute top-0 left-0 w-[calc(50%-24px)] border-t border-t-gray-900/10" />
+        <div className="absolute top-0 right-0 w-[calc(50%-24px)] border-t border-t-gray-900/10" />
+        <div className="absolute top-0 left-1/2 h-6 w-12 -translate-x-1/2 rounded-br-full rounded-bl-full border-b border-l border-r border-gray-900/10" />
+      </div>
       <button
         className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-100 bg-gray-50 p-3 text-gray-600 drop-shadow-md hf:text-gray-900 hf:drop-shadow"
         type="button"
