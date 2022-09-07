@@ -112,6 +112,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
                         setSelected(`${year}-${index}`);
                       }}
                     >
+                      <span className="sr-only">{`${year} - ${heading}`}</span>
                       <div className="h-8 w-0.5 bg-gray-500 transition-all selected:h-[80px] selected:bg-sky-500"></div>
                       <Icon className="mt-2 h-5 w-5 text-gray-500 transition-all d:text-gray-400 selected:text-gray-900 d:selected:text-white" />
                     </button>

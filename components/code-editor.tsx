@@ -31,9 +31,9 @@ export const CodeEditor = ({
             className="h-3 w-3 rounded-full bg-gray-700 transition-colors h:bg-[#61C454]"
           />
         </i>
-        <h4 className="color select-none text-center text-[13px] leading-none tracking-wide text-gray-500">
+        <div className="color select-none text-center text-[13px] leading-none tracking-wide text-gray-500">
           /index.tsx
-        </h4>
+        </div>
         <div className="flex justify-end">
           <CopyButton
             content={Array.isArray(code) ? code.join("\n") : code}
