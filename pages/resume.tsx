@@ -310,11 +310,11 @@ const ResumeFooter = () => {
     <footer
       className={clsx(
         "fixed inset-x-0 bottom-0 z-40 px-4 py-2 transition-all ease-linear [--resume-footer-bg:theme(colors.gray.50)] md:hidden",
-        active ? "max-h-72" : "max-h-8"
+        active ? "max-h-72" : "max-h-10"
       )}
     >
       <div
-        className="absolute inset-0 h-full w-full shadow-xl shadow-gray-700 drop-shadow-2xl"
+        className="absolute inset-0 h-full w-full bg-[image:radial-gradient(circle_24px_at_calc(50%)_calc(0%),transparent_30px,var(--resume-footer-bg)_0)] bg-[image:-webkit-radial-gradient(circle_24px_at_calc(50%)_calc(0%),transparent_30px,var(--resume-footer-bg)_0)] shadow-xl shadow-gray-700 drop-shadow-2xl"
         style={{
           backgroundImage: `radial-gradient(circle 24px at calc(50%) calc(0%),transparent 30px,var(--resume-footer-bg) 0)`,
         }}
