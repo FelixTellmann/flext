@@ -314,9 +314,9 @@ const ResumeFooter = () => {
       )}
     >
       <div
-        className="absolute inset-0 h-full w-full bg-[image:radial-gradient(circle_24px_at_calc(50%)_calc(0%),transparent_30px,var(--resume-footer-bg)_0)] bg-[image:-webkit-radial-gradient(circle_24px_at_calc(50%)_calc(0%),transparent_30px,var(--resume-footer-bg)_0)] shadow-xl shadow-gray-700 drop-shadow-2xl"
+        className="absolute inset-0 h-full w-full shadow-xl shadow-gray-700 drop-shadow-2xl"
         style={{
-          backgroundImage: `radial-gradient(circle 24px at calc(50%) calc(0%),transparent 30px,var(--resume-footer-bg) 0)`,
+          background: `radial-gradient(61px 61px,#0000 24px,var(--resume-footer-bg) 0px) 0px -24px/100% 48px no-repeat, linear-gradient(0deg, transparent 0px, transparent 24px, var(--resume-footer-bg) 24px, var(--resume-footer-bg) 100%) 0px 24px/100% 100%`,
         }}
       >
         <div className="absolute top-0 left-0 w-[calc(50%-24px)] border-t border-t-gray-900/10" />
