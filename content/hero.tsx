@@ -5,6 +5,7 @@ import { SiReact } from "@react-icons/all-files/si/SiReact";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
 import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
 import { Link } from "_client/link";
+import { TECH } from "content/tech-stack";
 import party from "party-js";
 
 export const HERO = {
@@ -15,10 +16,7 @@ export const HERO = {
     </>
   ),
   tech: [
-    {
-      name: "React.js",
-      Icon: ({ className }) => <SiReact className={className} />,
-    },
+    TECH.nextjs,
     {
       name: "Node.js",
       Icon: ({ className }) => <SiNodeDotJs className={className} />,
