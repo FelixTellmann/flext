@@ -4,6 +4,8 @@ import { LoadInitialData } from "_client/_stores/_load-initial-data";
 
 import { Footer } from "components/layout/footer";
 import { Header } from "components/layout/header";
+import { SEO } from "content/seo";
+import { DefaultSeo } from "next-seo";
 
 import { AppProps } from "next/app";
 import { useRouter } from "next/router";
@@ -38,6 +40,14 @@ const App = ({ pageProps, Component }: AppProps) => {
 
   return (
     <Loaders>
+      <DefaultSeo
+        {...SEO}
+        canonical={`${SEO.url}${router.asPath}`}
+        twitter={SEO.twitter}
+        title={SEO.title}
+        description={SEO.description}
+        openGraph={SEO.openGraph}
+      />
       <Header />
       <main className="min-h-screen">
         <Component {...pageProps} />
