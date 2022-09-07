@@ -707,52 +707,52 @@ export const CV = {
     {
       date: "2016",
       name: "FreeCodeCamp - Front-end Developer Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2017",
       name: "FreeCodeCamp - Back-end Developer Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2017",
       name: "Shopify - Theme Development Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2017",
       name: "Shopify - Product Fundamentals Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2017",
       name: "Shopify - App Development Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2018",
       name: "Shopify - Business Fundamentals Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2018",
       name: "CodeCademy - React.js Certification",
-      type: ["Web Development"],
+      type: ["web dev", "relevant"],
     },
     {
       date: "2016",
       name: "Diners Club - Diamond Wine list award",
-      type: ["Restaurant"],
+      type: ["restaurant"],
     },
     {
       date: "2015",
       name: "Diners Club - Diamond Wine list award",
-      type: ["Restaurant"],
+      type: ["restaurant"],
     },
     {
       date: "2015",
       name: "Eat out Magazine - Best Asian Restauth with Kitima Restaurant ",
-      type: ["Restaurant"],
+      type: ["restaurant"],
     },
   ],
   other: [

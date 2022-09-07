@@ -1,4 +1,7 @@
-import { ChevronDownIcon } from "@heroicons/react/24/solid";
+import { ChevronDownIcon, EnvelopeIcon } from "@heroicons/react/24/solid";
+import { SiGithub } from "@react-icons/all-files/si/SiGithub";
+import { SiLinkedin } from "@react-icons/all-files/si/SiLinkedin";
+import { SiTwitter } from "@react-icons/all-files/si/SiTwitter";
 import { Image } from "_client/image";
 import { Link } from "_client/link";
 
@@ -12,6 +15,7 @@ import { FC, PropsWithChildren, useEffect, useRef, useState } from "react";
 import ProfilePic from "public/images/about/resume-profile.jpg";
 import { useIntersection, useWindowSize } from "react-use";
 import { capitalize } from "utils/capitalize";
+import { scrollToY } from "utils/scroll-to";
 import { toKebabCase } from "utils/to-kebab-case";
 
 import create from "zustand";
@@ -136,16 +140,16 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
   return (
     <section id={toKebabCase(title)} className="scroll-mt-[122px] spacing-4" ref={sectionRef}>
       <header className="spacing-3">
-        <h2 className="flex items-baseline justify-between">
+        <h2 className="flex items-baseline">
           <span
-            className="text-3xl font-bold tracking-tight text-gray-800"
+            className="text-3xl font-bold tracking-tight text-gray-800 d:text-gray-100"
             onClick={() => showSection(key)}
           >
             {title}
           </span>
           <button
             type="button"
-            className="group mr-2 rounded p-2 text-gray-400/90 transition-colors hfa:outline-none hf:bg-gray-100 hf:text-gray-900 "
+            className="group mr-2 ml-auto rounded p-2 text-gray-400/90 transition-colors hfa:outline-none hf:bg-gray-100 hf:text-gray-900 "
             onClick={() => toggleSectionShowing(key)}
           >
             <span className="sr-only">Toggle Section Visibility</span>
@@ -202,7 +206,9 @@ export const Resume: FC<ResumeProps> = (props) => {
       <article className="relative mx-auto mb-16 grid max-w-6xl grid-cols-[1fr_200px] gap-12 px-4 py-16 md:px-8">
         <main className="min-h-[200vh] snap-y snap-normal spacing-10">
           <ResumeSection title="Intro">
-            <p className="text-[15px] leading-relaxed text-gray-500">{CV.intro}</p>
+            <p className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300 d:text-gray-300">
+              {CV.intro}
+            </p>
           </ResumeSection>
           <ResumeSection title="Experience">
             <div className="spacing-8">
@@ -232,7 +238,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                     return (
                       <section className="relative flex" key={index}>
                         <aside className="absolute left-4 top-1 h-full">
-                          <div className="absolute left-0 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gray-200">
+                          <div className="absolute left-0 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gray-200 d:bg-gray-400">
                             <h3 className="absolute top-0 right-full mr-6 text-right text-xs font-medium leading-[16px] text-gray-400">
                               <span className="spacing-1">
                                 <span className="mr-2 whitespace-nowrap">
@@ -253,23 +259,27 @@ export const Resume: FC<ResumeProps> = (props) => {
                                 </span>
                               </span>
                             </h3>
-                            <div className="h-2 w-2 rounded-full bg-gray-400" />
+                            <div className="h-2 w-2 rounded-full bg-gray-400 d:bg-gray-700" />
                           </div>
                           <i
                             className={clsx(
                               "absolute left-0 top-6 h-[calc(100%-2px)] w-0.5 -translate-x-1/2",
                               index === arr.length - 1
-                                ? "bg-gradient-to-b from-gray-200 to-transparent"
-                                : "bg-gray-200"
+                                ? "bg-gradient-to-b from-gray-200 to-transparent d:from-gray-800"
+                                : "bg-gray-200 d:bg-gray-800"
                             )}
                           />
                         </aside>
 
                         <main className="ml-12 spacing-1">
                           <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                            <strong className="text-[17px] font-bold text-gray-900">{title}</strong>{" "}
+                            <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
+                              {title}
+                            </strong>{" "}
                             <span className="flex items-baseline gap-2">
-                              <span className="font-semibold text-gray-600">{company}</span>
+                              <span className="font-semibold text-gray-600 d:text-gray-400">
+                                {company}
+                              </span>
                               <span className="select-none text-sm text-gray-300">-</span>
                               <span className="text-gray-400/80">
                                 {city && country
@@ -286,7 +296,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                           {description
                             ? <p className="text-sm leading-relaxed text-gray-600">{description}</p>
                             : null}
-                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400">
+                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                             {responsibilities
                               .filter(({ type }) => type.includes(filter) || filter === "all")
                               .map((responsibility, index) => (
@@ -342,11 +352,13 @@ export const Resume: FC<ResumeProps> = (props) => {
 
                         <main className="ml-12 spacing-1">
                           <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                            <strong className="text-[17px] font-bold text-gray-900">
+                            <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
                               {certificate}
                             </strong>{" "}
                             <span className="flex items-baseline gap-2">
-                              <span className="font-semibold text-gray-600">{institution}</span>
+                              <span className="font-semibold text-gray-600 d:text-gray-400">
+                                {institution}
+                              </span>
                               <span className="select-none text-sm text-gray-300">-</span>
                               <span className="font-medium text-gray-500">
                                 {city}, {country}
@@ -356,7 +368,7 @@ export const Resume: FC<ResumeProps> = (props) => {
                           {/*{description
                             ? <p className="text-sm leading-relaxed text-gray-600">{description}</p>
                             : null}
-                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400">
+                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:marker:text-gray-600 d:text-gray-400">
                             {responsibilities.map((responsibility, index) => (
                               <li className="pl-3" key={index}>
                                 {responsibility.content}
@@ -374,19 +386,21 @@ export const Resume: FC<ResumeProps> = (props) => {
             <div className="spacing-8">
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">Languages</strong>
+                  <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
+                    Languages
+                  </strong>
                 </h3>
-                <p className="text-sm text-gray-500 marker:text-gray-400">
+                <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.capabilities.languages.map((language, index) => language.name).join(", ")}
                 </p>
               </section>
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">
+                  <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
                     Programming Languages
                   </strong>
                 </h3>
-                <p className="text-sm text-gray-500 marker:text-gray-400">
+                <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.capabilities.programmingLanguages
                     .map((language, index) => language.name)
                     .join(", ")}
@@ -394,11 +408,11 @@ export const Resume: FC<ResumeProps> = (props) => {
               </section>
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">
+                  <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
                     Libraries & Frameworks
                   </strong>
                 </h3>
-                <p className="text-sm text-gray-500 marker:text-gray-400">
+                <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.capabilities.librariesFrameworks
                     .map((language, index) => language.name)
                     .join(", ")}
@@ -406,9 +420,11 @@ export const Resume: FC<ResumeProps> = (props) => {
               </section>
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">Service Providers</strong>{" "}
+                  <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
+                    Service Providers
+                  </strong>{" "}
                 </h3>
-                <p className="text-sm text-gray-500 marker:text-gray-400">
+                <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.capabilities.serviceProviders
                     .map((language, index) => language.name)
                     .join(", ")}
@@ -416,17 +432,21 @@ export const Resume: FC<ResumeProps> = (props) => {
               </section>
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">Content Platforms</strong>{" "}
+                  <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
+                    Content Platforms
+                  </strong>{" "}
                 </h3>
-                <p className="text-sm text-gray-500 marker:text-gray-400">
+                <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.capabilities.dataProviders.map((language, index) => language.name).join(", ")}
                 </p>
               </section>
               <section className="relative max-w-prose spacing-1">
                 <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">Tools</strong>{" "}
+                  <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
+                    Tools
+                  </strong>{" "}
                 </h3>
-                <p className="text-sm text-gray-500 marker:text-gray-400">
+                <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.capabilities.tools.map((language, index) => language.name).join(", ")}
                 </p>
               </section>
@@ -435,17 +455,18 @@ export const Resume: FC<ResumeProps> = (props) => {
           <ResumeSection title="Certifications">
             <div className="spacing-6">
               <section>
-                <ul className="text-sm text-gray-500 marker:text-gray-400">
+                <ul className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
                   {CV.certifications
                     .sort((a, b) => {
                       if (new Date(a.date) < new Date(b.date)) return 1;
                       if (new Date(a.date) > new Date(b.date)) return -1;
                       return 0;
                     })
+                    .filter(({ type }) => type.includes(filter) || filter === "all")
                     .map(({ date, name, type }, index, arr) => (
                       <li className="" key={index}>
                         <span className="inline-flex items-baseline gap-2">
-                          <span className="text-xs font-medium leading-[16px] text-gray-400">
+                          <span className="text-xs font-medium leading-[16px] text-gray-400 d:text-gray-500">
                             {date}
                           </span>
                           <span className="select-none text-sm text-gray-300">-</span>
@@ -456,25 +477,29 @@ export const Resume: FC<ResumeProps> = (props) => {
                 </ul>
               </section>
 
-              <section className="relative max-w-prose spacing-1">
-                <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                  <strong className="text-[17px] font-bold text-gray-900">Other</strong>{" "}
-                </h3>
-                <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400">
-                  {CV.other.map(({ name }, index) => (
-                    <li className="pl-3" key={index}>
-                      {name}
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              {["all", "restaurant"].includes(filter)
+                ? <section className="relative max-w-prose spacing-1">
+                    <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
+                      <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
+                        Other
+                      </strong>{" "}
+                    </h3>
+                    <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
+                      {CV.other.map(({ name }, index) => (
+                        <li className="pl-3" key={index}>
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                : null}
             </div>
           </ResumeSection>
           <ResumeSection title="References">
             <div className="spacing-10">
               {CV.references.map(({ author, company, title, reference }) => (
                 <figure key={author} className="max-w-prose spacing-2">
-                  <blockquote className="text-[15px] leading-relaxed text-gray-500">
+                  <blockquote className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300/90">
                     {reference}
                   </blockquote>
                   <figcaption className="">
@@ -490,10 +515,10 @@ export const Resume: FC<ResumeProps> = (props) => {
         </main>
         <aside className="sticky top-[144px] mb-auto max-h-min spacing-8">
           <figure className="relative -top-2 z-0 ml-2 h-48 w-[9.5rem] rotate-6">
-            <div className="absolute -inset-x-10 top-0 h-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
-            <div className="absolute -inset-y-10 right-0 w-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
-            <div className="absolute -inset-x-10 bottom-0 h-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
-            <div className="absolute -inset-y-10 left-0 w-0.5 bg-slate-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)]" />
+            <div className="absolute -inset-x-10 top-0 h-0.5 bg-gray-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)] d:bg-gray-50/20" />
+            <div className="absolute -inset-y-10 right-0 w-0.5 bg-gray-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)] d:bg-gray-50/20" />
+            <div className="absolute -inset-x-10 bottom-0 h-0.5 bg-gray-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)] d:bg-gray-50/20" />
+            <div className="absolute -inset-y-10 left-0 w-0.5 bg-gray-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)] d:bg-gray-50/20" />
             <div className="absolute bottom-full right-0 -mb-px flex h-8 items-end overflow-hidden">
               <div className="-mb-px flex h-[2px] w-44 -scale-x-100">
                 <div className="w-full flex-none blur-sm [background-image:linear-gradient(90deg,rgba(56,189,248,0)_0%,#0EA5E9_32.29%,rgba(236,72,153,0.3)_67.19%,rgba(236,72,153,0)_100%)]" />
@@ -537,7 +562,7 @@ export const Resume: FC<ResumeProps> = (props) => {
             </nav>
           </section>
           <section className="spacing-2">
-            <h4 className="text-[13px] font-medium text-gray-700">Filter view:</h4>
+            <h4 className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</h4>
             <nav className="flex flex-wrap gap-1.5">
               {(
                 [
@@ -556,16 +581,63 @@ export const Resume: FC<ResumeProps> = (props) => {
                     className={clsx(
                       "rounded border  px-1.5 py-0.5 text-xs font-medium outline-none hfa:outline-none ",
                       filter.includes(type)
-                        ? "border-gray-300 bg-gray-200 text-gray-700 hf:border-gray-400 hf:bg-gray-300/80 hf:text-gray-800"
-                        : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700"
+                        ? "border-sky-300 bg-sky-100 text-gray-700 hf:border-sky-400 hf:bg-sky-300/40 hf:text-gray-800 d:border-sky-700 d:bg-sky-900/60 d:text-gray-200 d:hf:bg-sky-700/50 d:hf:text-gray-100"
+                        : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700 d:border-gray-700 d:bg-gray-800 d:text-gray-300 d:hf:border-gray-600 d:hf:bg-gray-700 d:hf:text-gray-100"
                     )}
-                    onClick={() => selectFilter(type)}
+                    onClick={() => {
+                      selectFilter(type);
+                      scrollToY(150, 0);
+                    }}
                   >
                     {type}
                   </button>
                 </>
               ))}
             </nav>
+          </section>
+          <section className="mt-2 spacing-1">
+            {/*<h4 className="text-[13px] font-medium text-gray-700">Contact:</h4>*/}
+            <nav className="flex flex-wrap gap-2">
+              <Link
+                href="mailto:hello@flext.dev"
+                target="_blank"
+                className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+                data-tip="hello@flext.dev"
+              >
+                <span className="sr-only">Email me</span>
+                <EnvelopeIcon className="h-4 w-4" />
+              </Link>
+              <Link
+                href="https://github.com/FelixTellmann"
+                target="_blank"
+                data-tip="Github"
+                className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+              >
+                <span className="sr-only">Github</span>
+                <SiGithub className="h-4 w-4" />
+              </Link>
+              <Link
+                href="https://twitter.com/FelixTellmann"
+                target="_blank"
+                data-tip="Twitter"
+                className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+              >
+                <span className="sr-only">Twitter</span>
+                <SiTwitter className="h-4 w-4" />
+              </Link>
+              <Link
+                href="https://www.linkedin.com/in/felixtellmann"
+                target="_blank"
+                data-tip="LinkedIn"
+                className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+              >
+                <span className="sr-only">LinkedIn</span>
+                <SiLinkedin className="h-4 w-4" />
+              </Link>
+            </nav>
+            <h5 className="ml-1 text-[13px] text-gray-500 d:text-gray-400">
+              Cape Town, South Africa
+            </h5>
           </section>
         </aside>
       </article>
