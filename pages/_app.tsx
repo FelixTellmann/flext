@@ -35,7 +35,7 @@ const App = ({ pageProps, Component }: AppProps) => {
   return (
     <Loaders>
       <Header />
-      <main className="min-h-[200vh]">
+      <main className="min-h-screen">
         <Component {...pageProps} />
       </main>
       <Footer />

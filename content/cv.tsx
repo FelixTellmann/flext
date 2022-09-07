@@ -625,8 +625,7 @@ export const CV = {
           type: ["web dev", "relevant"],
         },
         {
-          content:
-            "Developed and maintained all client projects from based on design & data briefs.",
+          content: "Developed and maintained all client projects",
           type: ["web dev", "management", "relevant"],
         },
         {

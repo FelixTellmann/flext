@@ -1,4 +1,4 @@
-import { ChevronDownIcon, EnvelopeIcon } from "@heroicons/react/24/solid";
+import { ChevronDoubleUpIcon, ChevronDownIcon, EnvelopeIcon } from "@heroicons/react/24/solid";
 import { SiGithub } from "@react-icons/all-files/si/SiGithub";
 import { SiLinkedin } from "@react-icons/all-files/si/SiLinkedin";
 import { SiTwitter } from "@react-icons/all-files/si/SiTwitter";
@@ -138,7 +138,11 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
   }, [centerVisible, fullyVisible, section.showing, title, updateSection]);
 
   return (
-    <section id={toKebabCase(title)} className="scroll-mt-[122px] spacing-4" ref={sectionRef}>
+    <section
+      id={toKebabCase(title)}
+      className="-mx-4 scroll-mt-[122px] overflow-hidden px-4 spacing-4 md:overflow-visible"
+      ref={sectionRef}
+    >
       <header className="spacing-3">
         <h2 className="flex items-baseline">
           <span
@@ -174,6 +178,237 @@ const ResumeSection: FC<PropsWithChildren<{ title: string }>> = ({ title, childr
   );
 };
 
+type ResumeSectionDateSidebarProps = {
+  dateFrom: string | Date;
+  dateTo: string | Date;
+  isLast: boolean;
+  showDateRange: boolean;
+};
+const ResumeSectionDateSidebar: FC<ResumeSectionDateSidebarProps> = ({
+  dateFrom,
+  dateTo,
+  isLast,
+  showDateRange,
+}) => {
+  return (
+    <aside className="absolute top-1 left-[4.5rem] hidden h-full md:block xl:left-6 2xl:left-4">
+      <h3 className="absolute top-0 right-full pr-6 text-right text-xs font-medium leading-[16px] text-gray-400 xl:pr-8">
+        {showDateRange
+          ? <span className="spacing-1">
+              <span className=" whitespace-nowrap xl:mr-2">
+                {new Date(dateFrom)?.toLocaleDateString("en-GB", {
+                  month: "short",
+                  year: "numeric",
+                })}
+                <span className="hidden xl:inline"> -</span>
+              </span>
+              <span className="whitespace-nowrap">
+                {Date.now() > new Date(dateTo).getTime()
+                  ? new Date(dateTo)?.toLocaleDateString("en-GB", {
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "Current"}
+              </span>
+            </span>
+          : <span className="whitespace-nowrap">
+              {new Date(dateTo)?.toLocaleDateString("en-GB", {
+                year: "numeric",
+              })}
+            </span>}
+      </h3>
+      <div className="absolute left-0 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gray-200 d:bg-gray-400">
+        <div className="h-2 w-2 rounded-full bg-gray-400 d:bg-gray-700" />
+      </div>
+      <i
+        className={clsx(
+          "absolute left-0 top-6 h-[calc(100%-2px)] w-0.5 -translate-x-1/2",
+          isLast
+            ? "bg-gradient-to-b from-gray-200 to-transparent d:from-gray-800"
+            : "bg-gray-200 d:bg-gray-800"
+        )}
+      />
+    </aside>
+  );
+};
+
+const ResumeSectionDateEvents = ({
+  name,
+  organization,
+  city,
+  country,
+  dateFrom,
+  dateTo,
+  showDateRange,
+  description,
+  responsibilities,
+}) => {
+  const { filter } = useResumeSectionInView();
+  return (
+    <main className="ml-0 spacing-1 md:ml-24 xl:ml-14 2xl:ml-12">
+      <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
+        <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">{name}</strong>{" "}
+        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
+          <span className=" font-semibold text-gray-600 d:text-gray-400">{organization}</span>
+          <span className="select-none text-sm text-gray-300">-</span>
+          <span className="text-gray-400/80">
+            {city && country
+              ? <>
+                  <span className="hidden sm:inline">{city},</span> {country}
+                </>
+              : <>
+                  {city}
+                  {country}
+                </>}
+          </span>
+        </span>
+        <div className="flex gap-2 whitespace-nowrap text-xs font-semibold text-gray-500 d:text-gray-400 md:hidden">
+          {showDateRange
+            ? <>
+                <span>
+                  {new Date(dateFrom)?.toLocaleDateString("en-GB", {
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
+                <span>-</span>
+                <span>
+                  {Date.now() > new Date(dateTo).getTime()
+                    ? new Date(dateTo)?.toLocaleDateString("en-GB", {
+                        month: "short",
+                        year: "numeric",
+                      })
+                    : "Current"}
+                </span>
+              </>
+            : <span>
+                {new Date(dateTo)?.toLocaleDateString("en-GB", {
+                  year: "numeric",
+                })}
+              </span>}
+        </div>
+      </h3>
+      {description ? <p className="text-sm leading-relaxed text-gray-600">{description}</p> : null}
+      <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
+        {responsibilities
+          .filter(({ type }) => type.includes(filter) || filter === "all")
+          .map((responsibility, index) => (
+            <li className="pl-3" key={index}>
+              {responsibility.content}
+            </li>
+          ))}
+      </ul>
+    </main>
+  );
+};
+
+const ResumeFooter = () => {
+  const [active, setActive] = useState(false);
+  const { sections, filter, showSection, selectFilter } = useResumeSectionInView();
+
+  return (
+    <footer
+      className={clsx(
+        "fixed inset-x-0 bottom-0 z-40 px-4 py-2 transition-all ease-linear [--resume-footer-bg:theme(colors.gray.50)] md:hidden",
+        active ? "max-h-72" : "max-h-8"
+      )}
+    >
+      <div
+        className="absolute inset-0 h-full w-full shadow-xl shadow-gray-700 drop-shadow-2xl"
+        style={{
+          backgroundImage: `radial-gradient(circle 24px at calc(50%) calc(0%),transparent 30px,var(--resume-footer-bg) 0)`,
+        }}
+      />
+      <button
+        className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-100 bg-gray-50 p-3 text-gray-600 drop-shadow-md hf:text-gray-900 hf:drop-shadow"
+        type="button"
+        onClick={() => setActive((current) => !current)}
+      >
+        <span className="sr-only">Show Mobile Navigation</span>
+        <ChevronDoubleUpIcon className={clsx("h-4 w-4 transition-all", active && "rotate-180")} />
+      </button>
+      <section className="relative z-10 mt-8 grid grid-cols-2 pb-4">
+        <section className="spacing-2">
+          <h4 className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</h4>
+          <nav className="flex flex-wrap gap-1.5">
+            {(
+              [
+                "all",
+                "relevant",
+                "web dev",
+                "management",
+                "tech support",
+                "entrepreneurial",
+                "restaurant",
+              ] as const
+            ).map((type) => (
+              <button
+                key={type}
+                type="button"
+                className={clsx(
+                  "rounded border  px-1.5 py-0.5 text-xs font-medium outline-none hfa:outline-none ",
+                  filter.includes(type)
+                    ? "border-sky-300 bg-sky-100 text-gray-700 hf:border-sky-400 hf:bg-sky-300/40 hf:text-gray-800 d:border-sky-700 d:bg-sky-900/60 d:text-gray-200 d:hf:bg-sky-700/50 d:hf:text-gray-100"
+                    : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700 d:border-gray-700 d:bg-gray-800 d:text-gray-300 d:hf:border-gray-600 d:hf:bg-gray-700 d:hf:text-gray-100"
+                )}
+                onClick={() => {
+                  selectFilter(type);
+                  scrollToY(150, 0);
+                }}
+              >
+                {type}
+              </button>
+            ))}
+          </nav>
+        </section>
+        <section className="mt-2 justify-end spacing-1">
+          <nav className="flex flex-wrap gap-2">
+            <Link
+              href="mailto:hello@flext.dev"
+              target="_blank"
+              className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+              data-tip="hello@flext.dev"
+            >
+              <span className="sr-only">Email me</span>
+              <EnvelopeIcon className="h-4 w-4" />
+            </Link>
+            <Link
+              href="https://github.com/FelixTellmann"
+              target="_blank"
+              data-tip="Github"
+              className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+            >
+              <span className="sr-only">Github</span>
+              <SiGithub className="h-4 w-4" />
+            </Link>
+            <Link
+              href="https://twitter.com/FelixTellmann"
+              target="_blank"
+              data-tip="Twitter"
+              className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+            >
+              <span className="sr-only">Twitter</span>
+              <SiTwitter className="h-4 w-4" />
+            </Link>
+            <Link
+              href="https://www.linkedin.com/in/felixtellmann"
+              target="_blank"
+              data-tip="LinkedIn"
+              className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
+            >
+              <span className="sr-only">LinkedIn</span>
+              <SiLinkedin className="h-4 w-4" />
+            </Link>
+          </nav>
+          <h5 className="ml-1 text-[13px] text-gray-500 d:text-gray-400">
+            Cape Town, South Africa
+          </h5>
+        </section>
+      </section>
+    </footer>
+  );
+};
+
 export const Resume: FC<ResumeProps> = (props) => {
   const { sections, filter, showSection, selectFilter } = useResumeSectionInView();
   const [inView, setInView] = useState("intro");
@@ -203,8 +438,8 @@ export const Resume: FC<ResumeProps> = (props) => {
 
   return (
     <>
-      <article className="relative mx-auto mb-16 grid max-w-6xl grid-cols-[1fr_200px] gap-12 px-4 py-16 md:px-8">
-        <main className="min-h-[200vh] snap-y snap-normal spacing-10">
+      <article className="relative mx-auto mb-16 grid max-w-6xl gap-12 px-4 py-16 md:px-8 lg:grid-cols-[1fr_200px]">
+        <main className="snap-y snap-normal spacing-10">
           <ResumeSection title="Intro">
             <p className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300 d:text-gray-300">
               {CV.intro}
@@ -237,75 +472,24 @@ export const Resume: FC<ResumeProps> = (props) => {
                   ) => {
                     return (
                       <section className="relative flex" key={index}>
-                        <aside className="absolute left-4 top-1 h-full">
-                          <div className="absolute left-0 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gray-200 d:bg-gray-400">
-                            <h3 className="absolute top-0 right-full mr-6 text-right text-xs font-medium leading-[16px] text-gray-400">
-                              <span className="spacing-1">
-                                <span className="mr-2 whitespace-nowrap">
-                                  {new Date(dateFrom)?.toLocaleDateString("en-GB", {
-                                    month: "short",
-                                    year: "numeric",
-                                  })}{" "}
-                                  -
-                                </span>
-                                {/*<span className="text-gray-400">to</span>*/}
-                                <span className="whitespace-nowrap">
-                                  {Date.now() > new Date(dateTo).getTime()
-                                    ? new Date(dateTo)?.toLocaleDateString("en-GB", {
-                                        month: "short",
-                                        year: "numeric",
-                                      })
-                                    : "Current"}
-                                </span>
-                              </span>
-                            </h3>
-                            <div className="h-2 w-2 rounded-full bg-gray-400 d:bg-gray-700" />
-                          </div>
-                          <i
-                            className={clsx(
-                              "absolute left-0 top-6 h-[calc(100%-2px)] w-0.5 -translate-x-1/2",
-                              index === arr.length - 1
-                                ? "bg-gradient-to-b from-gray-200 to-transparent d:from-gray-800"
-                                : "bg-gray-200 d:bg-gray-800"
-                            )}
-                          />
-                        </aside>
+                        <ResumeSectionDateSidebar
+                          dateFrom={dateFrom}
+                          dateTo={dateTo}
+                          showDateRange
+                          isLast={index === arr.length - 1}
+                        />
 
-                        <main className="ml-12 spacing-1">
-                          <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                            <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
-                              {title}
-                            </strong>{" "}
-                            <span className="flex items-baseline gap-2">
-                              <span className="font-semibold text-gray-600 d:text-gray-400">
-                                {company}
-                              </span>
-                              <span className="select-none text-sm text-gray-300">-</span>
-                              <span className="text-gray-400/80">
-                                {city && country
-                                  ? <>
-                                      {city}, {country}
-                                    </>
-                                  : <>
-                                      {city}
-                                      {country}
-                                    </>}
-                              </span>
-                            </span>
-                          </h3>
-                          {description
-                            ? <p className="text-sm leading-relaxed text-gray-600">{description}</p>
-                            : null}
-                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
-                            {responsibilities
-                              .filter(({ type }) => type.includes(filter) || filter === "all")
-                              .map((responsibility, index) => (
-                                <li className="pl-3" key={index}>
-                                  {responsibility.content}
-                                </li>
-                              ))}
-                          </ul>
-                        </main>
+                        <ResumeSectionDateEvents
+                          name={title}
+                          organization={company}
+                          city={city}
+                          country={country}
+                          dateFrom={dateFrom}
+                          dateTo={dateTo}
+                          showDateRange
+                          description={description}
+                          responsibilities={responsibilities}
+                        />
                       </section>
                     );
                   }
@@ -329,53 +513,24 @@ export const Resume: FC<ResumeProps> = (props) => {
                   ) => {
                     return (
                       <section className="relative flex" key={index}>
-                        <aside className="absolute left-4 top-1 h-full">
-                          <div className="absolute left-0 top-0 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full bg-gray-200">
-                            <h3 className="absolute top-0 right-full mr-6 text-right text-xs font-medium leading-[16px] text-gray-400">
-                              <span className="whitespace-nowrap">
-                                {new Date(dateTo)?.toLocaleDateString("en-GB", {
-                                  year: "numeric",
-                                })}
-                              </span>
-                            </h3>
-                            <div className="h-2 w-2 rounded-full bg-gray-400" />
-                          </div>
-                          <i
-                            className={clsx(
-                              "absolute left-0 top-6 h-[calc(100%-2px)] w-0.5 -translate-x-1/2",
-                              index === arr.length - 1
-                                ? "bg-gradient-to-b from-gray-200 to-transparent"
-                                : "bg-gray-200"
-                            )}
-                          />
-                        </aside>
+                        <ResumeSectionDateSidebar
+                          dateFrom={dateFrom}
+                          dateTo={dateTo}
+                          showDateRange={false}
+                          isLast={index === arr.length - 1}
+                        />
 
-                        <main className="ml-12 spacing-1">
-                          <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                            <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
-                              {certificate}
-                            </strong>{" "}
-                            <span className="flex items-baseline gap-2">
-                              <span className="font-semibold text-gray-600 d:text-gray-400">
-                                {institution}
-                              </span>
-                              <span className="select-none text-sm text-gray-300">-</span>
-                              <span className="font-medium text-gray-500">
-                                {city}, {country}
-                              </span>
-                            </span>
-                          </h3>
-                          {/*{description
-                            ? <p className="text-sm leading-relaxed text-gray-600">{description}</p>
-                            : null}
-                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:marker:text-gray-600 d:text-gray-400">
-                            {responsibilities.map((responsibility, index) => (
-                              <li className="pl-3" key={index}>
-                                {responsibility.content}
-                              </li>
-                            ))}
-                          </ul>*/}
-                        </main>
+                        <ResumeSectionDateEvents
+                          name={certificate}
+                          organization={institution}
+                          city={city}
+                          country={country}
+                          dateFrom={dateFrom}
+                          dateTo={dateTo}
+                          showDateRange={false}
+                          description=""
+                          responsibilities={[]}
+                        />
                       </section>
                     );
                   }
@@ -513,7 +668,7 @@ export const Resume: FC<ResumeProps> = (props) => {
             </div>
           </ResumeSection>
         </main>
-        <aside className="sticky top-[144px] mb-auto max-h-min spacing-8">
+        <aside className="sticky top-[144px] mb-auto hidden max-h-min lg:spacing-8">
           <figure className="relative -top-2 z-0 ml-2 h-48 w-[9.5rem] rotate-6">
             <div className="absolute -inset-x-10 top-0 h-0.5 bg-gray-900/[0.1] [mask-image:linear-gradient(to_right,transparent,white_4rem,white_calc(100%-4rem),transparent)] d:bg-gray-50/20" />
             <div className="absolute -inset-y-10 right-0 w-0.5 bg-gray-900/[0.1] [mask-image:linear-gradient(to_top,transparent,white_4rem,white_calc(100%-4rem),transparent)] d:bg-gray-50/20" />
@@ -575,23 +730,22 @@ export const Resume: FC<ResumeProps> = (props) => {
                   "restaurant",
                 ] as const
               ).map((type) => (
-                <>
-                  <button
-                    type="button"
-                    className={clsx(
-                      "rounded border  px-1.5 py-0.5 text-xs font-medium outline-none hfa:outline-none ",
-                      filter.includes(type)
-                        ? "border-sky-300 bg-sky-100 text-gray-700 hf:border-sky-400 hf:bg-sky-300/40 hf:text-gray-800 d:border-sky-700 d:bg-sky-900/60 d:text-gray-200 d:hf:bg-sky-700/50 d:hf:text-gray-100"
-                        : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700 d:border-gray-700 d:bg-gray-800 d:text-gray-300 d:hf:border-gray-600 d:hf:bg-gray-700 d:hf:text-gray-100"
-                    )}
-                    onClick={() => {
-                      selectFilter(type);
-                      scrollToY(150, 0);
-                    }}
-                  >
-                    {type}
-                  </button>
-                </>
+                <button
+                  key={type}
+                  type="button"
+                  className={clsx(
+                    "rounded border  px-1.5 py-0.5 text-xs font-medium outline-none hfa:outline-none ",
+                    filter.includes(type)
+                      ? "border-sky-300 bg-sky-100 text-gray-700 hf:border-sky-400 hf:bg-sky-300/40 hf:text-gray-800 d:border-sky-700 d:bg-sky-900/60 d:text-gray-200 d:hf:bg-sky-700/50 d:hf:text-gray-100"
+                      : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700 d:border-gray-700 d:bg-gray-800 d:text-gray-300 d:hf:border-gray-600 d:hf:bg-gray-700 d:hf:text-gray-100"
+                  )}
+                  onClick={() => {
+                    selectFilter(type);
+                    scrollToY(150, 0);
+                  }}
+                >
+                  {type}
+                </button>
               ))}
             </nav>
           </section>
@@ -640,6 +794,7 @@ export const Resume: FC<ResumeProps> = (props) => {
             </h5>
           </section>
         </aside>
+        <ResumeFooter />
       </article>
     </>
   );
