@@ -118,7 +118,7 @@ export const TECH = {
     Icon: ({ className }) => <SiTailwindcss className={className} />,
   },
   prisma: {
-    name: "Mdx",
+    name: "Prisma",
     Icon: ({ className }) => <Prisma className={className} />,
   },
   planetscale: {
