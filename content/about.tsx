@@ -41,7 +41,7 @@ export const ABOUT = {
     {
       statistic: "3149",
       tooltip: "111 GitHub Stars",
-      caption: "GitHub Commits",
+      caption: "Commits",
     },
   ],
   description: (
