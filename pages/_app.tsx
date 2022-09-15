@@ -6,11 +6,9 @@ import { Footer } from "components/layout/footer";
 import { Header } from "components/layout/header";
 import { SEO } from "content/seo";
 import { DefaultSeo } from "next-seo";
-import { useTheme } from "next-themes";
-
 import { AppProps } from "next/app";
 import { useRouter } from "next/router";
-import { FC, PropsWithChildren, useEffect, useRef, useState } from "react";
+import { FC, PropsWithChildren, useEffect, useState } from "react";
 import "styles/tailwind.css";
 
 const Loaders: FC<PropsWithChildren> = ({ children }) => {
@@ -18,118 +16,6 @@ const Loaders: FC<PropsWithChildren> = ({ children }) => {
     <ContextProviders>
       <LoadInitialData>{children}</LoadInitialData>
     </ContextProviders>
-  );
-};
-
-const Stars = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const theme = useTheme();
-
-  console.log(theme);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const canvasContext = canvas.getContext("2d") as CanvasRenderingContext2D;
-
-    let width;
-    let height;
-
-    const setCanvasExtents = () => {
-      width = document.body.clientWidth;
-      height = document.body.clientHeight;
-      canvas.width = width;
-      canvas.height = height;
-    };
-
-    setCanvasExtents();
-
-    window.onresize = () => {
-      setCanvasExtents();
-    };
-
-    const makeStars = (count) => {
-      const out: { x: number; y: number; z: number }[] = [];
-      for (let i = 0; i < count; i++) {
-        const star = {
-          x: Math.random() * 1600 - 800,
-          y: Math.random() * 900 - 450,
-          z: Math.random() * 1000,
-        };
-        out.push(star);
-      }
-      return out;
-    };
-
-    const stars = makeStars(200);
-
-    const clear = () => {
-      canvasContext.fillStyle = theme.theme === "light" ? "white" : "#090d18";
-      canvasContext.fillRect(0, 0, canvas.width, canvas.height);
-    };
-
-    const putPixel = (x, y, brightness) => {
-      const intensity = brightness * 255;
-      const rgb = `rgb(${intensity},${intensity},${intensity})`;
-      canvasContext.fillStyle = rgb;
-      canvasContext.fillRect(x, y, 1, 1);
-    };
-
-    const moveStars = (distance) => {
-      const count = stars.length;
-      for (let i = 0; i < count; i++) {
-        const s = stars[i];
-        s.z -= distance;
-        while (s.z <= 1) {
-          s.z += 2000;
-        }
-      }
-    };
-
-    let prevTime;
-    const init = (time) => {
-      prevTime = time;
-      requestAnimationFrame(tick);
-    };
-
-    const tick = (time) => {
-      const elapsed = time - prevTime;
-      prevTime = time;
-
-      moveStars(elapsed * 0.1);
-
-      clear();
-
-      const cx = width / 2;
-      const cy = height / 2;
-
-      const count = stars.length;
-      for (let i = 0; i < count; i++) {
-        const star = stars[i];
-
-        const x = cx + star.x / (star.z * 0.001);
-        const y = cy + star.y / (star.z * 0.001);
-
-        if (x < 0 || x >= width || y < 0 || y >= height) {
-          continue;
-        }
-
-        const d = star.z / 1000.0;
-        const b = 1 - d * d;
-
-        putPixel(x, y, b);
-      }
-
-      requestAnimationFrame(tick);
-    };
-
-    requestAnimationFrame(init);
-  }, []);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="pointer-events-none fixed inset-0 -z-50 h-full w-full select-none"
-    />
   );
 };
 
@@ -164,7 +50,7 @@ const App = ({ pageProps, Component }: AppProps) => {
         openGraph={SEO.openGraph}
       />
       <Header />
-      <main className="min-h-screen">
+      <main className="min-h-screen print:!mx-auto print:!w-[1152px]">
         <Component {...pageProps} />
       </main>
       <Footer />
