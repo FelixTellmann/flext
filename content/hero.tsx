@@ -50,7 +50,7 @@ export const HERO = {
         Astro
       </Link>{" "}
       and{" "}
-      <Link href="https://replicache.dev" target="_blank">
+      <Link href="https://replicache.dev" target="_blank" className="underline hfa:text-sky-500">
         Replicache
       </Link>
       .
