@@ -214,7 +214,7 @@ export const TECH = {
     Icon: ({ className }) => <Jsdom className={className} />,
   },
   mysql: {
-    name: "Mysql",
+    name: "MySQL",
     Icon: ({ className }) => <SiMysql className={className} />,
   },
   nodejs: {

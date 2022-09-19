@@ -1,9 +1,10 @@
 import { TECH } from "content/tech-stack";
+import { Link } from "_client/link";
 
 export const CV = {
   name: "Felix Tellmann",
   title: "Senior Fullstack Engineer",
-  primary_stack: [TECH.typescript, TECH.react, TECH.nodejs, TECH.tailwindcss],
+  primary_stack: [TECH.typescript, TECH.react, TECH.nodejs, TECH.tailwindcss, TECH.mysql],
   address: "Cape Town, Vredehoek 8001, South Africa",
   email: "hello@flext.dev",
   website: "https://flext.dev",
@@ -11,7 +12,24 @@ export const CV = {
     href: `tel:+27760313590`,
     number: "+27 (0)76 031 3590",
   },
-  intro: `I'm a self-taught web developer and ex restaurateur looking for a new challenge. For the last decade, I've build and helped early-stage startups to large enterprise companies build businesses that are simple, beautiful, and impactful in their field. I love encountering hard-to solve-problems and approach them with patience, determination and relentless perseverance.`,
+  intro: (
+    <>
+      I am a passionate self-taught software developer (and former restaurateur & chef) looking for
+      a new challenge. I specialize in front-end- and serverless backend- development using
+      Typescript, React.js, and Node.js. As an advocate for web performance, accessibility, and an
+      evangelist for the{" "}
+      <Link href="https://jamstack.org/" target="_blank">
+        JAM Stack
+      </Link>{" "}
+      and the newer{" "}
+      <Link href="https://init.tips/#why" target="_blank">
+        T3 stack
+      </Link>
+      , I create amazing web applications to make the internet a better place. I love encountering
+      hard-to-solve-problems and approach them with patience, determination, and relentless
+      perseverance.
+    </>
+  ),
   eduction: [
     {
       dateFrom: "1992-08-01",
@@ -63,7 +81,7 @@ export const CV = {
       level: "Higher Education",
       type: ["restaurant", "management"],
     },
-    {
+    /*{
       dateFrom: "2009-07-01",
       dateTo: "2012-07-01",
       city: "Cape Town",
@@ -82,6 +100,22 @@ export const CV = {
       certificate: "Higher Diploma in Hospitality Management",
       level: "Higher Education",
       type: ["restaurant", "management"],
+    },*/
+    {
+      dateFrom: "2009-07-01",
+      dateTo: "2013-07-01",
+      city: "Cape Town",
+      country: "South Africa",
+      institution: "International Hotel School",
+      certificate: (
+        <div>
+          <div>Higher Diploma in Hospitality Management,</div>
+          <div>Higher Diploma in Food & Beverage Management, </div>
+          <div>Higher Diploma in Professional Cookery & Kitchen Management</div>
+        </div>
+      ),
+      level: "Higher Education",
+      type: ["relevant", "management", "restaurant"],
     },
     {
       dateFrom: "2015-01-01",
@@ -91,7 +125,7 @@ export const CV = {
       institution: "University of Cape Town",
       certificate: "Postgraduate Diploma in Business Management & Entrepreneurship",
       level: "Higher Education",
-      type: ["relevant", "web dev", "management", "entrepreneurial"],
+      type: ["relevant", "web / tech dev", "management", "entrepreneurial"],
     },
   ],
   experience: [
@@ -103,23 +137,23 @@ export const CV = {
       company: "Internet Cafe Matrix",
       title: "IT Technical Assistant",
       description: "",
-      type: ["tech support"],
+      type: ["web / tech dev"],
       responsibilities: [
         {
           content: "Assisted in hardware infrastructure & wired network installation",
-          type: ["tech support"],
+          type: ["web / tech dev"],
         },
         {
           content: "Created automated on-demand user-profile setup using Windows XP",
-          type: ["tech support"],
+          type: ["web / tech dev"],
         },
         {
           content: "Programmed Windows XP user access roles to restrict sensitive file access",
-          type: ["tech support"],
+          type: ["web / tech dev"],
         },
         {
           content: "Handling of day-to-day user queries & requests",
-          type: ["tech support"],
+          type: ["web / tech dev"],
         },
       ],
     },
@@ -149,7 +183,7 @@ export const CV = {
       country: "Germany",
       company: "Schröder & Tellmann Design Agency",
       title: "Internship in Media & Graphic Design",
-      type: ["tech support"],
+      type: ["web / tech dev"],
       responsibilities: [
         {
           content: "Assisted in the creation of print advertisements",
@@ -157,7 +191,7 @@ export const CV = {
         },
         {
           content: "Handling client service & communicating project requirements",
-          type: ["tech support"],
+          type: ["web / tech dev"],
         },
       ],
     },
@@ -390,7 +424,7 @@ export const CV = {
       country: "South Africa",
       company: "Kitima Restaurant",
       title: "Restaurant Manager",
-      type: ["restaurant", "management", "tech support", "web dev"],
+      type: ["restaurant", "management", "web / tech dev"],
       responsibilities: [
         {
           content: "Managing a team of 50 employees",
@@ -406,11 +440,11 @@ export const CV = {
         },
         {
           content: "Programming & troubleshooting of Micros POS computer system",
-          type: ["tech support"],
+          type: ["web / tech dev"],
         },
         {
           content: "Developed the restaurants website using Wordpress",
-          type: ["web dev"],
+          type: ["web / tech dev"],
         },
         {
           content:
@@ -426,7 +460,7 @@ export const CV = {
       country: "South Africa",
       company: "Kitima Restaurant",
       title: "Consulting Manager",
-      type: ["management", "restaurant", "tech support", "web dev"],
+      type: ["management", "restaurant", "web / tech dev"],
       responsibilities: [
         {
           content: "Creating & maintaining training programs.",
@@ -434,11 +468,11 @@ export const CV = {
         },
         {
           content: "Created information systems involving all food/beverage production.",
-          type: ["restaurant", "tech support"],
+          type: ["restaurant", "web / tech dev"],
         },
         {
           content: "Web design, Micros POS programming, IT solutions",
-          type: ["web dev", "tech support"],
+          type: ["web / tech dev"],
         },
       ],
     },
@@ -449,7 +483,7 @@ export const CV = {
       country: "South Africa",
       company: "Simply Stuck - Vinyl Accessories",
       title: "Co-Founder, CFO & Product Development Lead",
-      type: ["entrepreneurial", "management", "web dev"],
+      type: ["entrepreneurial", "management", "web / tech dev"],
       responsibilities: [
         {
           content: "Starting of new business venture in visual marketing products",
@@ -462,7 +496,7 @@ export const CV = {
         {
           content:
             "Created the company website & designed artworks for production according to vinyl specifications",
-          type: ["web dev"],
+          type: ["web / tech dev"],
         },
       ],
     },
@@ -473,35 +507,37 @@ export const CV = {
       country: "South Africa",
       company: "Raya Kitchen by Kitima",
       title: "General Manager",
-      type: ["entrepreneurial", "restaurant", "management", "web dev", "relevant"],
+      type: ["entrepreneurial", "restaurant", "management", "web / tech dev", "relevant"],
       responsibilities: [
         {
-          content: "Development & opening of a new restaurant",
+          content:
+            "I partnered with my previous employer to develop and open a new Restaurant in the centre of Cape Town",
           type: ["restaurant", "entrepreneurial", "management", "relevant"],
         },
         {
-          content: "Project Management - Overseeing Construction",
-          type: ["restaurant", "management"],
+          content:
+            "I grew the team from 1 to 25 employees and developed training manuals, operational systems and service procedures for all aspects of the day-to-day operation",
+          type: ["restaurant", "management", "relevant"],
         },
         {
-          content: "Creating new operational systems and service procedures",
-          type: ["restaurant", "management"],
+          content:
+            "Oversaw all aspects of the construction & shop fitting and setup the IT office infrastructure and programmed the POS system",
+          type: ["restaurant", "management", "relevant", "web / tech dev"],
         },
         {
-          content: "Hiring, training & development of the entire service team",
-          type: ["restaurant", "management"],
+          content:
+            "Created the wine & cocktail list and worked closely with the head chef to establish the food menu",
+          type: ["restaurant", "management", "relevant"],
         },
         {
-          content: "Created the restaurants website using Wordpress",
-          type: ["web dev", "relevant"],
+          content:
+            "I developed the launch marketing campaign and the restaurants website using Wordpress",
+          type: ["restaurant", "management", "web / tech dev", "relevant"],
         },
         {
-          content: "Setup & programming of the POS system & office computers",
-          type: ["restaurant", "tech support", "relevant"],
-        },
-        {
-          content: "Menu development & costing for the food & beverage operations",
-          type: ["restaurant", "management"],
+          content:
+            "Handled most financial aspects from budgeting to menu item costing, reporting directly to the owner",
+          type: ["restaurant", "management", "relevant"],
         },
       ],
     },
@@ -512,19 +548,22 @@ export const CV = {
       country: "South Africa",
       company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
       title: "Co-Founder & Managing Director / Web Developer",
-      type: ["entrepreneurial", "management", "web dev", "relevant"],
+      type: ["entrepreneurial", "management", "web / tech dev", "relevant"],
       responsibilities: [
         {
-          content: "Start-up of a SAAS restaurant training platform",
-          type: ["entrepreneurial", "relevant"],
+          content:
+            "Co-founded SmartUp Online (Pty) Ltd in 2016 as a SAAS Restaurant training platform with the goal to provide high quality training to restaurant workers in South Africa",
+          type: ["entrepreneurial", "relevant", "web / tech dev"],
         },
         {
-          content: "In charge of all Front-end & Back-end development",
-          type: ["web dev", "relevant"],
+          content:
+            "Working as the lead developer and content director for training material, where I developed the online platform using the LAMP stack (Linux, Apache, Mysql, Php) with a MVC (model, view, controller) Architecture",
+          type: ["web / tech dev", "management", "relevant"],
         },
         {
-          content: "Management & art direction for content creation",
-          type: ["management", "relevant"],
+          content:
+            "Involved in the UX design process, providing feedback, discussing technical challenges and performing qualitative user testing",
+          type: ["web / tech dev", "management", "relevant"],
         },
       ],
     },
@@ -535,34 +574,36 @@ export const CV = {
       country: "South Africa",
       company: "Liquix (Pty) Ltd. – Web Agency",
       title: "Senior Front-end Developer",
-      type: ["management", "web dev", "relevant"],
+      type: ["management", "web / tech dev", "relevant"],
       responsibilities: [
         {
-          content: "Developing Shopify themes for clients using Liquid, Javascript, HTML5 & CSS",
-          type: ["web dev", "relevant"],
+          content:
+            "Developed custom Shopify themes for clients using Liquid, Javascript, HTML5 & SASS",
+          type: ["web / tech dev", "relevant"],
         },
         {
-          content: "Assisted in the hiring of new developers",
-          type: ["management", "relevant"],
+          content:
+            "Assisted in the hiring of new developers and helped grow the team by mentored junior developers through pair programming, code reviews and 1-on-1s",
+          type: ["management", "relevant", "web / tech dev"],
         },
         {
           content:
             "Developed the Agency marketing site using React.js and Shopify as a headless cms",
-          type: ["web dev", "relevant"],
+          type: ["web / tech dev", "relevant"],
+        },
+        {
+          content: "Created documentation & coding standards for internal use across projects",
+          type: ["web / tech dev", "relevant"],
         },
         {
           content:
-            "Mentored more junior engineers through pair programming, code reviews and 1-on-1s",
-          type: ["web dev", "relevant"],
-        },
-        {
-          content: "Created documentation & coding standards for internal use across all projects",
-          type: ["web dev", "relevant"],
+            "Handled large scale data migrations, using database SQL queries and developed web-scrapers for legacy systems",
+          type: ["web / tech dev", "relevant"],
         },
         {
           content:
-            "Handled large scale data migrations, using direct database access and developed web-scrapers for legacy systems",
-          type: ["web dev", "relevant"],
+            "Improved test coverage by writing unit and integration tests with Jest and Enzyme",
+          type: ["web / tech dev", "relevant"],
         },
       ],
     },
@@ -573,36 +614,46 @@ export const CV = {
       country: "South Africa",
       company: "The Burger Exchange (Pty) Ltd",
       title: "Co-Founder, Managing Director",
-      type: ["management", "web dev", "relevant", "tech support", "restaurant", "entrepreneurial"],
+      type: [
+        "management",
+        "web / tech dev",
+        "relevant",
+        "web / tech dev",
+        "restaurant",
+        "entrepreneurial",
+      ],
       responsibilities: [
         {
           content:
-            "Co-founded a new 200 seater restaurant in Knysna based on our own concept & design",
-          type: ["entrepreneurial", "restaurant", "relevant"],
-        },
-        {
-          content: "Developing & providing Strategy & direction for the team",
+            "Envisioned & opened a 200 seater restaurant with my wife with a unique Grill & Burger theme at a beautiful spot on the Knysna lagoon",
           type: ["entrepreneurial", "restaurant", "relevant"],
         },
         {
           content:
-            "Project management, shop fitting, operations and establishing a team of 25+ employees",
+            "Covered all aspects of the restaurant, from creating the initial business plan, to sourcing funding, to the day-to-day operations",
+          type: ["entrepreneurial", "restaurant", "relevant"],
+        },
+        {
+          content:
+            "Project management, shop fitting, operations and establishing a team of 35 employees during peak season with up to 800 guests per day",
           type: ["management", "restaurant", "entrepreneurial", "relevant"],
         },
         {
-          content: "Handling of all Legal, IT & Financial responsibilities",
-          type: ["management", "relevant", "tech support"],
+          content: "Handled all Legal, IT & Financial responsibilities for the company",
+          type: ["management", "relevant", "web / tech dev"],
         },
         {
-          content: "Designed & created the restaurant website",
-          type: ["web dev", "relevant"],
+          content:
+            "Supported the overall marketing strategy with graphic design, food photography and I developed the restaurants website",
+          type: ["web / tech dev", "relevant"],
         },
         {
-          content: "Involved in all marketing & day-to-day operations",
+          content: "Managed the day-to-day operations and filled in any floor position as needed",
           type: ["management", "relevant"],
         },
         {
-          content: "Properly closing of the business & retrenching of all employees in March 2018",
+          content:
+            "De-registered and properly closed the business in March 2018 due to the economic effects of Covid on the Tourism industry",
           type: ["management", "entrepreneurial", "relevant"],
         },
       ],
@@ -614,29 +665,46 @@ export const CV = {
       country: "South Africa",
       company: "Tellmann – Web Design Studio",
       title: "Founder & Fullstack Developer",
-      type: ["management", "web dev", "relevant", "tech support", "entrepreneurial"],
+      type: ["management", "web / tech dev", "relevant", "entrepreneurial"],
       responsibilities: [
         {
           content:
-            "Founded Tellmann Ecommerce studio to provide high quality Shopify development services.",
-          type: ["entrepreneurial", "management", "relevant"],
+            "I founded Tellmann - Web Design Studio in 2020 during the first lockdown as a small scale web agency to provide exclusive web development services surrounding the Shopify ecosystem",
+          type: ["entrepreneurial", "management", "relevant", "web / tech dev"],
+        },
+        {
+          content: "I worked as the company's managing director and lead developer on all projects",
+          type: ["web / tech dev", "relevant"],
         },
         {
           content: "Responsible for finding & on-boarding new clients and handling business growth",
-          type: ["entrepreneurial", "management", "relevant"],
+          type: ["web / tech dev", "entrepreneurial", "management", "relevant"],
         },
+
         {
           content:
-            "Design email marketing campaigns, track week-over-week analytics to measure impact and reach.",
-          type: ["web dev", "relevant"],
+            "Planned, developed and published 2 web apps on the Shopify App store, built with Next.js, Turborepo, AWS S3 & Dynamo DB",
+          type: ["web / tech dev", "entrepreneurial", "management", "relevant"],
+        },
+
+        {
+          content: "Developed and maintained client, internal, and open source projects",
+          type: ["web / tech dev", "management", "relevant"],
         },
         {
-          content: "Developed and maintained all client projects",
-          type: ["web dev", "management", "relevant"],
+          content: "Providing of web-, data-, tech- and on-site support to clients",
+          type: ["web / tech dev", "relevant"],
         },
         {
-          content: "Providing of web-, data-, tech- and on-site support to clients.",
-          type: ["web dev", "relevant", "tech support"],
+          content: (
+            <>
+              Comprehensive portfolio of projects available at{" "}
+              <Link href="https://flext.dev" target="_blank">
+                flext.dev
+              </Link>
+            </>
+          ),
+          type: ["web / tech dev", "relevant"],
         },
       ],
     },
@@ -657,11 +725,11 @@ export const CV = {
       },
     ],
     programmingLanguages: [
+      TECH.typescript,
       TECH.javascript,
       TECH.html_5,
       TECH.css_3,
       TECH.sass,
-      TECH.typescript,
       TECH.graphql,
       TECH.markdown,
       TECH.liquid,
@@ -712,37 +780,37 @@ export const CV = {
     {
       date: "2016",
       name: "FreeCodeCamp - Front-end Developer Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2017",
       name: "FreeCodeCamp - Back-end Developer Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2017",
       name: "Shopify - Theme Development Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2017",
       name: "Shopify - Product Fundamentals Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2017",
       name: "Shopify - App Development Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2018",
       name: "Shopify - Business Fundamentals Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2018",
       name: "CodeCademy - React.js Certification",
-      type: ["web dev", "relevant"],
+      type: ["web / tech dev", "relevant"],
     },
     {
       date: "2016",
@@ -802,4 +870,5 @@ export const CV = {
       reference: `I have been fortunate enough to be working both along & with Felix Tellmann for the past 8 months. Felix has been an absolute light and strength in the team he runs. His approach to every challenge with a calm, firm & respectful attitude is something to be admired and to be learned by everyone. In spite of the challenges, this type of leadership makes a happy and productive work environment because it brings everyone together. I wish Felix all the best for his future endeavors. He is sure to make any challenge he takes on an absolute success.`,
     },
   ],
+  personal: `After spending my childhood in Germany and early work career, I moved to Cape Town 14 years ago. Cooking and hosting dinners for family and friends are some of my favorite activities, and I enjoy connecting with people through good food, technology, and intelligent discussion. You will often find me on and around Table Mountain, hiking or running with my dog Alpha. I am very excited about the new age Space Race and the innovation it brings, and I would like to witness a rocket launch in my lifetime. It is also important to me to keep up with web technology and UX design developments by listening to podcasts, attending local events, attending conferences, and using Twitter.`,
 };
