@@ -280,7 +280,17 @@ module.exports = {
       );
       matchUtilities(
         {
-          spacing: (value) => ({ display: `flex`, flexDirection: "column", gap: value }),
+          spacing: (value) => ({
+            display: `flex`,
+            flexDirection: "column",
+            gap: value,
+            "@media print": {
+              display: `block`,
+              "&>*:not(:first-child)": {
+                marginTop: value,
+              },
+            },
+          }),
         },
         { values: theme("spacing") }
       );

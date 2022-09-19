@@ -50,7 +50,7 @@ const App = ({ pageProps, Component }: AppProps) => {
         openGraph={SEO.openGraph}
       />
       <Header />
-      <main className="min-h-screen print:!mx-auto print:!w-[1152px]">
+      <main className="min-h-screen print:!mx-auto print:!w-[1024px]">
         <Component {...pageProps} />
       </main>
       <Footer />

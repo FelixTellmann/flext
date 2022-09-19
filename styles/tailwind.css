@@ -5,6 +5,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@page {
+  size: A4 portrait;
+  margin: 10mm 10mm 6mm 10mm;
+}
+
+
 .color-gray--slate {
   --color-gray-100: 241 245 249;
   --color-gray-200: 226 232 240;
@@ -99,7 +105,6 @@
 .__react_component_tooltip.show {
   opacity: 1 !important;
 }
-
 
 @layer base {
   @font-face {

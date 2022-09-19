@@ -24,6 +24,7 @@ module.exports = {
     {
       files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
       rules: {
+        "react/jsx-key": ["error", { checkFragmentShorthand: true }],
         "typescript-sort-keys/interface": 0,
         "sort-keys": 0,
         "sort-keys-fix": 0,

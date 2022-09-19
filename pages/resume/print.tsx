@@ -8,6 +8,7 @@ export const ResumePrint: FC = () => {
           @page {
             size: A4 portrait;
             margin: 10mm 10mm 10mm 10mm;
+
             /* change the margins as you want them to be. */
           }
         `}

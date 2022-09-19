@@ -270,7 +270,7 @@ export const TECH = {
     Icon: ({ className }) => <Swc className={className} />,
   },
   tailwindcss: {
-    name: "TailwindCSS",
+    name: "Tailwindcss",
     Icon: ({ className }) => <SiTailwindcss className={className} />,
   },
   takealot: {
@@ -330,7 +330,7 @@ export const TECH = {
     name: "Micros POS",
   },
   wordpress: {
-    name: "Wordpress",
+    name: "WordPress",
     Icon: ({ className }) => <SiWordpress className={className} />,
   },
   ftp: {

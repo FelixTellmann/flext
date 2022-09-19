@@ -2,9 +2,15 @@ import { TECH } from "content/tech-stack";
 
 export const CV = {
   name: "Felix Tellmann",
+  title: "Senior Fullstack Engineer",
+  primary_stack: [TECH.typescript, TECH.react, TECH.nodejs, TECH.tailwindcss],
   address: "Cape Town, Vredehoek 8001, South Africa",
   email: "hello@flext.dev",
-  mobile: "+27760313590",
+  website: "https://flext.dev",
+  mobile: {
+    href: `tel:+27760313590`,
+    number: "+27 (0)76 031 3590",
+  },
   intro: `I'm a self-taught web developer and ex restaurateur looking for a new challenge. For the last decade, I've build and helped early-stage startups to large enterprise companies build businesses that are simple, beautiful, and impactful in their field. I love encountering hard-to solve-problems and approach them with patience, determination and relentless perseverance.`,
   eduction: [
     {
@@ -665,7 +671,7 @@ export const CV = {
     ],
     librariesFrameworks: [
       TECH.react,
-      TECH.tailwind,
+      TECH.tailwindcss,
       TECH.nextjs,
       TECH.trpc,
       TECH.prisma,
