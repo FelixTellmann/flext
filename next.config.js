@@ -23,6 +23,8 @@ module.exports = withBundleAnalyzer({
       "burst.shopifycdn.com",
       "images.unsplash.com",
       "pbs.twimg.com",
+      "images-na.ssl-images-amazon.com",
+      "m.media-amazon.com",
     ],
   },
   async headers() {

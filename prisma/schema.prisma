@@ -202,3 +202,17 @@ model Habits {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model Books {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  read      Boolean  @default(false)
+  published Boolean  @default(false)
+  name      String
+  asin      String?
+  author    String?
+  image     String?
+  url       String?
+  votes     Int      @default(0)
+}
