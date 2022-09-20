@@ -1,6 +1,7 @@
 import { Image } from "_client/image";
 import { BOOKS } from "content/books";
 import { FC } from "react";
+import { Link } from "_client/link";
 
 type BooksProps = {};
 
@@ -14,19 +15,21 @@ export const Books: FC<BooksProps> = (props) => {
               key={book.name}
               className="items-center rounded-lg bg-gray-100/50 p-4 spacing-4"
             >
-              <figure className="aspect-[0.666] max-w-[140px] overflow-hidden">
-                <Image
-                  src={book.image}
-                  maxWidth={360}
-                  width={360}
-                  height={549}
-                  alt={book.name}
-                  className="-m-0.5 h-[calc(100%+0.25rem)] w-[calc(100%+0.25rem)] max-w-none object-cover object-center"
-                />
-              </figure>
-              <h2 className="text-center text-lg font-semibold tracking-tight text-gray-900">
-                {book.name}
-              </h2>
+              <Link href={book.url} className="items-center spacing-4">
+                <figure className="aspect-[0.666] w-[140px] max-w-[140px] overflow-hidden">
+                  <Image
+                    src={book.image}
+                    maxWidth={240}
+                    width={240}
+                    height={366}
+                    alt={book.name}
+                    className="-m-0.5 h-[calc(100%+0.25rem)] w-[calc(100%+0.25rem)] max-w-none object-cover object-center"
+                  />
+                </figure>
+                <h2 className="text-center font-semibold tracking-tighter text-gray-900">
+                  {book.name}
+                </h2>
+              </Link>
             </article>
           ))}
         </div>
