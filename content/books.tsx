@@ -451,17 +451,6 @@ export const BOOKS = [
     rating: 4.2,
   },
   {
-    name: "Blink: The Power of Thinking Without Thinking",
-    image: "https://images-na.ssl-images-amazon.com/images/I/61bYyB1I+UL.jpg",
-    url: "https://amzn.to/3xCPyoH",
-    author: "Malcolm Gladwell",
-    author_url: "https://amzn.to/3dqyAmN",
-    asin: "",
-    isbn10: "0316172324",
-    read: true,
-    rating: 4.2,
-  },
-  {
     name: "Outliers: The Story of Success",
     image: "https://images-na.ssl-images-amazon.com/images/I/71PP92fxyEL.jpg",
     url: "https://amzn.to/3QXOgLK",
