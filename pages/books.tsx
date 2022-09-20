@@ -10,7 +10,7 @@ export const Books: FC<BooksProps> = (props) => {
     <>
       <section className="relative mx-auto flex max-w-6xl px-4 py-16 md:px-8">
         <div className="grid w-full gap-8 md:grid-cols-2 xl:grid-cols-3">
-          {BOOKS.map((book) => (
+          {BOOKS.map((book, index) => (
             <article
               key={book.name}
               className="items-center rounded-lg bg-gray-100/50 p-4 spacing-4"
@@ -18,6 +18,7 @@ export const Books: FC<BooksProps> = (props) => {
               <Link href={book.url} className="items-center spacing-4" target="_blank">
                 <figure className="aspect-[0.666] w-[140px] max-w-[140px] overflow-hidden">
                   <Image
+                    preload={index < 10}
                     src={book.image}
                     maxWidth={240}
                     width={240}
