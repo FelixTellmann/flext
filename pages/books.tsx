@@ -9,7 +9,7 @@ export const Books: FC<BooksProps> = (props) => {
   return (
     <>
       <section className="relative mx-auto flex max-w-6xl px-4 py-16 md:px-8">
-        <div className="grid w-full grid-cols-3 gap-8">
+        <div className="grid w-full gap-8 md:grid-cols-2 xl:grid-cols-3">
           {BOOKS.map((book) => (
             <article
               key={book.name}
