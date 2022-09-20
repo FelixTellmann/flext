@@ -15,7 +15,7 @@ export const Books: FC<BooksProps> = (props) => {
               key={book.name}
               className="items-center rounded-lg bg-gray-100/50 p-4 spacing-4"
             >
-              <Link href={book.url} className="items-center spacing-4">
+              <Link href={book.url} className="items-center spacing-4" target="_blank">
                 <figure className="aspect-[0.666] w-[140px] max-w-[140px] overflow-hidden">
                   <Image
                     src={book.image}
