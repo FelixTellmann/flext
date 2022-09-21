@@ -35,12 +35,12 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
           <main className="ml-8 text-sm spacing-1">
             {paragraph ? <p className="text-[13px]">{paragraph}</p> : null}
             {list
-             ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
-               {list.map((li, i) => (
-                 <li key={li + i}>{li}</li>
-               ))}
-             </ul>
-             : null}
+              ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
+                  {list.map((li, i) => (
+                    <li key={li + i}>{li}</li>
+                  ))}
+                </ul>
+              : null}
           </main>
         </section>
       );
@@ -62,12 +62,12 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
           <main className="ml-8 text-sm spacing-1">
             {paragraph ? <p className="text-[13px]">{paragraph}</p> : null}
             {list
-             ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
-               {list.map((li, i) => (
-                 <li key={li + i}>{li}</li>
-               ))}
-             </ul>
-             : null}
+              ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
+                  {list.map((li, i) => (
+                    <li key={li + i}>{li}</li>
+                  ))}
+                </ul>
+              : null}
           </main>
         </section>
       );
@@ -89,12 +89,12 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
           <main className="ml-8 text-sm spacing-1">
             {paragraph ? <p className="text-[13px]">{paragraph}</p> : null}
             {list
-             ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
-               {list.map((li, i) => (
-                 <li key={li + i}>{li}</li>
-               ))}
-             </ul>
-             : null}
+              ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
+                  {list.map((li, i) => (
+                    <li key={li + i}>{li}</li>
+                  ))}
+                </ul>
+              : null}
           </main>
         </section>
       );
@@ -116,12 +116,12 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
           <main className="ml-8 text-sm spacing-1">
             {paragraph ? <p className="text-[13px]">{paragraph}</p> : null}
             {list
-             ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
-               {list.map((li, i) => (
-                 <li key={li + i}>{li}</li>
-               ))}
-             </ul>
-             : null}
+              ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
+                  {list.map((li, i) => (
+                    <li key={li + i}>{li}</li>
+                  ))}
+                </ul>
+              : null}
           </main>
         </section>
       );
@@ -143,12 +143,12 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
           <main className="ml-8 text-sm spacing-1">
             {paragraph ? <p className="text-[13px]">{paragraph}</p> : null}
             {list
-             ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
-               {list.map((li, i) => (
-                 <li key={li + i}>{li}</li>
-               ))}
-             </ul>
-             : null}
+              ? <ul role="list" className="list-disc space-y-2 pl-5 text-xs">
+                  {list.map((li, i) => (
+                    <li key={li + i}>{li}</li>
+                  ))}
+                </ul>
+              : null}
           </main>
         </section>
       );
