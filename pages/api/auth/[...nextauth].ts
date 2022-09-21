@@ -1,10 +1,10 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 
-import { env } from "_server/trpc/env";
-import { prisma } from "_server/trpc/prisma";
+import { env } from "server/trpc/env";
+import { prisma } from "server/trpc/prisma";
 import bcrypt from "bcrypt";
 import cuid from "cuid";
-import NextAuth, { Account, User } from "next-auth";
+import NextAuth, { Account, NextAuthOptions, User } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import EmailProvider from "next-auth/providers/email";
 import FacebookProvider from "next-auth/providers/facebook";
@@ -14,7 +14,7 @@ import TwitterProvider from "next-auth/providers/twitter";
 import { isValidPassword } from "utils/validate-password";
 import validate from "validator";
 
-export default NextAuth({
+export const authOptions: NextAuthOptions = {
   // Configure one or more authentication providers
   adapter: PrismaAdapter(prisma),
   secret: env.NEXTAUTH_SECRET,
@@ -22,7 +22,7 @@ export default NextAuth({
     maxAge: 120 * 24 * 60 * 60, // 120 days
     strategy: "jwt",
   },
-  debug: true,
+  debug: false,
   pages: {
     signIn: "/auth/sign-in",
     signOut: "/auth/sign-out",
@@ -300,4 +300,5 @@ export default NextAuth({
       return token;
     },*/
   },
-});
+};
+export default NextAuth(authOptions);

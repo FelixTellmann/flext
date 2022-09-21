@@ -88,7 +88,7 @@ export const BOOKS = [
     rating: 0,
   },
   {
-    name: "People Skills: How to Assert Yourself, Listen to Others, and Resolve Conflicts",
+    name: "People Skills",
     image: "https://images-na.ssl-images-amazon.com/images/I/617YRS1p9WL.jpg",
     url: "https://amzn.to/3qOcxtk",
     author: "Robert Bolton",
@@ -132,7 +132,7 @@ export const BOOKS = [
     rating: 4.8,
   },
   {
-    name: "Extreme Ownership: How U.S. Navy SEALs Lead and Win",
+    name: "Extreme Ownership",
     image: "https://images-na.ssl-images-amazon.com/images/I/815g1O76zBL.jpg",
     url: "https://amzn.to/3f4G7Ir",
     author: "Jocko Willink",
@@ -154,7 +154,7 @@ export const BOOKS = [
     rating: 4.9,
   },
   {
-    name: "Ikigai: The Japanese Secret to a Long and Happy Life",
+    name: "Ikigai",
     image: "https://images-na.ssl-images-amazon.com/images/I/71tbalAHYCL.jpg",
     url: "https://amzn.to/3f53gu4",
     author: "Héctor García",
@@ -231,7 +231,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "Smarter Faster Better: The Transformative Power of Real Productivity",
+    name: "Smarter Faster Better",
     image: "https://m.media-amazon.com/images/P/081299339X.01._SCLZZZZZZZ_SX500_.jpg",
     url: "https://amzn.to/3UoThzV",
     author: "Charles Duhigg",
@@ -242,7 +242,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "Grit: The Power of Passion and Perseverance",
+    name: "Grit",
     image: "https://images-na.ssl-images-amazon.com/images/I/51r1FcTxyhL.jpg",
     url: "https://amzn.to/3LtpQsr",
     author: "Angela Duckworth",
@@ -253,7 +253,7 @@ export const BOOKS = [
     rating: 4.5,
   },
   {
-    name: "Deep Work: Rules for Focused Success in a Distracted World",
+    name: "Deep Work",
     image: "https://images-na.ssl-images-amazon.com/images/I/71g8BUSqbpL.jpg",
     url: "https://amzn.to/3qNd9PX",
     author: "Cal Newport",
@@ -264,7 +264,7 @@ export const BOOKS = [
     rating: 0,
   },
   {
-    name: "The Upside of Irrationality: The Unexpected Benefits of Defying Logic at Work and at Home",
+    name: "The Upside of Irrationality",
     image: "https://images-na.ssl-images-amazon.com/images/I/51ucv9nGv7L.jpg",
     url: "https://amzn.to/3SfVnk2",
     author: "Dan Ariely",
@@ -275,7 +275,7 @@ export const BOOKS = [
     rating: 0,
   },
   {
-    name: "JavaScript and jQuery: Interactive Front-End Web Development",
+    name: "JavaScript and jQuery",
     image: "https://images-na.ssl-images-amazon.com/images/I/4119l82gW1L.jpg",
     url: "https://amzn.to/3QV6fmb",
     author: "Jon Duckett",
@@ -286,7 +286,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "JHTML and CSS: Design and Build Websites",
+    name: "JHTML and CSS",
     image: "https://images-na.ssl-images-amazon.com/images/I/31Aj-vC4y-L.jpg",
     url: "https://amzn.to/3dyjMCt",
     author: "Jon Duckett",
@@ -297,7 +297,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "Homo Deus: A History of Tomorrow",
+    name: "Homo Deus",
     image: "https://images-na.ssl-images-amazon.com/images/I/81hMjlT14ML.jpg",
     url: "https://amzn.to/3qTDLyO",
     author: "Yuval Noah Harari",
@@ -319,7 +319,7 @@ export const BOOKS = [
     rating: 3.3,
   },
   {
-    name: "Sapiens: A Brief History of Humankind",
+    name: "Sapiens",
     image: "https://images-na.ssl-images-amazon.com/images/I/71N3-FFSDxL.jpg",
     url: "https://amzn.to/3qP3SGY",
     author: "Yuval Noah Harari",
@@ -341,7 +341,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "Time to Think: Listening to Ignite the Human Mind",
+    name: "Time to Think",
     image: "https://m.media-amazon.com/images/I/41Z8Z6A5q4L._SY346_.jpg",
     url: "https://amzn.to/3dtnhKC",
     author: "Nancy Kline",
@@ -374,7 +374,7 @@ export const BOOKS = [
     rating: 4.7,
   },
   {
-    name: "Linchpin: Are You Indispensable?",
+    name: "Linchpin",
     image: "https://images-na.ssl-images-amazon.com/images/I/61MTYF-Dk+L.jpg",
     url: "https://amzn.to/3qTIjoS",
     author: "Seth Godin",
@@ -440,7 +440,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "Blink: The Power of Thinking Without Thinking",
+    name: "Blink",
     image: "https://images-na.ssl-images-amazon.com/images/I/61bYyB1I+UL.jpg",
     url: "https://amzn.to/3xCPyoH",
     author: "Malcolm Gladwell",
@@ -451,7 +451,7 @@ export const BOOKS = [
     rating: 4.2,
   },
   {
-    name: "Outliers: The Story of Success",
+    name: "Outliers",
     image: "https://images-na.ssl-images-amazon.com/images/I/71PP92fxyEL.jpg",
     url: "https://amzn.to/3QXOgLK",
     author: "Malcolm Gladwell",
@@ -462,7 +462,7 @@ export const BOOKS = [
     rating: 4.8,
   },
   {
-    name: "The Tipping Point: How Little Things Can Make a Big Differenceg",
+    name: "The Tipping Point",
     image: "https://images-na.ssl-images-amazon.com/images/I/71vzpPj921L.jpg",
     url: "https://amzn.to/3eRL6Mj",
     author: "Malcolm Gladwell",
@@ -473,7 +473,7 @@ export const BOOKS = [
     rating: 4.5,
   },
   {
-    name: "What the Dog Saw: And Other Adventures",
+    name: "What the Dog Saw",
     image: "https://images-na.ssl-images-amazon.com/images/I/61j+kOX7c2L.jpg",
     url: "https://amzn.to/3eZyz9M",
     author: "Malcolm Gladwell",
@@ -484,7 +484,7 @@ export const BOOKS = [
     rating: 3.6,
   },
   {
-    name: "David and Goliath: Underdogs, Misfits and the Art of Battling Giants",
+    name: "David and Goliath",
     image: "https://images-na.ssl-images-amazon.com/images/I/71L5SRRo3KL.jpg",
     url: "https://amzn.to/3f5ZUat",
     author: "Malcolm Gladwell",
@@ -495,7 +495,7 @@ export const BOOKS = [
     rating: 4,
   },
   {
-    name: "True North: Discover Your Authentic Leadership",
+    name: "True North",
     image: "https://images-na.ssl-images-amazon.com/images/I/51+N6nYLVfL.jpg",
     url: "https://amzn.to/3f3NZdc",
     author: "Bill George",
@@ -506,7 +506,7 @@ export const BOOKS = [
     rating: 3.2,
   },
   {
-    name: "Sprint: How to Solve Big Problems and Test New Ideas in Just Five Days",
+    name: "Sprint",
     image: "https://images-na.ssl-images-amazon.com/images/I/81xBzG4riDL.jpg",
     url: "https://amzn.to/3QXS6ov",
     author: "Jake Knapp",
@@ -517,7 +517,7 @@ export const BOOKS = [
     rating: 0,
   },
   {
-    name: "Inspired: How to Create Tech Products Customers Love",
+    name: "Inspired",
     image: "https://images-na.ssl-images-amazon.com/images/I/416vIaW8Q8L.jpg",
     url: "https://amzn.to/3RQA3Sh",
     author: "Marty Cagan",
@@ -528,7 +528,7 @@ export const BOOKS = [
     rating: 0,
   },
   {
-    name: "Elon Musk: Tesla, SpaceX, and the Quest for a Fantastic Future",
+    name: "Elon Musk",
     image: "https://images-na.ssl-images-amazon.com/images/I/5112YFsXIJL.jpg",
     url: "https://amzn.to/3Bu5MSj",
     author: "Ashlee Vance",
@@ -539,7 +539,7 @@ export const BOOKS = [
     rating: 0,
   },
   {
-    name: "Kitchen Confidential: Adventures in the Culinary Underbelly",
+    name: "Kitchen Confidential",
     image: "https://m.media-amazon.com/images/I/51IvNQ71JJL.jpg",
     url: "https://amzn.to/3BvXhpI",
     author: "Anthony Bourdain",
@@ -660,7 +660,7 @@ export const BOOKS = [
     rating: 3.6,
   },
   {
-    name: "Quiet: The Power of Introverts in a World That Can't Stop Talking",
+    name: "Quiet",
     image: "https://images-na.ssl-images-amazon.com/images/I/71uL+QKtoJL.jpg",
     url: "https://amzn.to/3BTRCez",
     author: "Susan Cain",
@@ -671,7 +671,7 @@ export const BOOKS = [
     rating: 3.9,
   },
   {
-    name: "Learning Web Design: A Beginner's Guide to (X)HTML, StyleSheets, and Web Graphics",
+    name: "Learning Web Design",
     image: "https://images-na.ssl-images-amazon.com/images/I/513uzQH5TCL.jpg",
     url: "https://amzn.to/3ScyZYw",
     author: "Jennifer Niederst Robbins",
@@ -693,7 +693,7 @@ export const BOOKS = [
     rating: 4.2,
   },
   {
-    name: "Drive: The Surprising Truth About What Motivates Us",
+    name: "Drive",
     image: "https://images-na.ssl-images-amazon.com/images/I/81-JlsOu0fL.jpg",
     url: "https://amzn.to/3xDZluJ",
     author: "Daniel H. Pink",
@@ -849,7 +849,7 @@ export const BOOKS = [
   },
   {
     name: "The E-Myth Revisited",
-    image: "https://images-na.ssl-images-amazon.com/images/I/71K9EcfzJ4L.jpg",
+    image: "https://images-na.ssl-images-amazon.com/images/I/41Uz0NvjNPL.jpg",
     url: "https://amzn.to/3eYmilX",
     author: "Michael E. Gerber",
     author_url: "https://amzn.to/3DIQgF3",
@@ -881,7 +881,7 @@ export const BOOKS = [
     rating: 2.9,
   },
   {
-    name: "Little Red Book of Selling: 12.5 Principles of Sales Greatness",
+    name: "Little Red Book of Selling",
     image: "https://images-na.ssl-images-amazon.com/images/I/91-1qV3oRfL.jpg",
     url: "https://amzn.to/3SmpWVf",
     author: "Jeffrey Gitomer",
@@ -892,7 +892,7 @@ export const BOOKS = [
     rating: 3.4,
   },
   {
-    name: "Zero to One: Notes on Startups, or How to Build the Future",
+    name: "Zero to One",
     image: "https://m.media-amazon.com/images/I/41PZRSHF-NL.jpg",
     url: "https://amzn.to/3BTFF8R",
     author: "Peter Thiel & Blake Masters",
@@ -947,7 +947,7 @@ export const BOOKS = [
     rating: 4.4,
   },
   {
-    name: "Influence: The Psychology of Persuasion",
+    name: "Influence",
     image: "https://images-na.ssl-images-amazon.com/images/I/81PIXB1RBEL.jpg",
     url: "https://amzn.to/3SaHyDy",
     author: "Robert B. Cialdini",

@@ -1,5 +1,5 @@
 import { HeartIcon, MoonIcon, StarIcon, SunIcon } from "@heroicons/react/24/solid";
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import { Badge } from "components/badge";
 import { CodeEditor } from "components/code-editor";
 import ToggleSwitch from "components/toggle-switch";

@@ -1,4 +1,4 @@
-import { makeStore } from "_client/_stores/_make-store";
+import { makeStore } from "components/_stores/_make-store";
 
 const { Provider, useStore } = makeStore<
   {

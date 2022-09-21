@@ -1,5 +1,5 @@
 import { SiGithub } from "@react-icons/all-files/si/SiGithub";
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import clsx from "clsx";
 import DarkmodeIcon from "components/darkmode-icon";
 import { useTheme } from "next-themes";

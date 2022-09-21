@@ -1,9 +1,8 @@
-import { loggerLink } from "@trpc/client";
 import { httpBatchLink } from "@trpc/client/links/httpBatchLink";
-import { setupTRPC } from "@trpc/next";
+import { createTRPCNext } from "@trpc/next";
 import { inferProcedureInput, inferProcedureOutput } from "@trpc/server";
-import { TrpcRouter } from "_server/api-routes";
 import { NextPageContext } from "next";
+import { TrpcRouter } from "server/api-routes";
 import superjson from "superjson";
 
 function getBaseUrl() {
@@ -43,18 +42,11 @@ export interface SSRContext extends NextPageContext {
   status?: number;
 }
 
-export const trpc = setupTRPC<TrpcRouter, SSRContext>({
+export const trpc = createTRPCNext<TrpcRouter, SSRContext>({
   config() {
     return {
       transformer: superjson,
       links: [
-        // adds pretty logs to your consoley in development and logs errors in production
-        /*loggerLink({
-          enabled: (opts) =>
-            process.env.NODE_ENV === "development" ||
-            (opts.direction === "down" && opts.result instanceof Error),
-        }),*/
-
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,
           // maxURLLength: 2083, // a suitable size
@@ -85,7 +77,6 @@ export const trpc = setupTRPC<TrpcRouter, SSRContext>({
     return {};
   },
 });
-
 /**
  * This is a helper method to infer the output of a query resolver
  * @example type HelloOutput = inferQueryOutput<'hello'>

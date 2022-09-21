@@ -1,4 +1,4 @@
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import { SOCIAL_ACCOUNTS } from "content/social-accounts";
 import { FC } from "react";
 

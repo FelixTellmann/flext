@@ -1,6 +1,6 @@
-import { trpc } from "_client/_app/trpc";
-import { ContextProviders } from "_client/_stores/_context-providers";
-import { LoadInitialData } from "_client/_stores/_load-initial-data";
+import { trpc } from "components/_app/trpc";
+import { ContextProviders } from "components/_stores/_context-providers";
+import { LoadInitialData } from "components/_stores/_load-initial-data";
 
 import { Footer } from "components/layout/footer";
 import { Header } from "components/layout/header";

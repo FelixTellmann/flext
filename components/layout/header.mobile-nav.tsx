@@ -1,4 +1,4 @@
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import clsx from "clsx";
 import { HEADER } from "content/layout";
 import { Property } from "csstype";

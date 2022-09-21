@@ -4,7 +4,7 @@ import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
 import { SiReact } from "@react-icons/all-files/si/SiReact";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
 import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import { TECH } from "content/tech-stack";
 import party from "party-js";
 

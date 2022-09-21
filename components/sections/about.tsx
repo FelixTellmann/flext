@@ -1,5 +1,5 @@
-import { useTooltipStore } from "_client/_stores/tooltip-store";
-import { Image } from "_client/image";
+import { useTooltipStore } from "components/_stores/tooltip-store";
+import { Image } from "components/image";
 import { ABOUT } from "content/about";
 import { FC, useCallback, useRef, useState } from "react";
 

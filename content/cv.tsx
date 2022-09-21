@@ -1,5 +1,5 @@
 import { TECH } from "content/tech-stack";
-import { Link } from "_client/link";
+import { Link } from "components/link";
 
 export const CV = {
   name: "Felix Tellmann",

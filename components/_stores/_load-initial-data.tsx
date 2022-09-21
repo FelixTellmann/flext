@@ -1,6 +1,6 @@
-import { useIsGloballyMounted } from "_client/_stores/is-globally-mounted-store";
-import { useNotifications } from "_client/_stores/notifications-store";
-import { useTooltipStore } from "_client/_stores/tooltip-store";
+import { useIsGloballyMounted } from "components/_stores/is-globally-mounted-store";
+import { useNotifications } from "components/_stores/notifications-store";
+import { useTooltipStore } from "components/_stores/tooltip-store";
 
 import { Toast } from "components/toast";
 import dynamic from "next/dynamic";

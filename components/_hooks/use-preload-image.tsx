@@ -1,5 +1,5 @@
-import { useIsGloballyMounted } from "_client/_stores/is-globally-mounted-store";
-import { usePreloadedImages } from "_client/_stores/preloaded-images-store";
+import { useIsGloballyMounted } from "components/_stores/is-globally-mounted-store";
+import { usePreloadedImages } from "components/_stores/preloaded-images-store";
 import { useCallback } from "react";
 
 type UsePreloadImageHook = () => (props: { src: string; width: number; quality?: number }) => void;

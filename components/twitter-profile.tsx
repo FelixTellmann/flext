@@ -1,5 +1,5 @@
-import { Image } from "_client/image";
-import { Link } from "_client/link";
+import { Image } from "components/image";
+import { Link } from "components/link";
 import { FC } from "react";
 import { components } from "twitter-api-sdk/dist/gen/openapi-types";
 

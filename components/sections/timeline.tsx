@@ -1,4 +1,4 @@
-import { useDebouncedEffect } from "_client/_hooks/use-debounce-effect";
+import { useDebouncedEffect } from "components/_hooks/use-debounce-effect";
 import clsx from "clsx";
 import { TIMELINEOBJECT } from "content/timeline";
 import { useInView } from "framer-motion";

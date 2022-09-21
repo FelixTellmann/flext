@@ -6,7 +6,7 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
   enabled: process.env.ANALYZE === "true",
 });
 
-const { env } = require("./_server/trpc/env");
+const { env } = require("./server/trpc/env");
 
 module.exports = withBundleAnalyzer({
   swcMinify: true,

@@ -1,4 +1,4 @@
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import { DesktopNav } from "components/layout/header.desktop-nav";
 import { MobileNav } from "components/layout/header.mobile-nav";
 import { ProfileNav } from "components/layout/header.settings";

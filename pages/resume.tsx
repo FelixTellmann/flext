@@ -2,8 +2,8 @@ import { EnvelopeIcon } from "@heroicons/react/24/solid";
 import { SiGithub } from "@react-icons/all-files/si/SiGithub";
 import { SiLinkedin } from "@react-icons/all-files/si/SiLinkedin";
 import { SiTwitter } from "@react-icons/all-files/si/SiTwitter";
-import { Image } from "_client/image";
-import { Link } from "_client/link";
+import { Image } from "components/image";
+import { Link } from "components/link";
 
 import clsx from "clsx";
 import { HoverEffect } from "components/layout/header.desktop-nav.hover-effect";

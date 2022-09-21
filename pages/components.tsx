@@ -1,5 +1,5 @@
 import { Bars2Icon, Bars3BottomLeftIcon } from "@heroicons/react/24/solid";
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import { FC } from "react";
 
 type ComponentsProps = {};

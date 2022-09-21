@@ -1,6 +1,6 @@
 // eslint-disable-next-line @next/next/no-document-import-in-page
-import { Favicon } from "_client/_document/favicon";
-import { Font } from "_client/_document/font";
+import { Favicon } from "components/_document/favicon";
+import { Font } from "components/_document/font";
 import Document, { Head, Html, Main, NextScript } from "next/document";
 import Script from "next/script";
 

@@ -1,4 +1,4 @@
-import usePreloadImage from "_client/_hooks/use-preload-image";
+import usePreloadImage from "components/_hooks/use-preload-image";
 import { ImageProps } from "next/dist/client/future/image";
 import NextImage from "next/future/image";
 import { FC, useEffect } from "react";

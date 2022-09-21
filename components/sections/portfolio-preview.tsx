@@ -1,9 +1,9 @@
 import { LinkIcon } from "@heroicons/react/24/solid";
 import { FaGithub } from "@react-icons/all-files/fa/FaGithub";
-import { Image } from "_client/image";
-import { Link } from "_client/link";
+import { Image } from "components/image";
+import { Link } from "components/link";
 import clsx from "clsx";
-import { ScrollGallery } from "components/components/scroll-gallery";
+import { ScrollGallery } from "components/scroll-gallery";
 import { PORTFOLIO } from "content/portfolio-preview";
 import { PROJECTS } from "content/projects";
 import { FC, useCallback, useState } from "react";

@@ -2,7 +2,7 @@ import { ChevronDoubleUpIcon, EnvelopeIcon } from "@heroicons/react/24/solid";
 import { SiGithub } from "@react-icons/all-files/si/SiGithub";
 import { SiLinkedin } from "@react-icons/all-files/si/SiLinkedin";
 import { SiTwitter } from "@react-icons/all-files/si/SiTwitter";
-import { Link } from "_client/link";
+import { Link } from "components/link";
 import clsx from "clsx";
 import { useResumeSectionInView } from "components/resume/use-resume-section-in-view";
 import { useState } from "react";
