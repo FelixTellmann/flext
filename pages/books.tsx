@@ -179,6 +179,6 @@ export const getStaticProps = async () => {
         updatedAt: new Date(book.updatedAt).toUTCString(),
       })),
     },
-    revalidate: 60 * 60,
+    revalidate: 60,
   };
 };
