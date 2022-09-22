@@ -147,7 +147,7 @@ export const BookList: FC<InferGetStaticPropsType<typeof getStaticProps>> = (pro
             </fieldset>*/}
           </div>
         </header>
-        <main className="grid w-full grid-cols-2 gap-16 gap-y-24 md:grid-cols-3">
+        <main className="grid w-full grid-cols-2 gap-8 gap-y-16 sm:gap-16 sm:gap-y-24 md:grid-cols-3">
           {props.books
             .sort((a, b) => b.votes - a.votes)
             .map((book, index) => (
