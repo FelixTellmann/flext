@@ -96,7 +96,7 @@ const BookItem = (props: {
         <h2>
           <Link
             href={book.url ?? ""}
-            className="text-[15px] font-semibold text-gray-900 hfa:underline"
+            className="text-[15px] font-semibold text-gray-900 hfa:underline d:text-gray-100"
           >
             {book.name}
           </Link>
@@ -105,7 +105,7 @@ const BookItem = (props: {
           {" "}
           <Link
             href={book.author_url ?? ""}
-            className="text-[15px] tracking-tight text-gray-900 hfa:underline"
+            className="text-[15px] tracking-tight text-gray-900 hfa:underline d:text-gray-400"
           >
             {book.author}
           </Link>
