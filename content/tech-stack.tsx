@@ -130,7 +130,7 @@ export const TECH = {
     Icon: ({ className }) => <Trpc className={className} />,
   },
   aws: {
-    name: "Amazon Web Services (AWS)",
+    name: "AWS",
     Icon: ({ className }) => <FaAws className={className} />,
   },
   aws_amplify: {
