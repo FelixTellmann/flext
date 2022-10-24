@@ -4,7 +4,7 @@ import { Link } from "components/link";
 export const CV = {
   name: "Elizabeth Dangwa",
   title: "Product Manager / UI & UX Designer",
-  primary_stack: [TECH.figma, TECH.office, TECH.shopify],
+  primary_stack: [TECH.figma, TECH.shopify, TECH.msTeams],
   address: "Cape Town, Vredehoek 8001, South Africa",
   email: "elizadangwa@gmail.com",
   website: "https://lizt.dev",
@@ -14,11 +14,10 @@ export const CV = {
   },
   intro: (
     <>
-      I am a passionate self-taught UI & UX designer (and former restaurateur & chef). I take
-      ownership of my projects and ensure that user stories reflect my clients best interests. I am
-      always open to learn and up for new challenges. I manage myself well and keep an objective
-      mind as I like to be pro-active. I know I have a lot to offer and I am willing to go the extra
-      mile
+      I am a passionate UI & UX designer (and former restaurateur & chef). I take ownership of my
+      projects with attention to detail and ensure that user stories reflect my clients best
+      interests. I am always open to learning and up for new challenges. I manage myself well and
+      keep an objective mind as I like to be pro-active.
     </>
   ),
   eduction: [
@@ -95,7 +94,7 @@ export const CV = {
     },
     {
       dateFrom: "2016-08-01",
-      dateTo: "2017-08-01",
+      dateTo: "2017-07-01",
       city: "Cape Town",
       country: "South Africa",
       company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
@@ -111,10 +110,10 @@ export const CV = {
           content: "Created the concept & brand identity designs",
           type: ["relevant"],
         },
-        {
+        /*        {
           content: "Conducted market research & analysis",
           type: ["relevant"],
-        },
+        },*/
         {
           content: "Lead the marketing & promotions for the web platform",
           type: ["relevant"],
@@ -126,33 +125,251 @@ export const CV = {
       ],
     },
     {
-      dateFrom: "2016-08-01",
-      dateTo: "2017-08-01",
+      dateFrom: "2016-12-01",
+      dateTo: "2017-09-01",
       city: "Cape Town",
       country: "South Africa",
-      company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
+      company: "LizActive yoga wear",
       title: "Product Manager",
       type: ["management", "relevant"],
       description: "",
       responsibilities: [
         {
-          content: "Project planning & execution management overseeing the engineering team",
+          content: "Concept & brand development for yoga active-wear",
           type: ["relevant"],
         },
         {
-          content: "Created the concept & brand identity designs",
+          content: "Competitive marketing research & analysis",
           type: ["relevant"],
         },
         {
-          content: "Conducted market research & analysis",
+          content: "Sourced suppliers & manufacturers / leadtime management",
           type: ["relevant"],
         },
         {
-          content: "Lead the marketing & promotions for the web platform",
+          content: "Qualitative product testing & quality assurance management",
           type: ["relevant"],
         },
         {
-          content: "Responsible for all product testing & quality assurance ",
+          content: "Designed & developed the ecommerce website",
+          type: ["relevant"],
+        },
+      ],
+    },
+    {
+      dateFrom: "2017-04-01",
+      dateTo: "2018-05-01",
+      city: "Cape Town",
+      country: "South Africa",
+      company: "Liquix.io - Ecommerce Solutions",
+      title: "Project Manager",
+      type: ["management", "relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content: "UX & UI design for web solutions based on client requirements",
+          type: ["relevant"],
+        },
+        {
+          content: "Facilitated & managed the engineering team",
+          type: ["relevant"],
+        },
+        {
+          content: "Effective communication with clients & establishing project scopes",
+          type: ["relevant"],
+        },
+        {
+          content: "Task prioritization and resources planning",
+          type: ["relevant"],
+        },
+        {
+          content: "Handling project handovers & quality assurance / testing",
+          type: ["relevant"],
+        },
+      ],
+    },
+    {
+      dateFrom: "2018-04-01",
+      dateTo: "2020-04-01",
+      city: "Knysna",
+      country: "South Africa",
+      company: "Liquix.io - Ecommerce Solutions",
+      title: "Co-owner & Managing Director",
+      type: ["management", "relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content:
+            "Concept & brand creation for a 200 seater restaurant with a unique grill & burger theme",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "Covered all aspects of the restaurant. From business plan, sourcing funding, to the day-to-day operations",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "Project management, shop fitting and establishing a team of 35 employee managing up to 800 guests a day",
+          type: ["relevant"],
+        },
+        {
+          content: "Menu design, recipe creation, supplier sourcing & pricing",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "In charge of all marketing activities with graphic design, food photography & website development",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "De-registered and properly closed the business in March 2018 due to the economic effects of Covid",
+          type: ["relevant"],
+        },
+      ],
+    },
+    {
+      dateFrom: "2020-05-01",
+      dateTo: "2022-10-01",
+      city: "Cape Town",
+      country: "South Africa",
+      company: "Lunalemon.dev - Online Success Partners",
+      title: "UI / UX Designer",
+      type: ["management", "relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content: "Designed & developed Shopify ecommerce stores for clients",
+          type: ["relevant"],
+        },
+        {
+          content: "SEO, Social media & promotions management",
+          type: ["relevant"],
+        },
+        {
+          content: "In charge of newsletter content marketing campaigns, design & development",
+          type: ["relevant"],
+        },
+        {
+          content: "Client success management, training & ecommerce store support",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "Developed Inventory management solutions and helped onsite for setup & training",
+          type: ["relevant"],
+        },
+        {
+          content: "Handled project management with timelines, budgets and allocated tasks",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "Created two apps from idea to UX & UI Design and managed the engineering team for execution",
+          type: ["relevant"],
+        },
+        {
+          content:
+            "Product testing & quality assurance for Shopify apps and handling app submissions",
+          type: ["relevant"],
+        },
+      ],
+    },
+  ],
+  projects: [
+    {
+      dateFrom: "2022-01-01",
+      dateTo: "2017-01-01",
+      sidebar: "Kids Living",
+      title: " Ongoing website management & social media promotions",
+      type: ["relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content: (
+            <>
+              I created & designed a website for a leading South African baby and kids store,
+              offering an extensive range of imported and locally manufactured high-end products. I
+              manage their marketing & promotions including their website and work with a team of
+              seven. I cover most aspects of their website from inventory management, digital
+              {/*marketing, web maintenance, UX & UI design to complete website testing and data
+              structures.*/}
+            </>
+          ),
+          type: ["relevant"],
+        },
+      ],
+    },
+    {
+      dateFrom: "2020-01-01",
+      dateTo: "2017-01-01",
+      sidebar: "Volkswagen",
+      title: "Ecommerce Website - Design & development",
+      type: ["relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content: (
+            <>
+              An automotive dealership site with an integrated eCommerce parts store. I was the
+              Project manager that was part of the design and launch of the website in three. I led
+              a team of five, including a Volkswagen product manager, sales team and developers. A
+              core responsibility was to create a vehicle matching algorithm that allows visitors to
+              {/*easily enter their car details and get the exact fitting parts for their model based
+              on the release year, model, and trim.*/}
+            </>
+          ),
+          type: ["relevant"],
+        },
+      ],
+    },
+    {
+      dateFrom: "2021-01-01",
+      dateTo: "2017-01-01",
+      sidebar: "Lunatag",
+      title: "UI & UX Designed for a Shopify App",
+      type: ["relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content: (
+            <>
+              Lunatag is a Shopify application that helps millions of eCommerce merchants tell a
+              story through pictures. It creates shop-the-look experiences anywhere in users'
+              stores. I was the principal product manger for the app, covering all areas from
+              conceptualisation to Publication. I managed a group of 4 including designers,
+              developers, and Shopify representatives. I set up and designed the mock store which
+              {/*showcases the apps functions to merchants before uploading it onto their stores. I
+              also performed a number of app testing throughout the project ensuring the app runs
+              smoothly & met all the requirements for publication.*/}
+            </>
+          ),
+          type: ["relevant"],
+        },
+      ],
+    },
+    {
+      dateFrom: "2021-01-01",
+      dateTo: "2017-01-01",
+      sidebar: "Click Upload",
+      title: "UI & UX Designed and Quality Assurance",
+      type: ["relevant"],
+      description: "",
+      responsibilities: [
+        {
+          content: (
+            <>
+              A Shopify application that helps merchants set up personalized products by providing
+              file upload functionality for products and orders. I was the Co UX & UI designer for
+              the App. A core feature of the app is that it fully integrates into the merchants'
+              theme editor and can easily be customized to suit any brand guide. The aim was to make
+              the app simple to use for the users while encompassing the needs of the merchant
+              {/*purchase details. I also performed a number of app testing throughout the project
+              insuring the app runs smoothly for the merchant as well as the client and met all the
+              requirements for publication.*/}
+            </>
+          ),
           type: ["relevant"],
         },
       ],
@@ -219,7 +436,7 @@ export const CV = {
       name: "Shopify - Product Fundamentals Certification",
       type: ["web / tech dev", "relevant"],
     },
-    {
+    /*    {
       date: "2011",
       name: "Cape Wine Academy Certificate",
       type: ["relevant"],
@@ -228,7 +445,7 @@ export const CV = {
       date: "2011",
       name: "Food Hygiene Practice Certificate",
       type: ["relevant"],
-    },
+    },*/
     {
       date: "2019",
       name: "500hr Advanced Yoga Teacher Training - RYT Qualification",
@@ -243,26 +460,6 @@ export const CV = {
       date: "2015",
       name: "Photography and lighting",
       type: ["relevant"],
-    },
-  ],
-  other: [
-    {
-      name: "Cape Wine Academy - Wine Certificate",
-    },
-    {
-      name: "First Aid Course - Level one",
-    },
-    {
-      name: "ICDL - International Computer Drivers License",
-    },
-    {
-      name: "Cardio Pulmonary Resuscitation Certificate",
-    },
-    {
-      name: "Crowd Management & Passenger Service Safety Certificate",
-    },
-    {
-      name: "Artful Food Competition - 1st price",
     },
   ],
   references: [

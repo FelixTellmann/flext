@@ -51,7 +51,7 @@ export const Resume: FC = (props) => {
         <tr>
           <th className="flex w-[1024px] pb-4 text-left font-normal">
             <header className="">
-              <h1 className="text-4xl font-extrabold tracking-tight">{CV?.name}</h1>
+              <h1 className="text-4xl font-bold tracking-tight">{CV?.name}</h1>
               <h2 className="flex gap-1 ">
                 <span className="font-semibold tracking-tight text-gray-500">{CV?.title} - </span>
                 {CV?.primary_stack.map(({ name, Icon }) => (
@@ -69,15 +69,15 @@ export const Resume: FC = (props) => {
                 <Link href={`mailto:${CV?.email}`}>{CV?.email}</Link>
               </div>
               <div>
-                <Link href={CV?.website}>{CV?.website.replace("https://", "")}</Link>
-                <span> - </span>
-                <Link href="https://github.com/FelixTellmann">github.com/FelixTellmann</Link>
+                {/*<Link href={CV?.website}>{CV?.website.replace("https://", "")}</Link>*/}
+                {/*<span> - </span>*/}
+                {/*<Link href="https://github.com/FelixTellmann">github.com/FelixTellmann</Link>*/}
               </div>
             </div>
           </th>
         </tr>
       </thead>
-      <tfoot className="fixed inset-x-0 bottom-0 hidden w-full text-center print:!table-footer-group">
+      {/*<tfoot className="fixed inset-x-0 bottom-0 hidden w-full text-center print:!table-footer-group">
         <tr>
           <th>
             <small className="absolute left-1/2 bottom-0 -translate-x-1/2 pb-1 pt-3 text-[13px] font-medium tracking-tight text-gray-400">
@@ -85,7 +85,7 @@ export const Resume: FC = (props) => {
             </small>
           </th>
         </tr>
-      </tfoot>
+      </tfoot>*/}
       <tbody className="block print:table-row-group print:!h-screen print:!min-h-screen">
         <tr className="block print:!table-row">
           <td className="block print:!table-cell">
@@ -128,6 +128,7 @@ export const Resume: FC = (props) => {
                 <ResumeSection
                   title="Experience"
                   className={clsx(
+                    "break-inside-avoid",
                     !CV.experience.filter(({ type }) => type.includes(filter) || filter === "all")
                       .length && "!hidden"
                   )}
@@ -188,6 +189,61 @@ export const Resume: FC = (props) => {
                   </div>
                 </ResumeSection>
                 <ResumeSection
+                  title="Projects"
+                  className={clsx(
+                    "break-inside-avoid",
+                    !CV.projects.filter(({ type }) => type.includes(filter) || filter === "all")
+                      .length && "!hidden"
+                  )}
+                >
+                  <div className="spacing-8">
+                    {CV?.projects
+                      .sort((a, b) => {
+                        if (new Date(a.dateFrom) < new Date(b.dateFrom)) return 1;
+                        if (new Date(a.dateFrom) > new Date(b.dateFrom)) return -1;
+                        return 0;
+                      })
+                      .filter(({ type }) => type.includes(filter) || filter === "all")
+                      .map(
+                        (
+                          { dateFrom, dateTo, title, responsibilities, sidebar, description, type },
+                          index,
+                          arr
+                        ) => {
+                          return (
+                            <section
+                              className="relative mb-auto break-inside-avoid-page"
+                              key={index}
+                            >
+                              <div className="relative flex">
+                                <ResumeSectionDateSidebar
+                                  dateFrom={dateFrom}
+                                  dateTo={dateTo}
+                                  showDateRange
+                                  isLast={index === arr.length - 1}
+                                  sidebar={sidebar}
+                                />
+
+                                <ResumeSectionDateEvents
+                                  name={title}
+                                  organization={undefined}
+                                  dateFrom={dateFrom}
+                                  dateTo={dateTo}
+                                  showDateRange
+                                  description={description}
+                                  responsibilities={responsibilities}
+                                  city={undefined}
+                                  country={undefined}
+                                  bullets={false}
+                                />
+                              </div>
+                            </section>
+                          );
+                        }
+                      )}
+                  </div>
+                </ResumeSection>
+                <ResumeSection
                   className={clsx(
                     "break-inside-avoid",
                     !CV.eduction.filter(({ type }) => type.includes(filter) || filter === "all")
@@ -237,7 +293,7 @@ export const Resume: FC = (props) => {
                 </ResumeSection>
                 <ResumeSection className="break-inside-avoid" title="Capabilities">
                   <div className="spacing-8 print:!-ml-24 print:!spacing-3">
-                    <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
+                    {/*<section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
                           Languages
@@ -248,7 +304,7 @@ export const Resume: FC = (props) => {
                           .map((language, index) => language.name)
                           .join(", ")}
                       </p>
-                    </section>
+                    </section>*/}
                     <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
@@ -344,7 +400,7 @@ export const Resume: FC = (props) => {
                       </ul>
                     </section>
 
-                    {["all", "restaurant"].includes(filter)
+                    {/*{["all", "restaurant"].includes(filter)
                       ? <section className="relative max-w-prose spacing-1">
                           <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                             <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
@@ -359,7 +415,7 @@ export const Resume: FC = (props) => {
                             ))}
                           </ul>
                         </section>
-                      : null}
+                      : null}*/}
                   </div>
                 </ResumeSection>
 
@@ -380,7 +436,7 @@ export const Resume: FC = (props) => {
                     ))}
                   </div>
                 </ResumeSection>
-                <ResumeSection title="Interests" className="break-inside-avoid">
+                <ResumeSection title="Interests" className="break-inside-avoid print:!hidden">
                   <p className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300 d:text-gray-300 print:!-ml-24 print:!text-base">
                     {CV?.personal}
                   </p>

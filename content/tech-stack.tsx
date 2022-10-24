@@ -24,6 +24,7 @@ import { SiJavascript } from "@react-icons/all-files/si/SiJavascript";
 import { SiJest } from "@react-icons/all-files/si/SiJest";
 import { SiMarkdown } from "@react-icons/all-files/si/SiMarkdown";
 import { SiMicrosoftoffice } from "@react-icons/all-files/si/SiMicrosoftoffice";
+import { SiMicrosoftteams } from "@react-icons/all-files/si/SiMicrosoftteams";
 import { SiMysql } from "@react-icons/all-files/si/SiMysql";
 import { SiNetlify } from "@react-icons/all-files/si/SiNetlify";
 import { SiNextDotJs } from "@react-icons/all-files/si/SiNextDotJs";
@@ -364,7 +365,7 @@ export const TECH = {
   },
   msTeams: {
     name: "Microsoft Teams",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }) => <SiMicrosoftteams className={className} />,
   },
   zoom: {
     name: "Zoom",
