@@ -1,3 +1,4 @@
+/** @type {import('tailwindcss').Config} */
 // eslint-disable-next-line node/no-unpublished-require
 const plugin = require("tailwindcss/plugin");
 // eslint-disable-next-line node/no-unpublished-require

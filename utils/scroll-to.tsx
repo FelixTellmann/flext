@@ -20,7 +20,8 @@ const easeInOutQuad = ({ currentTime, start, change, duration }: EaseInOutQuadOp
 export const scrollToY = (
   duration: number,
   to: number,
-  container: HTMLElement | Window = window
+  container: HTMLElement | Window = window,
+  callback: () => void = () => {}
 ): void => {
   const start = container instanceof HTMLElement ? container.scrollTop : container.scrollY;
 
@@ -43,6 +44,9 @@ export const scrollToY = (
 
     if (currentTime < duration) {
       requestAnimationFrame(animateScroll);
+    } else {
+      container.scrollTo(0, to);
+      callback();
     }
   };
   animateScroll();
@@ -76,6 +80,7 @@ export const scrollToX = (
     if (currentTime < duration) {
       requestAnimationFrame(animateScroll);
     } else {
+      container.scrollTo(to, 0);
       callback();
     }
   };

@@ -17,6 +17,7 @@ import { SiGithub } from "@react-icons/all-files/si/SiGithub";
 import { SiGooglechrome } from "@react-icons/all-files/si/SiGooglechrome";
 import { SiGraphql } from "@react-icons/all-files/si/SiGraphql";
 import { SiHtml5 } from "@react-icons/all-files/si/SiHtml5";
+import { SiInstagram } from "@react-icons/all-files/si/SiInstagram";
 import { SiIntellijidea } from "@react-icons/all-files/si/SiIntellijidea";
 import { SiIonic } from "@react-icons/all-files/si/SiIonic";
 import { SiJavascript } from "@react-icons/all-files/si/SiJavascript";
@@ -336,5 +337,41 @@ export const TECH = {
   ftp: {
     name: "Ftp",
     Icon: ({ className }) => <ImUpload className={className} />,
+  },
+  meta: {
+    name: "Meta Ads Management & Facebook Business suite",
+    Icon: ({ className }) => <ImUpload className={className} />,
+  },
+  google: {
+    name: "Google Ads, Business, Merchant & Analytics",
+    Icon: ({ className }) => <ImUpload className={className} />,
+  },
+  instagram: {
+    name: "Instagram",
+    Icon: ({ className }) => <SiInstagram className={className} />,
+  },
+  omnisend: {
+    name: "Omnisend Email Marketing",
+    Icon: ({ className }) => <SiInstagram className={className} />,
+  },
+  asana: {
+    name: "Asana",
+    Icon: ({ className }) => <SiInstagram className={className} />,
+  },
+  clockify: {
+    name: "Clockify",
+    Icon: ({ className }) => <SiInstagram className={className} />,
+  },
+  msTeams: {
+    name: "Microsoft Teams",
+    Icon: ({ className }) => <SiInstagram className={className} />,
+  },
+  zoom: {
+    name: "Zoom",
+    Icon: ({ className }) => <SiInstagram className={className} />,
+  },
+  slack: {
+    name: "Slack",
+    Icon: ({ className }) => <SiInstagram className={className} />,
   },
 } as const;
