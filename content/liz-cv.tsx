@@ -73,6 +73,7 @@ export const CV = {
       company: "Worldsport Events",
       title: "Sponsorship Rights Co-ordinator ",
       type: ["management", "relevant"],
+      description: "",
       responsibilities: [
         {
           content: "Rights Delivery for Momentum Insurance & Pick N Pay",
@@ -100,6 +101,7 @@ export const CV = {
       company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
       title: "Product Manager",
       type: ["management", "relevant"],
+      description: "",
       responsibilities: [
         {
           content: "Project planning & execution management overseeing the engineering team",
@@ -131,6 +133,7 @@ export const CV = {
       company: "SmartUp Online (Pty) Ltd. - Restaurant Training & Development",
       title: "Product Manager",
       type: ["management", "relevant"],
+      description: "",
       responsibilities: [
         {
           content: "Project planning & execution management overseeing the engineering team",
