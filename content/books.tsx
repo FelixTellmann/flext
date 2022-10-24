@@ -261,7 +261,7 @@ export const BOOKS = [
     asin: "",
     isbn10: "0349411905",
     read: false,
-    rating: 0,
+    rating: 4.6,
   },
   {
     name: "The Upside of Irrationality",
