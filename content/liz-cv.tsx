@@ -290,11 +290,9 @@ export const CV = {
           content: (
             <>
               I created & designed a website for a leading South African baby and kids store,
-              offering an extensive range of imported and locally manufactured high-end products. I
-              manage their marketing & promotions including their website and work with a team of
-              seven. I cover most aspects of their website from inventory management, digital
-              {/*marketing, web maintenance, UX & UI design to complete website testing and data
-              structures.*/}
+              offering an extensive range of imported and locally manufactured high-end products. In
+              addition to managing the E-commerce store & website, I also handle digital marketing,
+              web maintenance, UX design, data structures, and testing of the site with a team.
             </>
           ),
           type: ["relevant"],
@@ -312,12 +310,12 @@ export const CV = {
         {
           content: (
             <>
-              An automotive dealership site with an integrated eCommerce parts store. I was the
-              Project manager that was part of the design and launch of the website in three. I led
-              a team of five, including a Volkswagen product manager, sales team and developers. A
-              core responsibility was to create a vehicle matching algorithm that allows visitors to
-              {/*easily enter their car details and get the exact fitting parts for their model based
-              on the release year, model, and trim.*/}
+              This project was based on a dealership website integrated with an eCommerce parts
+              store. I was a Project Manager who was in charge of the design and launch of the
+              website in three months. My team included a Volkswagen product manager, the sales
+              team, and developers. The primary objective was to create an algorithm for matching
+              vehicles based on release year, model, and trim with the exact fitting parts for their
+              model.
             </>
           ),
           type: ["relevant"],
@@ -335,14 +333,11 @@ export const CV = {
         {
           content: (
             <>
-              Lunatag is a Shopify application that helps millions of eCommerce merchants tell a
-              story through pictures. It creates shop-the-look experiences anywhere in users'
-              stores. I was the principal product manger for the app, covering all areas from
-              conceptualisation to Publication. I managed a group of 4 including designers,
-              developers, and Shopify representatives. I set up and designed the mock store which
-              {/*showcases the apps functions to merchants before uploading it onto their stores. I
-              also performed a number of app testing throughout the project ensuring the app runs
-              smoothly & met all the requirements for publication.*/}
+              Lunatag is an eCommerce application that helps millions of eCommerce merchants tell a
+              story with pictures. I was the primary product manager for the app, covering all
+              aspects from concept to publication. My team consisted of designers, developers, and
+              Shopify representatives. Throughout the project, I also performed multiple app tests
+              to ensure the app ran smoothly and met all requirements.
             </>
           ),
           type: ["relevant"],
@@ -360,14 +355,11 @@ export const CV = {
         {
           content: (
             <>
-              A Shopify application that helps merchants set up personalized products by providing
-              file upload functionality for products and orders. I was the Co UX & UI designer for
-              the App. A core feature of the app is that it fully integrates into the merchants'
-              theme editor and can easily be customized to suit any brand guide. The aim was to make
-              the app simple to use for the users while encompassing the needs of the merchant
-              {/*purchase details. I also performed a number of app testing throughout the project
-              insuring the app runs smoothly for the merchant as well as the client and met all the
-              requirements for publication.*/}
+              Clickupload is a Shopify application that enables merchants to create personalized
+              products by uploading files. As part of the app team, I worked on UX and UI design. An
+              essential feature of the app is that it fully integrates into merchants' theme editors
+              and can be tailored to match any brand style. We aimed to make the app easy to use for
+              users while accommodating merchant purchase information needs.
             </>
           ),
           type: ["relevant"],
