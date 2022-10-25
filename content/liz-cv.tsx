@@ -14,10 +14,11 @@ export const CV = {
   },
   intro: (
     <>
-      I am a passionate UI & UX designer (and former restaurateur & chef). I take ownership of my
-      projects with attention to detail and ensure that user stories reflect my clients best
-      interests. I am always open to learning and up for new challenges. I manage myself well and
-      keep an objective mind as I like to be pro-active.
+      I am a passionate UI & UX designer (and a former restaurateur & chef). I take responsibility
+      for my projects with attention to detail and ensure user stories reflect the objectives and
+      interests of my clients. Keeping an objective mind and being proactive are two qualities I
+      possess that help me manage myself well. I thrive in team-oriented environments and enjoy
+      challenges and opportunities.
     </>
   ),
   eduction: [
