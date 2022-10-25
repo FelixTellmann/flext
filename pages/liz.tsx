@@ -367,7 +367,7 @@ export const Resume: FC = (props) => {
                 </ResumeSection>
                 <ResumeSection
                   className={clsx(
-                    "break-inside-avoid",
+                    "break-inside-avoid print:!mt-6",
                     !CV.certifications.filter(
                       ({ type }) => type.includes(filter) || filter === "all"
                     ).length && "!hidden"
