@@ -43,7 +43,7 @@
     "immer": "^9.0.15",
     "match-sorter": "^6.3.1",
     "next": "^12.3.1",
-    "next-auth": "^4.10.3",
+    "next-auth": "^4.18.8",
     "next-seo": "^5.5.0",
     "next-sitemap": "^3.1.22",
     "next-themes": "0.2.1",
