@@ -79,6 +79,7 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
         marketing: { label: "Accepts Marketing", type: "checkbox" },
       },
+      // @ts-ignore
       authorize: async (credentials, req) => {
         if (!credentials) {
           return {
@@ -155,6 +156,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
+      // @ts-ignore
       authorize: async (credentials, req) => {
         /*= =============== Validate Data  ================ */
         if (!credentials) {
@@ -213,7 +215,14 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     signIn: async ({ user: untypedUser, account, profile, email, credentials }) => {
-      const user = untypedUser as User & { accounts: Account[] };
+      const user = untypedUser as User & {
+        accounts: Account[];
+        validationError: any;
+        accountExists?: any;
+        accountNotFound?: any;
+        incorrectPassword?: any;
+        emailVerified?: any;
+      };
       if (credentials) {
         if (user.validationError) {
           return "http://localhost:3000/auth/error?error=validation-error";
