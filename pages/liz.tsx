@@ -13,7 +13,8 @@ import { ResumeSectionDateSidebar } from "components/resume/resume-section-data-
 import { ResumeSectionDateEvents } from "components/resume/resume-section-date-events";
 import { useResumeSectionInView } from "components/resume/use-resume-section-in-view";
 import { CV } from "content/liz-cv";
-import LizProfilePic from "public/images/about/liz-profile-pic.jpg";
+// import LizProfilePic from "public/images/about/liz-profile-pic.jpg";
+import LizProfilePic from "public/images/about/liz.jpg";
 import { FC, useEffect, useState } from "react";
 import { capitalize } from "utils/capitalize";
 import { scrollToY } from "utils/scroll-to";
@@ -62,7 +63,7 @@ export const Resume: FC = (props) => {
                 ))}
               </h2>
             </header>
-            <div className="mt-1 ml-auto mt-auto flex-1 items-end justify-end text-right text-[15px] text-gray-500 spacing-0">
+            <div className="mt-1 ml-auto flex-1 items-end justify-end text-right text-[15px] text-gray-500 spacing-0">
               <div>
                 <Link href={`tel:${CV?.mobile.href}`}>{CV?.mobile.number}</Link>
                 <span> - </span>
@@ -92,7 +93,7 @@ export const Resume: FC = (props) => {
             <article className="relative mx-auto mb-16 grid max-w-6xl gap-12 px-4 py-16 print:!flex print:!py-0 print:!pl-24 md:px-8 lg:grid-cols-[1fr_200px] print:[&_*]:![-webkit-print-color-adjust:exact] print:[&_*]:![color-adjust:exact] print:[&_*]:![print-color-adjust:exact]">
               <main className="snap-y snap-normal spacing-10">
                 <ResumeSection title="Intro" className="break-inside-avoid print:!max-w-3xl">
-                  <p className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300 d:text-gray-300 print:!-ml-24 print:!max-w-3xl print:!text-base">
+                  <p className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300 print:!-ml-24 print:!max-w-3xl print:!text-base">
                     {CV?.intro}
                   </p>
                 </ResumeSection>
@@ -136,8 +137,8 @@ export const Resume: FC = (props) => {
                   <div className="spacing-8">
                     {CV?.experience
                       .sort((a, b) => {
-                        if (new Date(a.dateFrom) < new Date(b.dateFrom)) return 1;
-                        if (new Date(a.dateFrom) > new Date(b.dateFrom)) return -1;
+                        if (new Date(a.dateTo) < new Date(b.dateTo)) return 1;
+                        if (new Date(a.dateTo) > new Date(b.dateTo)) return -1;
                         return 0;
                       })
                       .filter(({ type }) => type.includes(filter) || filter === "all")
@@ -308,11 +309,11 @@ export const Resume: FC = (props) => {
                     <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
-                          Project Management
+                          Design
                         </strong>
                       </h3>
                       <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600 print:!mt-0">
-                        {CV?.capabilities?.projectManagement
+                        {CV?.capabilities?.design
                           .map((language, index) => language.name)
                           .join(", ")}
                       </p>
@@ -320,11 +321,11 @@ export const Resume: FC = (props) => {
                     <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
-                          Service Providers
+                          Marketing
                         </strong>{" "}
                       </h3>
                       <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600 print:!mt-0">
-                        {CV?.capabilities?.serviceProviders
+                        {CV?.capabilities?.marketing
                           .map((language, index) => language.name)
                           .join(", ")}
                       </p>
@@ -356,7 +357,7 @@ export const Resume: FC = (props) => {
                     <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
-                          Tools
+                          Tools & Admin
                         </strong>{" "}
                       </h3>
                       <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600 print:!mt-0">

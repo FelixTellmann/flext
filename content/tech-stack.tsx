@@ -344,7 +344,7 @@ export const TECH = {
     Icon: ({ className }) => <ImUpload className={className} />,
   },
   google: {
-    name: "Google Ads, Business, Merchant & Analytics",
+    name: "Google Ads, Merchant platform & Analytics",
     Icon: ({ className }) => <ImUpload className={className} />,
   },
   instagram: {

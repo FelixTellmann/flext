@@ -753,14 +753,7 @@ export const CV = {
       TECH.framer,
       TECH.redis,
     ],
-    serviceProviders: [
-      TECH.vercel,
-      TECH.aws,
-      TECH.firebase,
-      TECH.netlify,
-      TECH.planetscale,
-      TECH.github,
-    ],
+    marketing: [TECH.vercel, TECH.aws, TECH.firebase, TECH.netlify, TECH.planetscale, TECH.github],
     dataProviders: [TECH.shopify, TECH.vend, TECH.erply, TECH.dear, TECH.micros, TECH.wordpress],
     tools: [
       TECH.intellij_idea,
