@@ -1,12 +1,12 @@
 import clsx from "clsx";
-import { FC } from "react";
+import { FC, ReactElement } from "react";
 
 type ResumeSectionDateSidebarProps = {
   dateFrom: string | Date;
   dateTo: string | Date;
   isLast: boolean;
   showDateRange: boolean;
-  sidebar?: string;
+  sidebar?: string | ReactElement;
 };
 export const ResumeSectionDateSidebar: FC<ResumeSectionDateSidebarProps> = ({
   dateFrom,
