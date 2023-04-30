@@ -37,6 +37,7 @@ import { SiReact } from "@react-icons/all-files/si/SiReact";
 import { SiRedis } from "@react-icons/all-files/si/SiRedis";
 import { SiRuby } from "@react-icons/all-files/si/SiRuby";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
+import { SiSketch } from "@react-icons/all-files/si/SiSketch";
 import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
 import { SiTypescript } from "@react-icons/all-files/si/SiTypescript";
 import { SiWebpack } from "@react-icons/all-files/si/SiWebpack";
@@ -69,6 +70,10 @@ import Liquid from "public/icons/tech-logos/liquid.svg";
 export const TECH = {
   shopify: {
     name: "Shopify",
+    Icon: ({ className }) => <SiShopify className={className} />,
+  },
+  shopify_polaris: {
+    name: "Shopify Polaris",
     Icon: ({ className }) => <SiShopify className={className} />,
   },
   vend: {
@@ -170,6 +175,10 @@ export const TECH = {
   figma: {
     name: "Figma",
     Icon: ({ className }) => <SiFigma className={className} />,
+  },
+  sketch: {
+    name: "Sketch",
+    Icon: ({ className }) => <SiSketch className={className} />,
   },
   firebase: {
     name: "Firebase",
@@ -340,11 +349,11 @@ export const TECH = {
     Icon: ({ className }) => <ImUpload className={className} />,
   },
   meta: {
-    name: "Meta Ads Management & Facebook Business suite",
+    name: "Meta Ads & Facebook Business suite",
     Icon: ({ className }) => <ImUpload className={className} />,
   },
   google: {
-    name: "Google Ads, Merchant platform & Analytics",
+    name: "Google Ads, Merchant & Analytics",
     Icon: ({ className }) => <ImUpload className={className} />,
   },
   instagram: {

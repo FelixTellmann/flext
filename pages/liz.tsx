@@ -197,7 +197,7 @@ export const Resume: FC = (props) => {
                       .length && "!hidden"
                   )}
                 >
-                  <div className="spacing-8">
+                  <div className="spacing-8 print:spacing-6">
                     {CV?.projects
                       .sort((a, b) => {
                         if (new Date(a.dateFrom) < new Date(b.dateFrom)) return 1;
@@ -252,7 +252,7 @@ export const Resume: FC = (props) => {
                   )}
                   title="Education"
                 >
-                  <div className="spacing-8">
+                  <div className="spacing-4">
                     {CV?.eduction
                       .sort((a, b) => {
                         if (new Date(a.dateFrom) < new Date(b.dateFrom)) return 1;
@@ -293,7 +293,7 @@ export const Resume: FC = (props) => {
                   </div>
                 </ResumeSection>
                 <ResumeSection className="break-inside-avoid" title="Capabilities">
-                  <div className="spacing-8 print:!-ml-24 print:!spacing-3">
+                  <div className="spacing-8 print:!-ml-24 print:!spacing-2">
                     {/*<section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">

@@ -3,7 +3,7 @@ import { Link } from "components/link";
 
 export const CV = {
   name: "Elizabeth Dangwa",
-  title: "UX & UI Designer / Product Manager",
+  title: "UX & UI Designer",
   primary_stack: [TECH.figma, TECH.illustrator, TECH.shopify],
   address: "Cape Town, Vredehoek 8001, South Africa",
   email: "elizadangwa@gmail.com",
@@ -82,15 +82,17 @@ export const CV = {
       responsibilities: [
         {
           content:
-            "Designing and maintaining a visually appealing, user-friendly, and intuitive website.",
+            "Growth & Success Partner for the company's online presence. Designed & setup the initial online portal using BigCommerce in 2015 and later on Shopify from 2017 onwards.",
           type: ["relevant"],
         },
         {
-          content: "Developing and executing a social media strategy.",
+          content:
+            "Continuous SEO implementations and creation of a Best Practices guide for the team to maintain a high quality of content displayed.",
           type: ["relevant"],
         },
         {
-          content: "Creating and curating engaging and high-quality content.",
+          content:
+            "Assisted to grow the stores sales by 25% per year through well designed conversion rate improvements and Social Media marketing efforts.",
           type: ["relevant"],
         } /*
         {
@@ -103,18 +105,16 @@ export const CV = {
           type: ["relevant"],
         },*/
         {
-          content:
-            "Collaborating with other teams such as marketing, development, and product to ensure a consistent brand voice and user experience across all channels.",
+          content: "Responsible for a Bi-Monthly E-mail newsletter with more than 15k Subscribers",
           type: ["relevant"],
         },
         {
           content:
-            "Conducting User tests and incorporating feedback to improve the usability and functionality of the online store.",
+            "Designed & Implemented two major website redesigns to improve the user experience",
           type: ["relevant"],
         },
         {
-          content:
-            "Staying up-to-date with the latest design trends, technologies, and best practices and incorporating them into the e-commerce store's design strategy.",
+          content: "Continuous Social Media Marketing with 15k followers on Instagram and Facebook",
           type: ["relevant"],
         },
         /* {
@@ -136,28 +136,31 @@ export const CV = {
       description: "",
       responsibilities: [
         {
-          content: "Managing a team of UI/UX designers and providing mentorship and guidance.",
-          type: ["relevant"],
-        },
-        {
-          content: "Overseeing the design process from concept to launch.",
+          content: "Design, concept & implementation for the new Lunalemon.dev website.",
           type: ["relevant"],
         },
         {
           content:
-            "Collaborating with other teams such as engineering, project management, and marketing.",
+            "Built a design guides & templates for websites, social media posts and marketing material.",
           type: ["relevant"],
         },
         {
-          content: "Conducting user research and analyzing data to improve designs.",
+          content:
+            "In charge of 2 major Shopify Apps, covering design, App listing, and marketing sites.",
           type: ["relevant"],
         },
         {
-          content: "Creating wireframes, prototypes, and high-fidelity designs.",
+          content:
+            "Creating wireframes, prototypes, and high-fidelity designs for client projects.",
           type: ["relevant"],
         },
         {
-          content: "Creating and maintaining design guidelines, patterns, and libraries.",
+          content:
+            "Created a universal design system that could be adjusted for various e-commerce stores.",
+          type: ["relevant"],
+        },
+        {
+          content: "Client service and communication throughout projects.",
           type: ["relevant"],
         },
       ],
@@ -181,11 +184,8 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content: "Creating and managing advertising and promotional campaigns.",
-          type: ["relevant"],
-        },
-        {
-          content: "Developing and designing new menu items, promotions, and events.",
+          content:
+            "Created the brand guide, social media templates, menu design, restaurant seating and decor.",
           type: ["relevant"],
         },
         {
@@ -193,7 +193,8 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content: "Continuously monitoring industry trends and innovations.",
+          content:
+            "Increased awareness and sales through Campaigns, promotions, events and business collaborations.",
           type: ["relevant"],
         },
       ],
@@ -209,12 +210,12 @@ export const CV = {
       description: "",
       responsibilities: [
         {
-          content: "Collaborating with clients to understand their needs and goals.",
+          content: "Growth & Success Partner for varies clients and projects.",
           type: ["relevant"],
         },
+
         {
-          content:
-            "Creating wireframes, prototypes, and high-fidelity designs for websites, & applications.",
+          content: "Lead Designer for a SAAS educational application.",
           type: ["relevant"],
         },
         {
@@ -223,7 +224,8 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content: "Conducting user research, usability testing, and user feedback.",
+          content:
+            "Creating wireframes, prototypes, and high-fidelity designs for websites & applications.",
           type: ["relevant"],
         },
       ],
@@ -234,7 +236,7 @@ export const CV = {
       city: "Cape Town",
       country: "South Africa",
       company: "LizActive Yoga Wear",
-      title: "Product Manager",
+      title: "Product Designer",
       type: ["relevant"],
       description: "",
       responsibilities: [
@@ -244,19 +246,12 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content: "Developing and managing the product roadmap.",
+          content:
+            "Created the product design, brand guide, social media templates & marketing campaign material and designed the LizActive website.",
           type: ["relevant"],
         },
         {
           content: "Defining and prioritizing product features and requirements.",
-          type: ["relevant"],
-        },
-        {
-          content: "Developing and executing marketing strategies and campaigns.",
-          type: ["relevant"],
-        },
-        {
-          content: "Continuously monitoring and analyzing customer feedback and market trends.",
           type: ["relevant"],
         },
       ],
@@ -490,7 +485,7 @@ export const CV = {
           </Link>
         </>
       ),
-      title: "Website Redesign",
+      title: "Website Re-design",
       type: ["relevant"],
       description: "",
       link: "https://lizt.dev/kidsliving",
@@ -529,7 +524,7 @@ export const CV = {
           </Link>
         </>
       ),
-      title: "Ecommerce Website - Design & development",
+      title: "Ecommerce Website & Parts Matching App",
       type: ["relevant"],
       description: "",
       link: "https://lizt.dev/volkswagen",
@@ -561,7 +556,7 @@ export const CV = {
           </Link>
         </>
       ),
-      title: "Designed for a Shopify App",
+      title: "Shopify App",
       type: ["relevant"],
       link: "https://lizt.dev/lunatag",
       description: "",
@@ -684,7 +679,7 @@ export const CV = {
       TECH.github,
       TECH.vercel,
     ],
-    design: [TECH.figma, TECH.illustrator, TECH.photoshop],
+    design: [TECH.figma, TECH.illustrator, TECH.sketch, TECH.photoshop, TECH.shopify_polaris],
     marketing: [TECH.meta, TECH.google, TECH.facebook, TECH.instagram],
     dataProviders: [TECH.shopify, TECH.vend, TECH.erply, TECH.dear, TECH.micros, TECH.wordpress],
     tools: [
