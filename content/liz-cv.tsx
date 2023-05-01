@@ -6,7 +6,7 @@ export const CV = {
   title: "UX & UI Designer",
   primary_stack: [TECH.figma, TECH.illustrator, TECH.shopify],
   address: "Cape Town, Vredehoek 8001, South Africa",
-  email: "elizadangwa@gmail.com",
+  email: "elizabeth@tellmann.co.za",
   website: "https://lizt.dev",
   mobile: {
     href: `tel:+763934356`,
