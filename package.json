@@ -59,6 +59,7 @@
     "react-tooltip": "^4.2.21",
     "react-use": "^17.4.0",
     "relative-indexing-method-polyfill": "^1.0.1",
+    "rimraf": "^5.0.1",
     "short-uuid": "^4.2.0",
     "superjson": "^1.10.0",
     "twitter-api-sdk": "^1.1.0",
