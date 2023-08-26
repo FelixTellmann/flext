@@ -61,6 +61,7 @@ export const trpcZustandNonBatching = createTRPCProxyClient<TrpcRouter>({
   ],
 });
 
+// @ts-ignore
 export const trpc = createTRPCNext<TrpcRouter, SSRContext>({
   config() {
     return {
