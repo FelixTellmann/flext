@@ -2,10 +2,8 @@
 <module type="WEB_MODULE" version="4">
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
-    <content url="file://$MODULE_DIR$/node_modules/.prisma" />
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/_client" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/_server" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pages" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/styles" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/utils" isTestSource="false" />

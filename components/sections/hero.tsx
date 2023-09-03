@@ -9,10 +9,7 @@ import { useTheme } from "next-themes";
 import { FC } from "react";
 import { components } from "twitter-api-sdk/dist/gen/openapi-types";
 
-type HeroProps = {
-  twitterData: components["schemas"]["User"];
-};
-export const Hero: FC<HeroProps> = ({ twitterData }) => {
+export const Hero: FC = () => {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -111,7 +108,7 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
             </div>
           </div>
           <div className="absolute hidden sm:top-24 sm:-right-5 sm:block lg:top-full lg:-left-64">
-            <TwitterProfile {...twitterData} />
+            <TwitterProfile />
           </div>
         </section>
         <div className="background pointer-events-none absolute inset-0 z-0 -z-30 select-none">

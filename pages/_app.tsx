@@ -1,4 +1,3 @@
-import { trpc } from "components/_app/trpc";
 import { ContextProviders } from "components/_stores/_context-providers";
 import { LoadInitialData } from "components/_stores/_load-initial-data";
 
@@ -59,4 +58,4 @@ const App = ({ pageProps, Component }: AppProps) => {
   );
 };
 
-export default trpc.withTRPC(App);
+export default App;

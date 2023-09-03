@@ -6,8 +6,6 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
   enabled: process.env.ANALYZE === "true",
 });
 
-const { env } = require("./server/trpc/env");
-
 module.exports = withBundleAnalyzer({
   swcMinify: true,
   reactStrictMode: false,
@@ -26,24 +24,6 @@ module.exports = withBundleAnalyzer({
       "images-na.ssl-images-amazon.com",
       "m.media-amazon.com",
     ],
-  },
-  async headers() {
-    return [
-      {
-        // matching all API routes
-        source: "/api/:path*",
-        headers: [
-          { key: "Access-Control-Allow-Credentials", value: "true" },
-          { key: "Access-Control-Allow-Origin", value: "*" },
-          { key: "Access-Control-Allow-Methods", value: "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
-          {
-            key: "Access-Control-Allow-Headers",
-            value:
-              "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version",
-          },
-        ],
-      },
-    ];
   },
   webpack: (config, { isServer, dev }) => {
     /*
@@ -82,12 +62,5 @@ module.exports = withBundleAnalyzer({
   experimental: {
     externalDir: true,
     images: { allowFutureImage: true },
-  },
-  env: {
-    ...this.env,
-    NEXT_PUBLIC_APP_VERSION: require("./package.json").version,
-  },
-  publicRuntimeConfig: {
-    NODE_ENV: env.NODE_ENV,
   },
 });
