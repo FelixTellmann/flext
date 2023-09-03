@@ -6,7 +6,6 @@ export const JSONParse = (object: any, origin = "") => {
   } catch (err) {
     console.log(err.message);
     fs.writeFileSync(`json-error-${Date.now()}.json`, object);
-    // console.log({ origin, object });
     return {};
   }
 };

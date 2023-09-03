@@ -12,7 +12,7 @@ export const HERO = {
   pre: "Welcome to my site.",
   heading: (
     <>
-      I'm <strong>Felix Tellmann</strong>, a Fullstack developer.
+      I'm <strong>Mateus</strong>, a Backend developer.
     </>
   ),
   tech: [
