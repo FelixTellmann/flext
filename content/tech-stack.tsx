@@ -43,6 +43,8 @@ import { SiTypescript } from "@react-icons/all-files/si/SiTypescript";
 import { SiWebpack } from "@react-icons/all-files/si/SiWebpack";
 import { SiWordpress } from "@react-icons/all-files/si/SiWordpress";
 import { SiYarn } from "@react-icons/all-files/si/SiYarn";
+import { SiJava } from "@react-icons/all-files/si/SiJava";
+import { SiJenkins } from "@react-icons/all-files/si/SiJenkins";
 
 import AwsAmplify from "public/icons/tech-logos/aws_amplify.svg";
 import AwsLambda from "public/icons/tech-logos/aws_lambda.svg";
@@ -215,6 +217,14 @@ export const TECH = {
   javascript: {
     name: "JavaScript",
     Icon: ({ className }) => <SiJavascript className={className} />,
+  },
+  java: {
+    name: "Java",
+    Icon: ({ className }) => <SiJava className={className} />,
+  },
+  jenkins: {
+    name: "Jenkins",
+    Icon: ({ className }) => <SiJenkins className={className} />,
   },
   jest: {
     name: "Jest",

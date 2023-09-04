@@ -5,18 +5,7 @@ import { FC, Fragment, useCallback, useEffect } from "react";
 
 export type CodeGroupProps = {
   code: string | string[];
-  language:
-    | "js"
-    | "css"
-    | "json"
-    | "jsx"
-    | "typescript"
-    | "tsx"
-    | "yml"
-    | "Rust"
-    | "bash"
-    | "html"
-    | "javascript";
+  language: "js" | "java";
   className?: string;
   lineHighlight?: string;
   plugins?: ("line-numbers" | "highlight-keywords")[];

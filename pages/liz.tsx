@@ -118,7 +118,7 @@ export const Resume: FC = (props) => {
                     <Image
                       src={LizProfilePic}
                       preload
-                      className="rounded-sm shadow-xl shadow-sky-400/10"
+                      className="rounded-sm shadow-xl shadow-teal-400/10"
                       alt="Felix Tellmann Profile Pic"
                       width="176"
                       height="224"
@@ -466,7 +466,7 @@ export const Resume: FC = (props) => {
                     <Image
                       src={LizProfilePic}
                       preload
-                      className="rounded-sm shadow-xl shadow-sky-400/10"
+                      className="rounded-sm shadow-xl shadow-teal-400/10"
                       alt="Felix Tellmann Profile Pic"
                       width="176"
                       height="224"
@@ -482,7 +482,7 @@ export const Resume: FC = (props) => {
                         key={key}
                         className={clsx(
                           "-ml-2 w-min rounded-md px-2 py-1 outline-none transition-all duration-75 hfa:outline-none",
-                          inView === key ? "text-sky-500 hf:text-sky-600" : "hf:text-gray-700"
+                          inView === key ? "text-teal-500 hf:text-teal-600" : "hf:text-gray-700"
                         )}
                         onClick={() => showSection(key)}
                         href={`#${key}`}
@@ -514,7 +514,7 @@ export const Resume: FC = (props) => {
                         className={clsx(
                           "rounded border  px-1.5 py-0.5 text-xs font-medium outline-none hfa:outline-none ",
                           filter.includes(type)
-                            ? "border-sky-300 bg-sky-100 text-gray-700 hf:border-sky-400 hf:bg-sky-300/40 hf:text-gray-800 d:border-sky-700 d:bg-sky-900/60 d:text-gray-200 d:hf:bg-sky-700/50 d:hf:text-gray-100"
+                            ? "border-teal-300 bg-teal-100 text-gray-700 hf:border-teal-400 hf:bg-teal-300/40 hf:text-gray-800 d:border-teal-700 d:bg-teal-900/60 d:text-gray-200 d:hf:bg-teal-700/50 d:hf:text-gray-100"
                             : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700 d:border-gray-700 d:bg-gray-800 d:text-gray-300 d:hf:border-gray-600 d:hf:bg-gray-700 d:hf:text-gray-100"
                         )}
                         onClick={() => {
@@ -540,7 +540,7 @@ export const Resume: FC = (props) => {
                       <EnvelopeIcon className="h-4 w-4" />
                     </Link>
                     <Link
-                      href="https://github.com/FelixTellmann"
+                      href="https://github.com/mateusneresrb"
                       target="_blank"
                       data-tip="Github"
                       className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
@@ -558,7 +558,7 @@ export const Resume: FC = (props) => {
                       <SiTwitter className="h-4 w-4" />
                     </Link>
                     <Link
-                      href="https://www.linkedin.com/in/felixtellmann"
+                      href="https://www.linkedin.com/in/mateusneresrb/"
                       target="_blank"
                       data-tip="LinkedIn"
                       className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"

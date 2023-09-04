@@ -23,12 +23,12 @@
       > div {
         @apply bg-transparent;
 
-        @apply b:bottom-0 b:left-[calc(var(--nav-icon-size)/6)] b:-rotate-45 b:bg-sky-500;
+        @apply b:bottom-0 b:left-[calc(var(--nav-icon-size)/6)] b:-rotate-45 b:bg-teal-500;
         &:before {
           transition: background-color 0.2s, bottom 0.2s, left 0.2s, transform 0.2s 0.15s
         }
 
-        @apply a:top-0 a:right-[calc(var(--nav-icon-size)/6)] a:rotate-45 a:bg-sky-500;
+        @apply a:top-0 a:right-[calc(var(--nav-icon-size)/6)] a:rotate-45 a:bg-teal-500;
         &:after {
           transition: background-color 0.2s, top 0.2s, right 0.2s, transform 0.2s 0.15s;
         }
@@ -60,7 +60,7 @@
   .heading-hero {
     @apply mb-3 text-5xl font-extrabold lg:mb-4 md:text-6xl lg:text-7xl text-gray-800 tracking-tighter dark:[--color-gray-800:var(--color-gray-50)];
     & strong {
-      @apply bg-gradient-to-r from-cyan-500 via-sky-500 to-blue-500 bg-clip-text text-transparent font-extrabold;
+      @apply bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 bg-clip-text text-transparent font-extrabold;
     }
   }
 

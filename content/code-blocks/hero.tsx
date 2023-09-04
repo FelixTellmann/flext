@@ -1,22 +1,13 @@
-import { FC } from "react";
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-type WelcomeProps = {
-  uses:
-    | "explore new tech"
-    | "display my skills"
-    | "find freelancing opportunities"
-    | "find a fulltime job";
-};
-
-export const Welcome: FC<WelcomeProps> = ({ uses }) => {
-  return (
-    <>
-      <h1>This is my little slice of the internet.</h1>
-      <p>
-        I use this site to <em>{uses}</em>.
-      </p>
-    </>
-  );
-};
-
-export default Welcome;
+@RestController
+@RequestMapping(value = "/welcome")
+public class Welcome {
+    
+    @GetMapping
+    public String sayHello() {
+        return "Hello, it's Mateus Neres website!";
+    }
+}

@@ -30,7 +30,7 @@ export const Components: FC<ComponentsProps> = (props) => {
               href="/components/headings"
               className="group flex items-center gap-3 whitespace-nowrap py-1"
             >
-              <figure className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-green-500 to-cyan-500">
+              <figure className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-green-500 to-emerald-500">
                 <Bars3BottomLeftIcon className="h-5 w-5 text-white" />
               </figure>
               <span className="text-sm font-medium text-gray-400 transition-colors duration-100 group-hover:text-white">

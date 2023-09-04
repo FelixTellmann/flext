@@ -1,9 +1,6 @@
 // @ts-ignore
 import heroCode from "!!raw-loader!content/code-blocks/hero.tsx"; // Adding `!!` to a request will disable all loaders specified in the configuration
-import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
-import { SiReact } from "@react-icons/all-files/si/SiReact";
-import { SiShopify } from "@react-icons/all-files/si/SiShopify";
-import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
+import { SiSpring } from "@react-icons/all-files/si/SiSpring";
 import { Link } from "components/link";
 import { TECH } from "content/tech-stack";
 import party from "party-js";
@@ -12,23 +9,18 @@ export const HERO = {
   pre: "Welcome to my site.",
   heading: (
     <>
-      I'm <strong>Mateus</strong>, a Backend developer.
+      I'm <strong>Mateus Neres</strong>, a Backend developer.
     </>
   ),
   tech: [
-    TECH.nextjs,
+    TECH.java,
     {
-      name: "Node.js",
-      Icon: ({ className }) => <SiNodeDotJs className={className} />,
+      name: "Spring",
+      Icon: ({ className }) => <SiSpring className={className} />,
     },
-    {
-      name: "Tailwind",
-      Icon: ({ className }) => <SiTailwindcss className={className} />,
-    },
-    {
-      name: "Shopify",
-      Icon: ({ className }) => <SiShopify className={className} />,
-    },
+    TECH.redis,
+    TECH.jenkins,
+    TECH.aws,
   ] as const,
   body: (
     <>
@@ -46,11 +38,11 @@ export const HERO = {
       </em>
       .<span className="mt-4 block" />I am always keen to learn and explore new technologies,
       frameworks and programming languages. Currently, I'm learning about{" "}
-      <Link target="_blank" href="https://astro.build/" className="underline hfa:text-sky-500">
+      <Link target="_blank" href="https://astro.build/" className="underline hfa:text-teal-500">
         Astro
       </Link>{" "}
       and{" "}
-      <Link href="https://replicache.dev" target="_blank" className="underline hfa:text-sky-500">
+      <Link href="https://replicache.dev" target="_blank" className="underline hfa:text-teal-500">
         Replicache
       </Link>
       .

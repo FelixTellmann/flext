@@ -30,7 +30,7 @@ export const Badge: FC<PropsWithChildren<BadgeProps>> = ({
           lg: "px-3 py-1 text-[13px]",
         }[size],
         {
-          info: "cursor-pointer border-cyan-700/20 bg-cyan-100 text-cyan-900 hfa:bg-cyan-200/90 d:border-cyan-400/30 d:bg-gradient-to-b d:from-cyan-900/90 d:to-cyan-900/90 d:text-cyan-100 d:hfa:from-cyan-900/70 d:hfa:to-cyan-900/70",
+          info: "cursor-pointer border-emerald-700/20 bg-emerald-100 text-emerald-900 hfa:bg-emerald-200/90 d:border-emerald-400/30 d:bg-gradient-to-b d:from-emerald-900/90 d:to-emerald-900/90 d:text-emerald-100 d:hfa:from-emerald-900/70 d:hfa:to-emerald-900/70",
           success:
             "cursor-pointer border-green-700/20 bg-green-100 text-green-900 hfa:bg-green-200/90 d:border-green-400/30 d:bg-gradient-to-b d:from-green-900/90 d:to-green-900/90 d:text-green-100 d:hfa:from-green-900/70 d:hfa:to-green-900/70",
           attention:

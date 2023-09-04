@@ -2,7 +2,7 @@ import { Image } from "components/image";
 import { Link } from "components/link";
 import { FC } from "react";
 
-export const TwitterProfile: FC = () => {
+export const LinkedinProfile: FC = () => {
   return (
     <section className="max-w-xs animate-float rounded-lg border-2 border-gray-400/30 bg-white/90 p-4 backdrop-blur-md will-change-transform spacing-2 d:bg-gray-800 lg:bg-white/80">
       <header className="flex gap-4">
@@ -23,8 +23,8 @@ export const TwitterProfile: FC = () => {
         </div>
         <Link
           target="_blank"
-          href="https://twitter.com/mateusneresrb"
-          className="butter-border my-auto ml-auto flex items-center justify-center rounded-full bg-sky-500/90 py-1.5 px-4 text-xs text-white transition-colors hfa:bg-sky-600/80 d:bg-sky-600/90 d:hfa:bg-sky-500/80"
+          href="https://www.linkedin.com/in/mateusneresrb/"
+          className="butter-border my-auto ml-auto flex items-center justify-center rounded-full bg-teal-500/90 py-1.5 px-4 text-xs text-white transition-colors hfa:bg-teal-600/80 d:bg-teal-600/90 d:hfa:bg-teal-500/80"
         >
           Connect
         </Link>

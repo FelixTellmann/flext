@@ -21,17 +21,17 @@ export const ABOUT = {
   stats: [
     {
       statistic: `${
-        new Date(Date.now() - new Date("1986-01-08T01:30:00").getTime()).getFullYear() - 1970
+        new Date(Date.now() - new Date("2000-08-15T01:30:00").getTime()).getFullYear() - 1970
       }`,
       tooltip: `${Math.round(
-        (Date.now() - new Date("1986-01-08T01:30:00").getTime()) / 1000
+        (Date.now() - new Date("2000-08-15T01:30:00").getTime()) / 1000
       )} seconds`,
       caption: "Years Old",
     },
     {
-      statistic: "10+",
-      tooltip: "First line of code written in 1997",
-      caption: "Years Web Dev",
+      statistic: "5+",
+      tooltip: "First line of code written in 2016",
+      caption: "Years Dev",
     },
     {
       statistic: "1",
@@ -39,8 +39,8 @@ export const ABOUT = {
       caption: "Amazing dog",
     },
     {
-      statistic: "3149",
-      tooltip: "111 GitHub Stars",
+      statistic: "749",
+      tooltip: "13 GitHub Stars",
       caption: "Commits",
     },
   ],

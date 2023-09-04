@@ -50,13 +50,13 @@ input[type="number"] {
 
 /*:is([type="checkbox"], [type="radio"]):is(:focus) {
   &:focus {
-    @apply ring-2 ring-offset-1 ring-sky-400 dark:ring-white dark:ring-offset-0 appearance-none}
+    @apply ring-2 ring-offset-1 ring-teal-400 dark:ring-white dark:ring-offset-0 appearance-none}
 }*/
 
 * {
   &:focus-visible:not(:is(input, select)) {
     outline: none;
-    @apply ring-2 ring-offset-2 ring-sky-400 dark:ring-white dark:ring-offset-0;
+    @apply ring-2 ring-offset-2 ring-teal-400 dark:ring-white dark:ring-offset-0;
     //@apply rounded-sm
   }
   :is(input, select):not(:is([type="checkbox"], [type="radio"])):focus-visible {
@@ -86,7 +86,7 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gradient-to-b from-sky-200 to-sky-400 dark:from-gray-400 dark:to-gray-800 rounded-[3px];
+  @apply bg-gradient-to-b from-teal-200 to-teal-400 dark:from-gray-400 dark:to-gray-800 rounded-[3px];
 }
 
 

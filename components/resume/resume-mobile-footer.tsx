@@ -58,7 +58,7 @@ export const ResumeFooter = () => {
                 className={clsx(
                   "rounded border  px-1.5 py-0.5 text-xs font-medium outline-none hfa:outline-none ",
                   filter.includes(type)
-                    ? "border-sky-300 bg-sky-100 text-gray-700 hf:border-sky-400 hf:bg-sky-300/40 hf:text-gray-800 d:border-sky-700 d:bg-sky-900/60 d:text-gray-200 d:hf:bg-sky-700/50 d:hf:text-gray-100"
+                    ? "border-teal-300 bg-teal-100 text-gray-700 hf:border-teal-400 hf:bg-teal-300/40 hf:text-gray-800 d:border-teal-700 d:bg-teal-900/60 d:text-gray-200 d:hf:bg-teal-700/50 d:hf:text-gray-100"
                     : "border-gray-200 bg-gray-100 text-gray-400 hf:border-gray-300 hf:bg-gray-200 hf:text-gray-700 d:border-gray-700 d:bg-gray-800 d:text-gray-300 d:hf:border-gray-600 d:hf:bg-gray-700 d:hf:text-gray-100"
                 )}
                 onClick={() => {
@@ -74,16 +74,16 @@ export const ResumeFooter = () => {
         <section className="mt-2 justify-end spacing-1">
           <nav className="flex flex-wrap gap-2">
             <Link
-              href="mailto:hello@flext.dev"
+              href="mailto:contato@mateusneres.dev"
               target="_blank"
               className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
-              data-tip="hello@flext.dev"
+              data-tip="contato@mateusneres.dev"
             >
               <span className="sr-only">Email me</span>
               <EnvelopeIcon className="h-4 w-4" />
             </Link>
             <Link
-              href="https://github.com/FelixTellmann"
+              href="https://github.com/mateusneresrb"
               target="_blank"
               data-tip="Github"
               className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
@@ -92,16 +92,7 @@ export const ResumeFooter = () => {
               <SiGithub className="h-4 w-4" />
             </Link>
             <Link
-              href="https://twitter.com/FelixTellmann"
-              target="_blank"
-              data-tip="Twitter"
-              className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
-            >
-              <span className="sr-only">Twitter</span>
-              <SiTwitter className="h-4 w-4" />
-            </Link>
-            <Link
-              href="https://www.linkedin.com/in/felixtellmann"
+              href="https://www.linkedin.com/in/mateusneresrb/"
               target="_blank"
               data-tip="LinkedIn"
               className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"

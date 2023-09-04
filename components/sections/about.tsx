@@ -75,7 +75,7 @@ export const About: FC<AboutProps> = (props) => {
                 sizes="(min-width: 580px) 540px, 400px"
                 preload
                 priority={index === 0}
-                className="absolute left-0 top-0 rounded-xl border-2 border-gray-50/80 object-cover !opacity-0 shadow-lg shadow-gray-700/5 transition-all duration-300 group-focus-visible:border-sky-500 d:border-gray-600/80"
+                className="absolute left-0 top-0 rounded-xl border-2 border-gray-50/80 object-cover !opacity-0 shadow-lg shadow-gray-700/5 transition-all duration-300 group-focus-visible:border-teal-500 d:border-gray-600/80"
                 data-about-image-index={index}
                 onLoadingComplete={() =>
                   document
@@ -107,7 +107,7 @@ export const About: FC<AboutProps> = (props) => {
                   data-tip={tooltip}
                   className="cursor-help select-none spacing-1"
                 >
-                  <span className="bg-gradient-to-r from-cyan-500 to-blue-600 bg-clip-text text-4xl font-extrabold tracking-tighter text-transparent">
+                  <span className="bg-gradient-to-r from-emerald-500 to-green-600 bg-clip-text text-4xl font-extrabold tracking-tighter text-transparent">
                     {statistic}
                   </span>
                   <figcaption className="text-[15px] font-semibold tracking-tight text-gray-400 d:text-gray-300/80">

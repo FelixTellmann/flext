@@ -113,7 +113,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
                       }}
                     >
                       <span className="sr-only">{`${year} - ${heading}`}</span>
-                      <div className="h-8 w-0.5 bg-gray-500 transition-all selected:h-[80px] selected:bg-sky-500"></div>
+                      <div className="h-8 w-0.5 bg-gray-500 transition-all selected:h-[80px] selected:bg-teal-500"></div>
                       <Icon className="mt-2 h-5 w-5 text-gray-500 transition-all d:text-gray-400 selected:text-gray-900 d:selected:text-white" />
                     </button>
                     <div className="absolute top-0 left-px h-2.5 w-[119px] bg-[image:linear-gradient(90deg,transparent_0px,transparent_9px,var(--line-color)_10px,var(--line-color)_10px)] bg-[length:10px_10px] [--line-color:theme(colors.gray.500)]"></div>

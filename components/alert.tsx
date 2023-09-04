@@ -19,14 +19,14 @@ export const Alert: FC<AlertProps> = ({ show, type, dismissAlert, title, paragra
   switch (type) {
     case "info":
       return (
-        <section className="rounded-md bg-blue-50 p-4 text-blue-800 spacing-1">
+        <section className="rounded-md bg-green-50 p-4 text-green-800 spacing-1">
           <header className="relative flex items-center">
-            <InformationCircleIcon className="mr-3 h-5 w-5 text-blue-400" aria-hidden="true" />
+            <InformationCircleIcon className="mr-3 h-5 w-5 text-green-400" aria-hidden="true" />
             <h3 className="flex-1 text-sm font-medium">{title}</h3>
             <button
               type="button"
               onClick={dismissAlert}
-              className="absolute -right-1.5 -top-1.5 inline-flex rounded-md bg-blue-50 p-1.5 text-blue-500 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 focus:ring-offset-blue-50"
+              className="absolute -right-1.5 -top-1.5 inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50"
             >
               <span className="sr-only">Dismiss</span>
               <XMarkIcon className="h-5 w-5" aria-hidden="true" />

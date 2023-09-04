@@ -32,7 +32,7 @@ export const CodeEditor = ({
           />
         </i>
         <div className="color select-none text-center text-[13px] leading-none tracking-wide text-gray-500">
-          /index.tsx
+          /Welcome.java
         </div>
         <div className="flex justify-end">
           <CopyButton

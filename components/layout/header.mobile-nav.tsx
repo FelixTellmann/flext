@@ -80,7 +80,7 @@ export const MobileNav: FC<HeaderMobileNavProps> = ({ showNav, setShowNav }) => 
                 <Link
                   key={navItem.href}
                   href={navItem.href}
-                  className="group flex items-baseline justify-between py-2 text-gray-300 opacity-0 opacity-0 transition-opacity delay-200 hfa:text-sky-400 [.nav-active_&]:opacity-100"
+                  className="group flex items-baseline justify-between py-2 text-gray-300 opacity-0 opacity-0 transition-opacity delay-200 hfa:text-teal-400 [.nav-active_&]:opacity-100"
                   onClick={() => setShowNav(false)}
                 >
                   <span
