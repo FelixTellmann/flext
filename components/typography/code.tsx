@@ -13,18 +13,8 @@ export type CodeGroupProps = {
 
 export const Code: FC<CodeGroupProps> = ({ language, plugins, lineHighlight, code, className }) => {
   const loadDependencies = useCallback(async () => {
-    if (language === "tsx") {
-      // @ts-ignore
-      await import(`prismjs/components/prism-jsx`);
-      // @ts-ignore
-      await import(`prismjs/components/prism-typescript`);
-    }
-    if (language === "html") {
-      await import(`prismjs/components/prism-markup`);
-    }
-    if (language !== "html") {
-      await import(`prismjs/components/prism-${language}`);
-    }
+    await import(`prismjs/components/prism-${language}`);
+
     if (plugins?.includes("line-numbers")) {
       // @ts-ignore
       await import("prismjs/plugins/line-numbers/prism-line-numbers.js");
