@@ -69,10 +69,9 @@ export const Hero: FC = () => {
         <section className="relative md:h-[420px]">
           <div className="relative flex h-full min-w-[460px] flex-col gap-4 sm:min-w-[660px] lg:absolute lg:left-8 lg:top-16 lg:left-6 lg:top-24 lg:min-w-[460px]">
             <div className="relative z-20 flex justify-end gap-1.5">
-              <Badge style="info">Hiker</Badge>
-              <Badge style="success">Chef</Badge>
-              <Badge style="warning">Runner</Badge>
-              <Badge style="accent">Mixologist</Badge>
+              <Badge style="info">Traveler</Badge>
+              <Badge style="warning">Fitness</Badge>
+              <Badge style="accent">Coffee Lover</Badge>
               <Badge style="plain">Space Enthusiast</Badge>
             </div>
             <div className="relative flex h-full flex-col">

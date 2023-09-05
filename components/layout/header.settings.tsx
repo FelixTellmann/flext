@@ -38,7 +38,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
       </Link>
       <Link
         target="_blank"
-        href="mailto:hello@flext.dev"
+        href="mailto:contato@mateusneres.dev"
         className="button-rainbow ml-4 hidden whitespace-nowrap px-4 py-1.5 text-sm font-medium tracking-tight text-gray-500 md:flex"
       >
         Lets work

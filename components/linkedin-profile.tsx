@@ -31,14 +31,15 @@ export const LinkedinProfile: FC = () => {
       </header>
       <main>
         <p className="pr-2 text-[13px] tracking-tight text-gray-500/90 line-clamp-3 d:text-gray-300/90">
-          "lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
-          ut labore et dolore magna aliqua."
+          My professional space, I share insights about my career, personal projects, and topics
+          from the world of programming.
         </p>
       </main>
       <footer>
         <p className="text-[13px] text-gray-500 d:text-gray-300/90">
-          <span className="font-semibold text-gray-600 d:text-gray-200">1.000</span> Following{" "}
-          <span className="ml-2 font-semibold text-gray-600 d:text-gray-200">2.055</span> Followers
+          <span className="font-semibold text-gray-600 d:text-gray-200">3.015</span> Followers{" "}
+          <span className="ml-2 font-semibold text-gray-600 d:text-gray-200">2.600</span>{" "}
+          Connections
         </p>
       </footer>
     </section>
