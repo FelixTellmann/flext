@@ -13,7 +13,7 @@ import { ResumeSectionDateSidebar } from "components/resume/resume-section-data-
 import { ResumeSectionDateEvents } from "components/resume/resume-section-date-events";
 import { useResumeSectionInView } from "components/resume/use-resume-section-in-view";
 import { CV } from "content/cv";
-import ProfilePic from "public/images/about/resume-profile.jpg";
+import ProfilePic from "public/images/about/my_photo.jpg";
 import { FC, useEffect, useState } from "react";
 import { capitalize } from "utils/capitalize";
 import { scrollToY } from "utils/scroll-to";

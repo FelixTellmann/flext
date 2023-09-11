@@ -14,7 +14,7 @@ import { ResumeSectionDateEvents } from "components/resume/resume-section-date-e
 import { useResumeSectionInView } from "components/resume/use-resume-section-in-view";
 import { CV } from "content/liz-cv";
 // import LizProfilePic from "public/images/about/liz-profile-pic.jpg";
-import LizProfilePic from "public/images/about/liz.jpg";
+import LizProfilePic from "public/images/about/my_photo.jpg";
 import { FC, useEffect, useState } from "react";
 import { capitalize } from "utils/capitalize";
 import { scrollToY } from "utils/scroll-to";
