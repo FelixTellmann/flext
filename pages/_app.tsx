@@ -43,7 +43,6 @@ const App = ({ pageProps, Component }: AppProps) => {
       <DefaultSeo
         {...SEO}
         canonical={`${SEO.url}${router.asPath}`}
-        twitter={SEO.twitter}
         title={SEO.title}
         description={SEO.description}
         openGraph={SEO.openGraph}
