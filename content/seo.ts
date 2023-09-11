@@ -1,43 +1,27 @@
 export const SEO = {
-  title: "Felix Tellmann - Fullstack Developer - TS, Next, Tailwind, Shopify",
-  url: "https://flext.dev",
+  title: "Mateus Neres - Backend Developer - Java, Spring, AWS, Kafka",
+  url: "https://mateusneres.dev",
   description:
-    "I'm a self-taught Full-stack developer and entrepreneur living in Cape Town. I enjoy creating things that live on the internet, whether that be websites, applications, or anything in between.",
-  siteName: "Flext.dev",
-  github: "https://github.com/FelixTellmann/flext",
-  avatar: "https://avatars.githubusercontent.com/u/22034038",
-  author: "Felix Tellmann",
-  twitter: {
-    handle: "@Tellmann",
-    site: "@FelixTellmann",
-    cardType: "summary_large_image",
-  },
+    "I am a backend developer. I have extensive experience both as a freelancer and as a team member, working with various languages and frameworks. However, my primary focus in recent times has been on the Java ecosystem, particularly using the Spring Framework, Cloud, Messaging, and other related technologies.",
+  siteName: "mateusneres.dev",
+  github: "https://github.com/mateusneresrb",
+  avatar: "https://avatars.githubusercontent.com/u/52140952",
+  author: "Mateus Neres",
   openGraph: {
     type: "website",
-    locale: "en_IE",
-    url: "https://flext.dev",
-    site_name: "Flext.dev",
-    title: "Felix Tellmann",
+    locale: "en_US",
+    url: "https://mateusneres.dev",
+    site_name: "mateusneres.dev",
+    title: "Mateus Neres",
     description:
-      "Lets make things better with quality code - Learn Web Development / API's / Automations / Serverless / Architecture / and more.",
+      "Lets make things better with quality code - Learn Backend Development / API's / Automations / Serverless / Architecture / and more.",
     images: [
       {
         url: "https://flext.dev/images/sharing-image.jpg",
-        alt: "Felix Tellmann - Full-stack Engineer - Next.js, Typescript, Tailwindcss, Shopify",
+        alt: "Mateus Neres - Backend Engineer - Java, Spring Framework, Kafka, AWS",
         width: 1200,
         height: 630,
       },
     ],
-  },
-};
-
-export const BLOG_SEO = {
-  title: "Felix Tellmann - Blog",
-  description:
-    "Learn Web Development - TypeScript / React / APIs / Automations / Serverless / Architecture / and more. - Lets make things better with quality code",
-  openGraph: {
-    title: "Felix Tellmann - Blog",
-    description:
-      "Learn Web Development - TypeScript / React / APIs / Automations / Serverless / Architecture / and more. - Lets make things better with quality code",
   },
 };
