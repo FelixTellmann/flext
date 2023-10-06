@@ -44,7 +44,9 @@ import { SiWebpack } from "@react-icons/all-files/si/SiWebpack";
 import { SiWordpress } from "@react-icons/all-files/si/SiWordpress";
 import { SiYarn } from "@react-icons/all-files/si/SiYarn";
 import { SiJava } from "@react-icons/all-files/si/SiJava";
+import { SiKotlin } from "@react-icons/all-files/si/SiKotlin";
 import { SiJenkins } from "@react-icons/all-files/si/SiJenkins";
+import { SiSpring } from "@react-icons/all-files/si/SiSpring";
 
 import AwsAmplify from "public/icons/tech-logos/aws_amplify.svg";
 import AwsLambda from "public/icons/tech-logos/aws_lambda.svg";
@@ -74,6 +76,23 @@ export const TECH = {
     name: "Shopify",
     Icon: ({ className }) => <SiShopify className={className} />,
   },
+  spring: {
+    name: "Spring",
+    Icon: ({ className }) => <SiSpring className={className} />,
+  },
+  hibernate: { name: "Hibernate" },
+  kafka: { name: "Apache Kafka" },
+  junit: { name: "JUnit" },
+  mockito: { name: "Mockito" },
+  micrometer: { name: "Microrometer" },
+  insomnia: { name: "Insomnia" },
+  vscode: { name: "Visual Studio Code" },
+  dbeaver: { name: "DBeaver" },
+  oraclesql: { name: "Oracle SQL Developer" },
+  maven: { name: "Maven" },
+  gradle: { name: "Gradle" },
+  oraclecloud: { name: "Oracle Cloud" },
+  gcp: { name: "Google Cloud Plataform" },
   shopify_polaris: {
     name: "Shopify Polaris",
     Icon: ({ className }) => <SiShopify className={className} />,
@@ -221,6 +240,10 @@ export const TECH = {
   java: {
     name: "Java",
     Icon: ({ className }) => <SiJava className={className} />,
+  },
+  kotlin: {
+    name: "Kotlin",
+    Icon: ({ className }) => <SiKotlin className={className} />,
   },
   jenkins: {
     name: "Jenkins",

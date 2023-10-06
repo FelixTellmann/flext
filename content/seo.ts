@@ -18,7 +18,7 @@ export const SEO = {
     images: [
       {
         url: "https://flext.dev/images/sharing-image.jpg",
-        alt: "Mateus Neres - Backend Engineer - Java, Spring Framework, Kafka, AWS",
+        alt: "Mateus Neres - Software Engineer - Java, Spring Framework, Kafka, AWS",
         width: 1200,
         height: 630,
       },

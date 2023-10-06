@@ -27,7 +27,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
         <DarkmodeIcon />
       </button>
       <Link
-        href="https://github.com/FelixTellmann"
+        href="https://github.com/mateusneresrb/"
         className={clsx(
           "rounded p-2 text-gray-500 transition-colors d:text-gray-300 d:h:text-gray-50 md:h:text-gray-900",
           showNav ? "h:text-gray-200" : "h:text-gray-900"

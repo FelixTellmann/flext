@@ -41,17 +41,7 @@ export const ResumeFooter = () => {
         <section className="spacing-2">
           <div className="text-[13px] font-medium text-gray-700 d:text-gray-300">Filter view:</div>
           <nav className="flex flex-wrap gap-1.5">
-            {(
-              [
-                "all",
-                "relevant",
-                "web / tech dev",
-                "management",
-                // "tech support",
-                "entrepreneurial",
-                "restaurant",
-              ] as const
-            ).map((type) => (
+            {(["all", "relevant"] as const).map((type) => (
               <button
                 key={type}
                 type="button"
@@ -101,9 +91,7 @@ export const ResumeFooter = () => {
               <SiLinkedin className="h-4 w-4" />
             </Link>
           </nav>
-          <h5 className="ml-1 text-[13px] text-gray-500 d:text-gray-400">
-            Cape Town, South Africa
-          </h5>
+          <h5 className="ml-1 text-[13px] text-gray-500 d:text-gray-400">Rio de janeiro, Brazil</h5>
         </section>
       </section>
     </footer>

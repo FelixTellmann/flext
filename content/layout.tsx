@@ -24,13 +24,7 @@ export const HEADER = {
       title: "Portfolio",
       alt: "Work I've done.",
       desktop: true,
-    } /*
-    {
-      href: "/gallery",
-      title: "Gallery",
-      alt: "Images and stuff",
-      desktop: true,
-    },*/,
+    },
     {
       href: "/resume",
       title: "Resume",

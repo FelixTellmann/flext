@@ -1,7 +1,6 @@
 import { EnvelopeIcon } from "@heroicons/react/24/solid";
 import { SiGithub } from "@react-icons/all-files/si/SiGithub";
 import { SiLinkedin } from "@react-icons/all-files/si/SiLinkedin";
-import { SiTwitter } from "@react-icons/all-files/si/SiTwitter";
 import { Image } from "components/image";
 import { Link } from "components/link";
 
@@ -71,7 +70,7 @@ export const Resume: FC = (props) => {
               <div>
                 <Link href={CV.website}>{CV.website.replace("https://", "")}</Link>
                 <span> - </span>
-                <Link href="https://github.com/FelixTellmann">github.com/FelixTellmann</Link>
+                <Link href="https://github.com/mateusneresrb">github.com/mateusneresrb</Link>
               </div>
             </div>
           </th>
@@ -81,7 +80,7 @@ export const Resume: FC = (props) => {
         <tr>
           <th>
             <small className="absolute left-1/2 bottom-0 -translate-x-1/2 pb-1 pt-3 text-[13px] font-medium tracking-tight text-gray-400">
-              View full resume at <Link href="https://flext.dev">www.flext.dev</Link>
+              View full resume at <Link href="https://mateusneres.dev">mateusneres.dev</Link>
             </small>
           </th>
         </tr>
@@ -190,13 +189,13 @@ export const Resume: FC = (props) => {
                 <ResumeSection
                   className={clsx(
                     "break-inside-avoid",
-                    !CV.eduction.filter(({ type }) => type.includes(filter) || filter === "all")
+                    !CV.education.filter(({ type }) => type.includes(filter) || filter === "all")
                       .length && "!hidden"
                   )}
                   title="Education"
                 >
                   <div className="spacing-8">
-                    {CV.eduction
+                    {CV.education
                       .sort((a, b) => {
                         if (new Date(a.dateFrom) < new Date(b.dateFrom)) return 1;
                         if (new Date(a.dateFrom) > new Date(b.dateFrom)) return -1;
@@ -288,18 +287,6 @@ export const Resume: FC = (props) => {
                     <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
                       <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
                         <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
-                          Content Platforms
-                        </strong>{" "}
-                      </h3>
-                      <p className="text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600 print:!mt-0">
-                        {CV.capabilities.dataProviders
-                          .map((language, index) => language.name)
-                          .join(", ")}
-                      </p>
-                    </section>
-                    <section className="relative max-w-prose spacing-1 print:!grid print:!max-w-3xl print:!grid-cols-[140px_1fr]">
-                      <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                        <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100 print:!text-sm print:!font-semibold ">
                           Tools
                         </strong>{" "}
                       </h3>
@@ -343,48 +330,7 @@ export const Resume: FC = (props) => {
                           ))}
                       </ul>
                     </section>
-
-                    {["all", "restaurant"].includes(filter)
-                      ? <section className="relative max-w-prose spacing-1">
-                          <h3 className="items-baseline text-sm tracking-tight spacing-1 ">
-                            <strong className="text-[17px] font-bold text-gray-900 d:text-gray-100">
-                              Other
-                            </strong>{" "}
-                          </h3>
-                          <ul className="list-outside list-disc pl-4 text-sm text-gray-500 marker:text-gray-400 d:text-gray-300/80 d:marker:text-gray-600">
-                            {CV.other.map(({ name }, index) => (
-                              <li className="pl-3" key={index}>
-                                {name}
-                              </li>
-                            ))}
-                          </ul>
-                        </section>
-                      : null}
                   </div>
-                </ResumeSection>
-
-                <ResumeSection className="break-inside-avoid print:!hidden" title="References">
-                  <div className="spacing-10">
-                    {CV.references.map(({ author, company, title, reference }) => (
-                      <figure key={author} className="max-w-prose spacing-2">
-                        <blockquote className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300/90">
-                          {reference}
-                        </blockquote>
-                        <figcaption className="">
-                          <div className="font-semibold">{author}</div>
-                          <div className="text-sm text-gray-400">
-                            {title} at {company}
-                          </div>
-                        </figcaption>
-                      </figure>
-                    ))}
-                  </div>
-                </ResumeSection>
-                <ResumeSection title="Interests" className="break-inside-avoid">
-                  <p className="text-[15px] leading-relaxed text-gray-500 d:text-gray-300 d:text-gray-300 print:!-ml-24 print:!text-base">
-                    {CV.personal}
-                  </p>
-                  <div className="h-24"></div>
                 </ResumeSection>
               </main>
               <aside className="top-[144px] mb-auto hidden max-h-min print:!hidden lg:sticky lg:spacing-8">
@@ -440,17 +386,7 @@ export const Resume: FC = (props) => {
                     Filter view:
                   </div>
                   <nav className="flex flex-wrap gap-1.5">
-                    {(
-                      [
-                        "all",
-                        "relevant",
-                        "web / tech dev",
-                        "management",
-                        // "tech support",
-                        "entrepreneurial",
-                        "restaurant",
-                      ] as const
-                    ).map((type) => (
+                    {(["all", "relevant"] as const).map((type) => (
                       <button
                         key={type}
                         type="button"
@@ -492,15 +428,6 @@ export const Resume: FC = (props) => {
                       <SiGithub className="h-4 w-4" />
                     </Link>
                     <Link
-                      href="https://twitter.com/FelixTellmann"
-                      target="_blank"
-                      data-tip="Twitter"
-                      className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
-                    >
-                      <span className="sr-only">Twitter</span>
-                      <SiTwitter className="h-4 w-4" />
-                    </Link>
-                    <Link
                       href="https://www.linkedin.com/in/mateusneresrb/"
                       target="_blank"
                       data-tip="LinkedIn"
@@ -511,7 +438,7 @@ export const Resume: FC = (props) => {
                     </Link>
                   </nav>
                   <h5 className="ml-1 text-[13px] text-gray-500 d:text-gray-400">
-                    Cape Town, South Africa
+                    Rio de Janeiro, Brazil
                   </h5>
                 </section>
               </aside>
