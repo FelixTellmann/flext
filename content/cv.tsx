@@ -97,6 +97,7 @@ export const CV = {
     },
     {
       dateFrom: "2023-05-05",
+      dateTo: "2024-05-05",
       city: "Remote",
       country: "Brazil",
       company: "Compass UOL",
