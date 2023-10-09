@@ -77,7 +77,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                   "bg-[linear-gradient(140deg,var(--tw-gradient-stops))] from-emerald-400/80 to-indigo-700/50 shadow-indigo-700/20"
               )}
             >
-              <figure className="relative flex aspect-2 w-full">
+              <figure style={{ maxHeight: "160px" }} className="relative flex aspect-2 w-full">
                 <Image
                   preload
                   src={project.featuredImage}
@@ -107,7 +107,9 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
                 </div>
               </header>
               <main className="mt-2 text-[15px] tracking-tight text-gray-600 d:text-gray-200 ">
-                <p className="line-clamp-4">{project.description}</p>
+                <p title={project.description} className="line-clamp-4">
+                  {project.description}
+                </p>
               </main>
               <footer className="absolute bottom-3 left-0 mt-auto flex w-full items-end justify-end gap-2 px-4">
                 <div className="mr-auto text-sm font-semibold text-gray-700/80 d:text-gray-300/80">

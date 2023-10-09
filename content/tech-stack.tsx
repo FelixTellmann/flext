@@ -93,6 +93,10 @@ export const TECH = {
   gradle: { name: "Gradle" },
   oraclecloud: { name: "Oracle Cloud" },
   gcp: { name: "Google Cloud Plataform" },
+  selenium: { name: "Selenium" },
+  lombok: { name: "Lombok" },
+  swing: { name: "Swing X" },
+  gson: { name: "Gson" },
   shopify_polaris: {
     name: "Shopify Polaris",
     Icon: ({ className }) => <SiShopify className={className} />,
