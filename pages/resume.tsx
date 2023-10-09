@@ -410,10 +410,10 @@ export const Resume: FC = (props) => {
                   {/*<h4 className="text-[13px] font-medium text-gray-700">Contact:</h4>*/}
                   <nav className="flex flex-wrap gap-2">
                     <Link
-                      href="mailto:hello@flext.dev"
+                      href="mailto:contato@mateusneres.dev"
                       target="_blank"
                       className="rounded p-1 text-gray-400 transition-all duration-75 hf:bg-gray-100 hf:text-gray-700 d:text-gray-300 d:hf:bg-gray-800/80 d:hf:text-gray-200"
-                      data-tip="hello@flext.dev"
+                      data-tip="contato@mateusneres.dev"
                     >
                       <span className="sr-only">Email me</span>
                       <EnvelopeIcon className="h-4 w-4" />

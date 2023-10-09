@@ -1,5 +1,4 @@
 import { TECH } from "content/tech-stack";
-import { Link } from "components/link";
 
 export const CV = {
   name: "Mateus Neres",
@@ -14,20 +13,13 @@ export const CV = {
   },
   intro: (
     <>
-      I am a passionate self-taught software developer (and former restaurateur & chef) looking for
-      a new challenge. I specialize in front-end- and serverless backend- development using
-      Typescript, React.js, and Node.js. As an advocate for web performance, accessibility, and an
-      evangelist for the{" "}
-      <Link href="https://jamstack.org/" target="_blank">
-        JAM Stack
-      </Link>{" "}
-      and the newer{" "}
-      <Link href="https://init.tips/#why" target="_blank">
-        T3 stack
-      </Link>
-      , I create amazing web applications to make the internet a better place. I love encountering
-      hard-to-solve-problems and approach them with patience, determination, and relentless
-      perseverance.
+      I am an experienced software developer, specializing in backend and the creation of robust and
+      efficient APIs. My passion for programming drives me to constantly seek new skills and
+      technologies, allowing me to deliver high-quality solutions that meet customer needs. With a
+      solid understanding of software engineering principles, I am able to design, implement, and
+      maintain complex systems with high efficiency and reliability. I am always eager to take on
+      new challenges and contribute my experience and skills to the success of the projects I am
+      involved in.
     </>
   ),
   experience: [
@@ -39,10 +31,16 @@ export const CV = {
       company: "Turo",
       title: "Software Engineer - Freelancer",
       type: ["all", "relevant"],
+      description: "Java · Selenium · Automation · Apache Maven · Unit Tests · Among others",
       responsibilities: [
         {
           content:
-            "Development of an automation script in java, using the selenium framework to automate the process of sending messages and photos between rentals on the turo website.",
+            "I developed an automation script in Java, using the Selenium framework, to automate the process of sending messages and photos between rentals on the Turo website. This script was designed to improve the efficiency and accuracy of the process.",
+          type: ["all", "relevant"],
+        },
+        {
+          content:
+            "The script automates various tasks, including logging into the site, navigating to the correct page, filling out forms, and sending messages and photos. This not only saves time but also reduces the possibility of human errors.",
           type: ["all", "relevant"],
         },
       ],
@@ -55,10 +53,21 @@ export const CV = {
       company: "Futurium – Minecraft Server",
       title: "Lead Developer",
       type: ["all", "relevant"],
+      description: "Java · Redis · Wordpress · MariaDB · Unit Tests · Nginx · HTML · CSS · JavaScript · Among others",
       responsibilities: [
         {
           content:
-            "Developed custom Shopify themes for clients using Liquid, Javascript, HTML5 & SASS",
+            "I served as the development leader on a large Minecraft server, where I played an active role in the development and construction of the architecture to support thousands of users daily. My leadership and technical skills were fundamental to the server’s success.",
+          type: ["all", "relevant"],
+        },
+        {
+          content:
+            "During my time as a leader, I was responsible for coordinating the development team, setting goals, and ensuring deadlines were met. I also actively participated in development, implementing various features and optimizing server performance.",
+          type: ["all", "relevant"],
+        },
+        {
+          content:
+            "During my time as a leader, I was responsible for coordinating the development team, setting goals, and ensuring deadlines were met. I also actively participated in development, implementing various features and optimizing server performance.",
           type: ["all", "relevant"],
         },
       ],
@@ -71,10 +80,17 @@ export const CV = {
       company: "UpWork",
       title: "Software Engineer - Freelancer",
       type: ["all", "relevant"],
+      description:
+        "Java · Spring · HTML · CSS · Selenium · Apache Maven · Gradle · Scrum · WordPress · Shopify · Tests · SQL ",
       responsibilities: [
         {
           content:
-            "Envisioned & opened a 200 seater restaurant with my wife with a unique Grill & Burger theme at a beautiful spot on the Knysna lagoon",
+            "With extensive experience in software development, I have worked on projects in various areas, from creating server-side solutions in Java and Spring, to automating and maintaining Linux servers, as well as cloud-based projects. I always strive to understand my clients’ needs and offer customized and efficient solutions. It’s rewarding to contribute to projects in a satisfactory manner to achieve their goals.",
+          type: ["all", "relevant"],
+        },
+        {
+          content:
+            "I have a broad and up-to-date view of market trends, which allows me to work in various areas of software development, from backend to frontend, with a special focus on system integration and process optimization. I love working with technology and always strive to stay updated to align with the latest news and trends. I also stand out for my leadership and project management skills, which allow me to deliver high-quality results even under pressure.",
           type: ["all", "relevant"],
         },
       ],
@@ -86,10 +102,17 @@ export const CV = {
       company: "Compass UOL",
       title: "Software Engineer",
       type: ["all", "relevant"],
+      description:
+        "Java · Spring · Gradle · Kafka · Tracing · Tests · SQL · PMD · AWS · RestAPIs · Tests · Among others",
       responsibilities: [
         {
           content:
-            "I founded Tellmann - Web Design Studio in 2020 during the first lockdown as a small scale web agency to provide exclusive web development services surrounding the Shopify ecosystem",
+            "I work in the development of REST APIs using Java for large corporations, including banks and other multinationals. My experience encompasses creating robust and scalable solutions that meet the complex demands of these sectors.",
+          type: ["all", "relevant"],
+        },
+        {
+          content:
+            "My work involves the use of modern software engineering practices and design patterns to ensure the efficiency and reliability of the APIs I develop. I am constantly seeking to enhance my skills and knowledge to deliver high-quality products.",
           type: ["all", "relevant"],
         },
       ],
@@ -101,7 +124,7 @@ export const CV = {
       dateTo: "2017-12-21",
       city: "Rio de Janeiro",
       country: "Brazil",
-      institution: "C.E Desembargador José Augusto C. R. Jr",
+      institution: "C.E Desembargador José Augusto C. R. JR",
       certificate: "High School Diploma",
       level: "High School",
       type: ["all"],
@@ -181,6 +204,11 @@ export const CV = {
     {
       date: "2023",
       name: "AWS Certified Cloud Practitioner",
+      type: ["all", "relevant"],
+    },
+    {
+      date: "2023",
+      name: "A.I. Assisted Professional",
       type: ["all", "relevant"],
     },
     {

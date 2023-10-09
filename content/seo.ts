@@ -17,7 +17,7 @@ export const SEO = {
       "Lets make things better with quality code - Learn Backend Development / API's / Automations / Serverless / Architecture / and more.",
     images: [
       {
-        url: "https://flext.dev/images/sharing-image.jpg",
+        url: "https://mateusneres.dev/images/sharing-image.jpg",
         alt: "Mateus Neres - Software Engineer - Java, Spring Framework, Kafka, AWS",
         width: 1200,
         height: 630,

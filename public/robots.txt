@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Host
-Host: https://flext.dev
+Host: https://mateusneres.dev
 
 # Sitemaps
-Sitemap: https://flext.dev/sitemap.xml
+Sitemap: https://mateusneres.dev/sitemap.xml

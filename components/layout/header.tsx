@@ -18,7 +18,7 @@ export const Header: FC = ({}) => {
             data-tip={"Hi, I'm Mateus. Welcome to my site."}
             data-delay-show={2000}
           >
-            <span className="sr-only">Flext.dev Logo</span>
+            <span className="sr-only">mateusneres.dev Logo</span>
             {HEADER.logo.title}
           </Link>
           <DesktopNav />
