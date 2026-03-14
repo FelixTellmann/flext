@@ -1,28 +1,29 @@
-/** @type {import('tailwindcss').Config} */
-// eslint-disable-next-line node/no-unpublished-require
-const plugin = require("tailwindcss/plugin");
-// eslint-disable-next-line node/no-unpublished-require
-const colors = require("tailwindcss/colors");
-const defaultTheme = require("tailwindcss/defaultTheme");
-const { default: flattenColorPalette } = require("tailwindcss/lib/util/flattenColorPalette");
-const svgToDataUri = require("mini-svg-data-uri");
+import plugin from "tailwindcss/plugin";
+import colors from "tailwindcss/colors";
+import defaultTheme from "tailwindcss/defaultTheme";
+import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
+import svgToDataUri from "mini-svg-data-uri";
+import tailwindForms from "@tailwindcss/forms";
+import tailwindTypography from "@tailwindcss/typography";
+import tailwindAspectRatio from "@tailwindcss/aspect-ratio";
+import tailwindLineClamp from "@tailwindcss/line-clamp";
+import tailwindChildren from "tailwind-children";
+import tailwindGradientMask from "tailwind-gradient-mask-image";
+
+const { default: flattenPalette } = flattenColorPalette;
 
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}`;
 }
 
-module.exports = {
+/** @type {import('tailwindcss').Config} */
+export default {
   content: [
-    "./pages/**/*.{js,ts,jsx,tsx}",
-    "./components/**/*.{js,ts,jsx,tsx}",
+    "./src/**/*.{js,ts,jsx,tsx}",
     "./content/**/*.{js,ts,jsx,tsx}",
-    "./client/**/*.{js,ts,jsx,tsx}",
-    "./_client/**/*.{js,ts,jsx,tsx}",
-    "./update/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: "class", // or 'media' or 'class'
-  // mode: process.env.NODE_ENV ? "jit" : undefined,
+  darkMode: "class",
   mode: "jit",
   theme: {
     extend: {
@@ -76,16 +77,16 @@ module.exports = {
         blink: "blink 0.75s step-start infinite",
       },
       fontFamily: {
-        sans: ["Inter", /*"'Basier Circle'",*/ ...defaultTheme.fontFamily.sans],
+        sans: ["Inter", ...defaultTheme.fontFamily.sans],
         mono: [
           "Consolas",
-          `ui-monospace`,
-          `SFMono-Regular`,
-          `Menlo`,
-          `Monaco`,
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
           "Liberation Mono",
           "Courier New",
-          `monospace`,
+          "monospace",
         ],
       },
       aspectRatio: {
@@ -102,7 +103,6 @@ module.exports = {
         header: "66px",
         wrapper: "62.5rem",
       },
-      "shadow-border": `box-shadow: black 0px 0px 0px 2px`,
       maxWidth: {
         "8xl": "90rem",
       },
@@ -158,8 +158,10 @@ module.exports = {
       },
       backgroundImage: (theme) => ({
         tick: "url('/icons/tick.svg')",
-        gradient1: `radial-gradient(at 100% 100%, rgba(7, 0, 31, 0.07), rgba(88, 5, 171, 0.01), rgba(0, 0, 0, 0)), linear-gradient(to right bottom, rgb(239, 254, 250), rgb(248, 250, 255), rgb(254, 238, 248), rgb(231, 249, 251))`,
-        "gradient-stats": `radial-gradient(ellipse 75% 650px at 35% calc(100% + 100px), rgb(var(--color-accent)) 20%, rgb(var(--color-accent) / 10%), rgb(var(--color-bg) / 0))`,
+        gradient1:
+          "radial-gradient(at 100% 100%, rgba(7, 0, 31, 0.07), rgba(88, 5, 171, 0.01), rgba(0, 0, 0, 0)), linear-gradient(to right bottom, rgb(239, 254, 250), rgb(248, 250, 255), rgb(254, 238, 248), rgb(231, 249, 251))",
+        "gradient-stats":
+          "radial-gradient(ellipse 75% 650px at 35% calc(100% + 100px), rgb(var(--color-accent)) 20%, rgb(var(--color-accent) / 10%), rgb(var(--color-bg) / 0))",
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-radial-to-tr": "radial-gradient(115% 90% at 0% 100%, var(--tw-gradient-stops))",
         "gradient-radial-to-tl": "radial-gradient(115% 90% at 100% 100%, var(--tw-gradient-stops))",
@@ -185,10 +187,6 @@ module.exports = {
             "--tw-prose-quote-borders": colors.slate[700],
             "--tw-prose-captions": colors.slate[400],
             "--tw-prose-code": colors.white,
-            // "--tw-prose-pre-code": colors.slate[300],
-            // "--tw-prose-pre-bg": "rgb(0 0 0 / 50%)",
-            // "--tw-prose-th-borders": colors.slate[600],
-            // "--tw-prose-td-borders": colors.slate[700],
           },
         },
       }),
@@ -198,13 +196,13 @@ module.exports = {
     extend: {},
   },
   plugins: [
-    require("@tailwindcss/forms"),
-    require("@tailwindcss/typography"),
-    require("@tailwindcss/aspect-ratio"),
-    require("@tailwindcss/line-clamp"),
-    require("tailwind-children"),
-    require("tailwind-gradient-mask-image"),
-    plugin(({ addVariant, addUtilities, addComponents }) => {
+    tailwindForms,
+    tailwindTypography,
+    tailwindAspectRatio,
+    tailwindLineClamp,
+    tailwindChildren,
+    tailwindGradientMask,
+    plugin(({ addVariant, addUtilities }) => {
       addVariant("hfa", ["&:hover", "&:focus", "&:active"]);
       addVariant("hfva", ["&:hover", "&:focus", "&:focus-visible", "&:active"]);
       addVariant("ha", ["&:hover", "&:active"]);
@@ -270,23 +268,23 @@ module.exports = {
             };
           },
         },
-        { values: flattenColorPalette(theme("backgroundColor")), type: "color" }
+        { values: flattenPalette(theme("backgroundColor")), type: "color" }
       );
 
       matchUtilities(
         {
           highlight: (value) => ({ boxShadow: `inset 0 1px 0 0 ${value}` }),
         },
-        { values: flattenColorPalette(theme("backgroundColor")), type: "color" }
+        { values: flattenPalette(theme("backgroundColor")), type: "color" }
       );
       matchUtilities(
         {
           spacing: (value) => ({
-            display: `flex`,
+            display: "flex",
             flexDirection: "column",
             gap: value,
             "@media print": {
-              display: `block`,
+              display: "block",
               "&>*:not(:first-child)": {
                 marginTop: value,
               },
@@ -300,15 +298,15 @@ module.exports = {
       const backgroundSize = "7.07px 7.07px";
       const backgroundImage = (color) =>
         `linear-gradient(135deg, ${color} 10%, transparent 10%, transparent 50%, ${color} 50%, ${color} 60%, transparent 60%, transparent 100%)`;
-      const colors = Object.entries(theme("backgroundColor")).filter(
+      const themeColors = Object.entries(theme("backgroundColor")).filter(
         ([, value]) => typeof value === "object" && value[400] && value[500]
       );
 
       addUtilities(
         Object.fromEntries(
-          colors.map(([name, colors]) => {
-            const backgroundColor = `${colors[400]}1a`; // 10% opacity
-            const stripeColor = `${colors[500]}80`; // 50% opacity
+          themeColors.map(([name, colorObj]) => {
+            const backgroundColor = `${colorObj[400]}1a`;
+            const stripeColor = `${colorObj[500]}80`;
 
             return [
               `.bg-stripes-${name}`,

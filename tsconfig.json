@@ -1,47 +1,39 @@
 {
-  "extends": "./node_modules/fx-style/tsconfig-google.json",
   "compilerOptions": {
-    "baseUrl": ".",
-    "allowSyntheticDefaultImports": true,
-    "paths": {
-      "@graphql/*": [
-        "./graphql/*"
-      ],
-      "types/*": [
-        "./@types/*"
-      ]
-    },
-    "downlevelIteration": true,
-    "target": "ES2020",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "lib": ["DOM", "ESNext", "DOM.Iterable"],
     "strict": false,
     "strictNullChecks": true,
-    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "incremental": true,
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
-    "typeRoots": ["./node_modules/@types","./@types/types.d.ts"]
+    "incremental": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["src/*"],
+      "@server/*": ["server/*"],
+      "types/*": ["./@types/*"],
+      "content/*": ["content/*"],
+      "utils/*": ["utils/*"]
+    },
+    "types": ["node"]
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    "./*.js",
-    "**/*.svg",
+    "**/*.mjs",
+    "**/*.js"
   ],
   "exclude": [
     "node_modules",
-    "content/code-blocks/**/*",
+    ".output",
+    "content/code-blocks"
   ]
 }
