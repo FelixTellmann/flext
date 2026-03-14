@@ -39,3 +39,6 @@ amplifytools.xcconfig
 # Contentlayer
 .contentlayer
 warehouse
+
+.vercel
+.env*.local
