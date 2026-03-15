@@ -3,11 +3,13 @@ import mysql from "mysql2/promise";
 import * as schema from "./schema";
 import * as relations from "./relations";
 
+// PlanetScale URLs include ?sslaccept=strict which mysql2 doesn't recognize.
+// Strip it and pass ssl config separately.
+const database_url = (process.env.DATABASE_URL ?? "").replace(/[?&]sslaccept=strict/gi, "");
+
 const pool = mysql.createPool({
-  uri: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: true,
-  },
+  uri: database_url,
+  ssl: {},
 });
 
 export const db = drizzle(pool, {
