@@ -1,10 +1,10 @@
 import { Link } from "~/components/link";
 import clsx from "clsx";
 import { HEADER } from "content/layout";
-import { Property } from "csstype";
+import type { Property } from "csstype";
 import { FC, MouseEventHandler, useCallback } from "react";
-import BorderWidth = Property.BorderWidth;
-import Width = Property.Width;
+type BorderWidth = Property.BorderWidth;
+type Width = Property.Width;
 
 type HeaderMobileNavProps = {
   setShowNav: (value: ((prevState: boolean) => boolean) | boolean) => void;

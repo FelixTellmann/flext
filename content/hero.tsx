@@ -1,5 +1,5 @@
 // @ts-ignore
-import heroCode from "!!raw-loader!content/code-blocks/hero.tsx"; // Adding `!!` to a request will disable all loaders specified in the configuration
+import heroCode from "content/code-blocks/hero.tsx?raw";
 import { SiNodeDotJs } from "@react-icons/all-files/si/SiNodeDotJs";
 import { SiReact } from "@react-icons/all-files/si/SiReact";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
