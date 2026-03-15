@@ -1,4 +1,5 @@
-# next.js build output
+# Build output
+.output
 .next
 .idea
 .linaria-cache
@@ -42,3 +43,6 @@ warehouse
 
 .vercel
 .env*.local
+
+# TanStack Router generated
+src/routeTree.gen.ts

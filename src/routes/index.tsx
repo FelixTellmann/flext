@@ -1,4 +1,5 @@
-import { createFileRoute, createServerFn } from "@tanstack/react-start";
+import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { About } from "~/components/sections/about";
 import { Hero } from "~/components/sections/hero";
 import { PortfolioPreview } from "~/components/sections/portfolio-preview";

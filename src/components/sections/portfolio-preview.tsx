@@ -21,7 +21,7 @@ export const PortfolioPreview: FC<PortfolioPreviewProps> = ({}) => {
         <div className="relative -mx-4 overflow-x-auto px-4 pb-2">
           <fieldset
             className="flex gap-3"
-            onChange={(e) => setFilter((e.target as HTMLInputElement).value)}
+            onChange={(e) => setFilter((e.target as unknown as HTMLInputElement).value)}
           >
             <legend className="sr-only">Filter by Tag</legend>
             {["All Projects", ...new Set(PROJECTS.map((p) => p.type).flat())].map((type, index) => {

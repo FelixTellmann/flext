@@ -1,4 +1,5 @@
-import { useInView } from "framer-motion/dist/es/utils/use-in-view.mjs";
+import { useInView } from "framer-motion";
+import type { JSX } from "react";
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { delay } from "utils/delay";
 import { getRandomInteger } from "utils/get-random-integer";
@@ -116,7 +117,7 @@ export const Typewriter: FC<TypewriterProps> = ({
       {items.map((item, index) => {
         return (
           <span
-            ref={(ref) => (contentRef.current[index] = ref)}
+            ref={(ref) => { contentRef.current[index] = ref; }}
             key={index}
             aria-hidden
             className="hidden after:animate-blink after:content-['|']"

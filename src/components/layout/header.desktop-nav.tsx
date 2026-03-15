@@ -3,11 +3,11 @@ import clsx from "clsx";
 import { HoverEffect } from "~/components/layout/header.desktop-nav.hover-effect";
 
 import { HEADER } from "content/layout";
-import { useRouter } from "@tanstack/react-router";
+import { useLocation } from "@tanstack/react-router";
 import { FC } from "react";
 
 export const DesktopNav: FC = () => {
-  const router = useRouter();
+  const location = useLocation();
   return (
     <>
       <nav className="sm:scrollbar-none header-nav group relative isolate mt-auto hidden h-full justify-center overflow-auto px-2 md:flex">
@@ -15,7 +15,7 @@ export const DesktopNav: FC = () => {
         {HEADER.nav
           .filter(({ desktop }) => desktop)
           .map((link, i) => {
-            const isActive = router.asPath.split(/[#?]/)[0] === link.href;
+            const isActive = location.pathname.split(/[#?]/)[0] === link.href;
             return (
               <div
                 className="my-auto flex h-full items-center px-2"

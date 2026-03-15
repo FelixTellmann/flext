@@ -1,4 +1,5 @@
-import { createFileRoute, createServerFn } from "@tanstack/react-start";
+import { createFileRoute } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { HeartIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
 import { Image } from "~/components/image";

@@ -24,7 +24,7 @@ export const booksProcedures = {
       votes: z.number().optional(),
     }),
   ).handler(async ({ input }) => {
-    const result = await db.insert(books).values(input);
+    const result = await db.insert(books).values({ ...input, updatedAt: new Date() });
     return result;
   }),
 
@@ -45,7 +45,7 @@ export const booksProcedures = {
       }),
     ),
   ).handler(async ({ input }) => {
-    const result = await db.insert(books).values(input);
+    const result = await db.insert(books).values(input.map((item) => ({ ...item, updatedAt: new Date() })));
     return result;
   }),
 

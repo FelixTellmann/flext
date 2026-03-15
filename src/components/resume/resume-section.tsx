@@ -49,7 +49,7 @@ export const ResumeSection: FC<PropsWithChildren<{ title: string; className?: st
   useEffect(() => {
     const element = sectionContentRef.current;
     if (element && !element.classList.contains("!max-h-0") && element.style.maxHeight) {
-      sectionContentRef.current.style.maxHeight = "";
+      element.style.maxHeight = "";
     }
   }, [width, filter]);
 
