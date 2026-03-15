@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import { highlightAll } from "prismjs";
+import "prismjs/themes/prism-okaidia.css";
 
 import { FC, Fragment, useCallback, useEffect } from "react";
 

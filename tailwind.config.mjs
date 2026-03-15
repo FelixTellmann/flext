@@ -6,7 +6,6 @@ import svgToDataUri from "mini-svg-data-uri";
 import tailwindForms from "@tailwindcss/forms";
 import tailwindTypography from "@tailwindcss/typography";
 import tailwindAspectRatio from "@tailwindcss/aspect-ratio";
-import tailwindLineClamp from "@tailwindcss/line-clamp";
 import tailwindChildren from "tailwind-children";
 import tailwindGradientMask from "tailwind-gradient-mask-image";
 
@@ -199,7 +198,6 @@ export default {
     tailwindForms,
     tailwindTypography,
     tailwindAspectRatio,
-    tailwindLineClamp,
     tailwindChildren,
     tailwindGradientMask,
     plugin(({ addVariant, addUtilities }) => {

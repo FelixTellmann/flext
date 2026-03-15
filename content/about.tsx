@@ -1,21 +1,20 @@
-// @ts-ignore
-import DontBeADick from "../public/images/about/dont-be-a-dick.jpg";
-import HikingProfile from "../public/images/about/profile-lionshead.jpg";
-import Namibia from "../public/images/about/namibia.jpg";
-import QuadBike from "../public/images/about/quadbike.jpg";
-import AlphaBackpack from "../public/images/about/alpha-backpack.jpg";
-import ChristmasInWilderness from "../public/images/about/christmas-wilderness.jpg";
-import Ottertrail from "../public/images/about/ottertrail.jpg";
-import Running from "../public/images/about/running.jpg";
-import Restaurant from "../public/images/about/restaurant.jpg";
-import RestaurantDiy from "../public/images/about/restaurant-diy.jpg";
-import Wedding from "../public/images/about/wedding.jpg";
-import AlphaLionshead from "../public/images/about/alpha-mountain.jpg";
-import Kirstenbosch from "../public/images/about/kirstenbosch.jpg";
-import Camping from "../public/images/about/camping.jpg";
-import GreatIdeas from "../public/images/about/great-ideas.jpg";
-import Desert from "../public/images/about/desert.jpg";
-import AdelphiFamily from "../public/images/about/profile-adelphi.jpg";
+const DontBeADick = "/images/about/dont-be-a-dick.jpg";
+const HikingProfile = "/images/about/profile-lionshead.jpg";
+const Namibia = "/images/about/namibia.jpg";
+const QuadBike = "/images/about/quadbike.jpg";
+const AlphaBackpack = "/images/about/alpha-backpack.jpg";
+const ChristmasInWilderness = "/images/about/christmas-wilderness.jpg";
+const Ottertrail = "/images/about/ottertrail.jpg";
+const Running = "/images/about/running.jpg";
+const Restaurant = "/images/about/restaurant.jpg";
+const RestaurantDiy = "/images/about/restaurant-diy.jpg";
+const Wedding = "/images/about/wedding.jpg";
+const AlphaLionshead = "/images/about/alpha-mountain.jpg";
+const Kirstenbosch = "/images/about/kirstenbosch.jpg";
+const Camping = "/images/about/camping.jpg";
+const GreatIdeas = "/images/about/great-ideas.jpg";
+const Desert = "/images/about/desert.jpg";
+const AdelphiFamily = "/images/about/profile-adelphi.jpg";
 
 export const ABOUT = {
   stats: [

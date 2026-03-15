@@ -1,26 +1,26 @@
 import { TECH } from "content/tech-stack";
-import Aiko from "../public/images/projects/Aiko.jpg";
-import AlphabetPIX from "../public/images/projects/AlphabetPix.jpg";
-import BroadwayJewellers from "../public/images/projects/BroadwayJewellers.jpg";
-import BushScarf from "../public/images/projects/BushScarf.jpg";
-import ClickUpload from "../public/images/projects/ClickUpload.jpg";
-import ErplyEgypt from "../public/images/projects/Erply Egypt.png";
-import ErplyTakealot from "../public/images/projects/Erply Takealot.png";
-import FxStyle from "../public/images/projects/fx-style.png";
-import KidsLiving from "../public/images/projects/kidsliving.jpg";
-import Lunalemon from "../public/images/projects/Lunalemon.jpg";
-import Lunatag from "../public/images/projects/Lunatag.jpg";
-import ShopifyCourierGuy from "../public/images/projects/Shopify CourierGuy.png";
-import ShopifyDear from "../public/images/projects/Shopify Dear Systems.png";
-import VendShopifyOmnisend from "../public/images/projects/Shopify Vend Omnisend.png";
-import ShopifyVend from "../public/images/projects/Shopify Vend.png";
-import ShopifyCms from "../public/images/projects/Shopify-cms.png";
-import ShopifyFtp from "../public/images/projects/shopify-ftp.png";
-import ShopifyTypedNodeApi from "../public/images/projects/shopify-typed-node-api.png";
-import Tellmann from "../public/images/projects/Tellmann.jpg";
-import VendTakealot from "../public/images/projects/Vend Takealot.png";
-import WaraqHealth from "../public/images/projects/Waraq.jpg";
-import ZoomPrinting from "../public/images/projects/ZoomPringing.jpg";
+const Aiko = "/images/projects/Aiko.jpg";
+const AlphabetPIX = "/images/projects/AlphabetPix.jpg";
+const BroadwayJewellers = "/images/projects/BroadwayJewellers.jpg";
+const BushScarf = "/images/projects/BushScarf.jpg";
+const ClickUpload = "/images/projects/ClickUpload.jpg";
+const ErplyEgypt = "/images/projects/Erply Egypt.png";
+const ErplyTakealot = "/images/projects/Erply Takealot.png";
+const FxStyle = "/images/projects/fx-style.png";
+const KidsLiving = "/images/projects/kidsliving.jpg";
+const Lunalemon = "/images/projects/Lunalemon.jpg";
+const Lunatag = "/images/projects/Lunatag.jpg";
+const ShopifyCourierGuy = "/images/projects/Shopify CourierGuy.png";
+const ShopifyDear = "/images/projects/Shopify Dear Systems.png";
+const VendShopifyOmnisend = "/images/projects/Shopify Vend Omnisend.png";
+const ShopifyVend = "/images/projects/Shopify Vend.png";
+const ShopifyCms = "/images/projects/Shopify-cms.png";
+const ShopifyFtp = "/images/projects/shopify-ftp.png";
+const ShopifyTypedNodeApi = "/images/projects/shopify-typed-node-api.png";
+const Tellmann = "/images/projects/Tellmann.jpg";
+const VendTakealot = "/images/projects/Vend Takealot.png";
+const WaraqHealth = "/images/projects/Waraq.jpg";
+const ZoomPrinting = "/images/projects/ZoomPringing.jpg";
 
 export const PROJECTS = [
   {
