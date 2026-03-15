@@ -23,7 +23,8 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        api: "modern-compiler" as const,
+        // @ts-expect-error -- sass modern-compiler API
+        api: "modern-compiler",
       },
     },
   },

@@ -2,6 +2,11 @@ declare module "*.png";
 declare module "*.jpg";
 declare module "*.jpeg";
 declare module "*.svg";
+declare module "*.svg?react" {
+  import type { FC, SVGProps } from "react";
+  const component: FC<SVGProps<SVGSVGElement>>;
+  export default component;
+}
 declare module "*.gif";
 
 type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;

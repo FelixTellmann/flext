@@ -23,7 +23,7 @@ import { RiVirusLine } from "@react-icons/all-files/ri/RiVirusLine";
 import { RiWalkFill } from "@react-icons/all-files/ri/RiWalkFill";
 import { SiCoronaengine } from "@react-icons/all-files/si/SiCoronaengine";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
-import { BsFillPatchQuestionFill } from "@react-icons/all-files/bs/BsFillPatchQuestionFill";
+import { BsQuestionCircleFill as BsFillPatchQuestionFill } from "@react-icons/all-files/bs/BsQuestionCircleFill";
 
 export const TIMELINEOBJECT = {
   "1986": [

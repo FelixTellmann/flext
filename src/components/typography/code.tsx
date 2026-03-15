@@ -1,8 +1,17 @@
 import clsx from "clsx";
-import { highlightAll } from "prismjs";
+import Prism from "prismjs";
 import "prismjs/themes/prism-okaidia.css";
+import "prismjs/components/prism-jsx";
+import "prismjs/components/prism-typescript";
+import "prismjs/components/prism-tsx";
+import "prismjs/components/prism-css";
+import "prismjs/components/prism-json";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-markup";
+import "prismjs/components/prism-yaml";
+import "prismjs/components/prism-rust";
 
-import { FC, Fragment, useCallback, useEffect } from "react";
+import { type FC, Fragment, useEffect, useRef } from "react";
 
 export type CodeGroupProps = {
   code: string | string[];
@@ -23,59 +32,45 @@ export type CodeGroupProps = {
   plugins?: ("line-numbers" | "highlight-keywords")[];
 };
 
+const languageMap: Record<string, string> = {
+  js: "javascript",
+  jsx: "jsx",
+  typescript: "typescript",
+  tsx: "tsx",
+  css: "css",
+  json: "json",
+  bash: "bash",
+  html: "markup",
+  yml: "yaml",
+  Rust: "rust",
+  javascript: "javascript",
+};
+
 export const Code: FC<CodeGroupProps> = ({ language, plugins, lineHighlight, code, className }) => {
-  const loadDependencies = useCallback(async () => {
-    if (language === "tsx") {
-      // @ts-ignore
-      await import(`prismjs/components/prism-jsx`);
-      // @ts-ignore
-      await import(`prismjs/components/prism-typescript`);
-    }
-    if (language === "html") {
-      await import(`prismjs/components/prism-markup`);
-    }
-    if (language !== "html") {
-      await import(`prismjs/components/prism-${language}`);
-    }
-    if (plugins?.includes("line-numbers")) {
-      // @ts-ignore
-      await import("prismjs/plugins/line-numbers/prism-line-numbers.js");
-    }
-    if (plugins?.includes("highlight-keywords")) {
-      // @ts-ignore
-      await import("prismjs/plugins/highlight-keywords/prism-highlight-keywords.js");
-    }
-
-    if (lineHighlight) {
-      // @ts-ignore
-      await import("prismjs/plugins/line-highlight/prism-line-highlight.js");
-    }
-
-    highlightAll();
-  }, [language, lineHighlight, plugins]);
+  const preRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
-    loadDependencies();
-  }, [language, loadDependencies]);
+    if (preRef.current) {
+      Prism.highlightAllUnder(preRef.current);
+    }
+  }, [language, code]);
+
+  const prismLang = languageMap[language] ?? language;
 
   return (
     <pre
-      className={clsx(
-        plugins,
-        lineHighlight && "line-highlight",
-        `language-${language}`,
-        className
-      )}
+      ref={preRef}
+      className={clsx(plugins, lineHighlight && "line-highlight", `language-${prismLang}`, className)}
       data-line={lineHighlight}
       tabIndex={-1}
     >
-      {(Array.isArray(code) ? code : [code]).map((code, index) => {
+      {(Array.isArray(code) ? code : [code]).map((codeBlock, index) => {
         return (
           <Fragment key={index}>
-            <code className={`language-${language}`} data-selected-index={index}>
-              {code}
+            <code className={`language-${prismLang}`} data-selected-index={index}>
+              {codeBlock}
             </code>
-            {`\n`}
+            {"\n"}
           </Fragment>
         );
       })}

@@ -41,7 +41,7 @@ function IndexPage() {
   const { twitterData } = Route.useLoaderData();
   return (
     <>
-      <Hero twitterData={twitterData} />
+      <Hero twitterData={twitterData as any} />
       <About />
       <Timeline />
       <PortfolioPreview />
