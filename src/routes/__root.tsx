@@ -1,6 +1,10 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { ContextProviders } from "~/stores/_context-providers";
+import { LoadInitialData } from "~/stores/_load-initial-data";
+import { Header } from "~/components/layout/header";
+import { Footer } from "~/components/layout/footer";
 import { SEO } from "content/seo";
-import { type FC, type PropsWithChildren } from "react";
+import { type FC, type PropsWithChildren, useEffect, useState } from "react";
 
 const RootDocument: FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -68,9 +72,37 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(false);
+    if (process.env.NODE_ENV !== "development") {
+      console.log(
+        "%cHEY YOU! I see you sneaking in my code. This Page is custom built by Felix Tellmann. I mainly used TanStack Start, TailwindCSS, Typescript, and ORPC as the main tech here. It's something I've worked hard on so please do not copy it directly. LEARN FROM IT AND MAKE IT YOUR OWN. Questions? Just drop me an email at hello@flext.dev!",
+        "background: rgb(0,0,0);color: #fafafa;font-size: 24px;font-weight: bold;padding: 25px 10px;text-align: center;text-shadow: 2px 2px 0 rgba(45, 45, 45);",
+      );
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <RootDocument>
+        <></>
+      </RootDocument>
+    );
+  }
+
   return (
     <RootDocument>
-      <Outlet />
+      <ContextProviders>
+        <LoadInitialData>
+          <Header />
+          <main className="min-h-screen print:!mx-auto print:!w-[1024px]">
+            <Outlet />
+          </main>
+          <Footer />
+        </LoadInitialData>
+      </ContextProviders>
     </RootDocument>
   );
 }
