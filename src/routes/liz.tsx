@@ -14,8 +14,7 @@ import { ResumeSectionDateSidebar } from "~/components/resume/resume-section-dat
 import { ResumeSectionDateEvents } from "~/components/resume/resume-section-date-events";
 import { useResumeSectionInView } from "~/components/resume/use-resume-section-in-view";
 import { CV } from "content/liz-cv";
-// import LizProfilePic from "public/images/about/liz-profile-pic.jpg";
-import LizProfilePic from "public/images/about/liz.jpg";
+const LizProfilePic = "/images/about/liz.jpg";
 import { type FC, useEffect, useState } from "react";
 import { capitalize } from "utils/capitalize";
 import { scrollToY } from "utils/scroll-to";

@@ -1,4 +1,4 @@
-import FlextLogo from "public/logo.svg";
+import FlextLogo from "../public/logo.svg?react";
 
 export const HEADER = {
   logo: {
