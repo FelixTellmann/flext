@@ -7,26 +7,31 @@ import { Timeline } from "~/components/sections/timeline";
 import { Client } from "twitter-api-sdk";
 
 const fetchTwitterData = createServerFn({ method: "GET" }).handler(async () => {
-  const client = new Client(process.env.TWITTER_CLIENT_BEARER_TOKEN!);
-  const twitterData = await client.users.findUserByUsername("FelixTellmann", {
-    "user.fields": [
-      "created_at",
-      "description",
-      "entities",
-      "id",
-      "location",
-      "name",
-      "pinned_tweet_id",
-      "profile_image_url",
-      "protected",
-      "public_metrics",
-      "url",
-      "username",
-      "verified",
-      "withheld",
-    ],
-  });
-  return twitterData.data;
+  try {
+    const client = new Client(process.env.TWITTER_CLIENT_BEARER_TOKEN!);
+    const twitterData = await client.users.findUserByUsername("FelixTellmann", {
+      "user.fields": [
+        "created_at",
+        "description",
+        "entities",
+        "id",
+        "location",
+        "name",
+        "pinned_tweet_id",
+        "profile_image_url",
+        "protected",
+        "public_metrics",
+        "url",
+        "username",
+        "verified",
+        "withheld",
+      ],
+    });
+    return twitterData.data ?? null;
+  } catch (error) {
+    console.error("Failed to fetch Twitter data:", error);
+    return null;
+  }
 });
 
 export const Route = createFileRoute("/")({
@@ -41,7 +46,7 @@ function IndexPage() {
   const { twitterData } = Route.useLoaderData();
   return (
     <>
-      <Hero twitterData={twitterData as any} />
+      <Hero twitterData={twitterData} />
       <About />
       <Timeline />
       <PortfolioPreview />

@@ -7,6 +7,7 @@ import { Link } from "~/components/link";
 import { orpc } from "~/integrations/orpc";
 import { type FC, useCallback, useState } from "react";
 import shortUUID from "short-uuid";
+import { BOOKS } from "content/books";
 
 type Book = {
   id: string;
@@ -26,12 +27,32 @@ type Book = {
 };
 
 const fetchBooks = createServerFn({ method: "GET" }).handler(async () => {
-  const data = await orpc.books.get();
-  return data.map((book) => ({
-    ...book,
-    createdAt: new Date(book.createdAt).toUTCString(),
-    updatedAt: new Date(book.updatedAt).toUTCString(),
-  }));
+  try {
+    const data = await orpc.books.get();
+    return data.map((book) => ({
+      ...book,
+      createdAt: new Date(book.createdAt).toUTCString(),
+      updatedAt: new Date(book.updatedAt).toUTCString(),
+    }));
+  } catch (error) {
+    console.error("Failed to fetch books from DB, using static data:", error);
+    return BOOKS.filter((b) => b.read).map((book) => ({
+      id: book.isbn10 || book.asin || book.name,
+      createdAt: new Date().toUTCString(),
+      updatedAt: new Date().toUTCString(),
+      read: book.read,
+      published: true,
+      name: book.name,
+      asin: book.asin || null,
+      isbn10: book.isbn10 || null,
+      author: book.author || null,
+      author_url: book.author_url || null,
+      image: book.image || null,
+      url: book.url || null,
+      rating: book.rating ?? 0,
+      votes: 0,
+    }));
+  }
 });
 
 export const Route = createFileRoute("/books")({
@@ -86,7 +107,11 @@ const BookItem = (props: { book: Book; preload: boolean }) => {
       votes: book.votes + 1,
       upvoted: true,
     }));
-    orpc.books.upvote({ id });
+    try {
+      await orpc.books.upvote({ id });
+    } catch {
+      setBook((book) => ({ ...book, votes: book.votes - 1, upvoted: false }));
+    }
   }, []);
 
   return (

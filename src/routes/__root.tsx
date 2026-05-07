@@ -4,7 +4,7 @@ import { LoadInitialData } from "~/stores/_load-initial-data";
 import { Header } from "~/components/layout/header";
 import { Footer } from "~/components/layout/footer";
 import { SEO } from "content/seo";
-import { type FC, type PropsWithChildren, useEffect, useState } from "react";
+import { type FC, type PropsWithChildren, useEffect } from "react";
 
 const RootDocument: FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -36,6 +36,17 @@ const RootDocument: FC<PropsWithChildren> = ({ children }) => {
 
         {/* Font preload */}
         <link as="font" crossOrigin="anonymous" href="/fonts/inter-var-latin.woff2" rel="preload" type="font/woff2" />
+
+        {/* Analytics (production only) */}
+        {import.meta.env.PROD && (
+          <script
+            async
+            defer
+            src="https://flext-analytics.vercel.app/umami.js"
+            data-website-id="69aaf2ad-a456-4a0e-9d99-b31687decc50"
+            data-host-url="https://flext-analytics.vercel.app"
+          />
+        )}
 
         {/* Theme anti-flash script */}
         <script
@@ -72,10 +83,7 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    setLoading(false);
     if (process.env.NODE_ENV !== "development") {
       console.log(
         "%cHEY YOU! I see you sneaking in my code. This Page is custom built by Felix Tellmann. I mainly used TanStack Start, TailwindCSS, Typescript, and ORPC as the main tech here. It's something I've worked hard on so please do not copy it directly. LEARN FROM IT AND MAKE IT YOUR OWN. Questions? Just drop me an email at hello@flext.dev!",
@@ -83,14 +91,6 @@ function RootComponent() {
       );
     }
   }, []);
-
-  if (loading) {
-    return (
-      <RootDocument>
-        <></>
-      </RootDocument>
-    );
-  }
 
   return (
     <RootDocument>

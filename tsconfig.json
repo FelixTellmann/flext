@@ -23,7 +23,7 @@
       "content/*": ["content/*"],
       "utils/*": ["utils/*"]
     },
-    "types": ["node"]
+    "types": ["node", "vite-plugin-svgr/client"]
   },
   "include": [
     "**/*.ts",

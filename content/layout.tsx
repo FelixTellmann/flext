@@ -1,4 +1,3 @@
-// @ts-expect-error -- Vite SVG ?react import
 import FlextLogo from "../src/assets/logo.svg?react";
 
 export const HEADER = {

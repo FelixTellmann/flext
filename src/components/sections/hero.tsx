@@ -10,7 +10,7 @@ import { FC } from "react";
 import { components } from "twitter-api-sdk/dist/gen/openapi-types";
 
 type HeroProps = {
-  twitterData: components["schemas"]["User"];
+  twitterData: components["schemas"]["User"] | null;
 };
 export const Hero: FC<HeroProps> = ({ twitterData }) => {
   const { theme, setTheme } = useTheme();
@@ -110,9 +110,11 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
               />
             </div>
           </div>
-          <div className="absolute hidden sm:top-24 sm:-right-5 sm:block lg:top-full lg:-left-64">
-            <TwitterProfile {...twitterData} />
-          </div>
+          {twitterData && (
+            <div className="absolute hidden sm:top-24 sm:-right-5 sm:block lg:top-full lg:-left-64">
+              <TwitterProfile {...twitterData} />
+            </div>
+          )}
         </section>
         <div className="background pointer-events-none absolute inset-0 z-0 -z-30 select-none">
           <div className="relative top-1/2 left-1/2  h-2/3 w-1/2 -translate-y-[30%] rounded-full bg-gradient-radial from-emerald-600/30 to-sky-600/5 blur-2xl"></div>

@@ -21,16 +21,19 @@ function getSystemTheme(): string {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export const ThemeProvider: FC<PropsWithChildren<{ attribute?: string }>> = ({ children }) => {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolvedTheme, setResolvedTheme] = useState("light");
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") return "system";
+  return (localStorage.getItem("theme") as Theme) || "system";
+}
 
-  useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    if (stored) {
-      setThemeState(stored);
-    }
-  }, []);
+function resolveTheme(theme: Theme): string {
+  if (theme === "system") return getSystemTheme();
+  return theme;
+}
+
+export const ThemeProvider: FC<PropsWithChildren<{ attribute?: string }>> = ({ children }) => {
+  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  const [resolvedTheme, setResolvedTheme] = useState(() => resolveTheme(getInitialTheme()));
 
   useEffect(() => {
     const resolved = theme === "system" ? getSystemTheme() : theme;

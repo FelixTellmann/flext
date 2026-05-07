@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cd:*)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(curl -s http://localhost:3000/)",
+      "Bash(curl:*)"
     ]
   }
 }

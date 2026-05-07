@@ -1,5 +1,5 @@
 export const SEO = {
-  title: "Felix Tellmann - Fullstack Developer - TS, Next, Tailwind, Shopify",
+  title: "Felix Tellmann - Fullstack Developer - TS, TanStack Start, Tailwind, Shopify",
   url: "https://flext.dev",
   description:
     "I'm a self-taught Full-stack developer and entrepreneur living in Cape Town. I enjoy creating things that live on the internet, whether that be websites, applications, or anything in between.",
