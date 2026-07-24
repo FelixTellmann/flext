@@ -661,3 +661,7 @@ git commit -m "docs: complete tooling + AI baseline plan" -- docs/plans
 - Task ordering puts the dependency upgrade (3) before the strict flip (4) so strict fixes happen once, against final versions, with a green bisect point between them.
 - `strictNullChecks` removed as redundant under `strict: true`; `noEmit` moved fully into tsconfig so the script drops `--noEmit`.
 - Biome ignore globs verified against real flext paths (`content/code-blocks` is also tsconfig-excluded; `server/db/migrations` is drizzle output).
+
+**Completed: 2026-07-24**
+- Verified: bun run tsc (TS7 native, full strict + verbatimModuleSyntax, exit 0), bunx biome check (0 errors; 15 warnings/53 infos accepted signal), bun run build (Vite 8 + nitro, green; CSS output byte-identical through the biome pass), git diff --cached --name-status review per commit.
+- Open: manual browser QA of the live site after the dependency upgrades (React 19.2.8, Vite 8, TanStack latest, nitro 3.0.260610-beta); react-tooltip held at v4 + tailwind v3 + zod v3 migrations tracked in ideas.md; database replacement decision (specs/active/2026-07-24-database-replacement-design.md).
