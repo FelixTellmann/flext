@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { FC } from "react";
+import type { FC } from "react";
 
 export const ButtonLoading: FC<{ className?: string }> = ({ className }) => {
   return (

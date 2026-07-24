@@ -1,4 +1,4 @@
-export function hexToRgb(hex) {
+export function hexToRgb(hex: string) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (result) {
     return `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}`;
@@ -6,14 +6,14 @@ export function hexToRgb(hex) {
   return "";
 }
 
-function convertString(name, str) {
+function convertString(name: string, str: string) {
   const arr: string[] = [];
 
   str
     .replace(/#(......)/gi, "$#$1|")
     .replace(/(\s|\n)/gi, "")
     .split("|")
-    .forEach((color) => {
+    .forEach((color: string) => {
       const [val, col] = color.split("$");
       if (!col) return;
       arr.push(`--color-${name}-${val}: ${hexToRgb(col)};`);

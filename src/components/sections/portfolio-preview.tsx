@@ -6,7 +6,8 @@ import clsx from "clsx";
 import { ScrollGallery } from "~/components/scroll-gallery";
 import { PORTFOLIO } from "content/portfolio-preview";
 import { PROJECTS } from "content/projects";
-import { FC, useCallback, useState } from "react";
+import type { FC } from "react";
+import { useCallback, useState } from "react";
 
 type PortfolioPreviewProps = {};
 

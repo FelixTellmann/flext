@@ -1,8 +1,10 @@
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import clsx from "clsx";
-import { ResumeSectionInViewStore, useResumeSectionInView } from "~/components/resume/use-resume-section-in-view";
+import { useResumeSectionInView } from "~/components/resume/use-resume-section-in-view";
+import type { ResumeSectionInViewStore } from "~/components/resume/use-resume-section-in-view";
 import { useInView } from "framer-motion";
-import { FC, PropsWithChildren, useEffect, useRef } from "react";
+import type { FC, PropsWithChildren } from "react";
+import { useEffect, useRef } from "react";
 import { useWindowSize } from "react-use";
 import { toKebabCase } from "utils/to-kebab-case";
 

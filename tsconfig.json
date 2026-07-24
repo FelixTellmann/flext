@@ -1,20 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "lib": ["DOM", "ESNext", "DOM.Iterable"],
-    "strict": false,
-    "strictNullChecks": true,
+
     "noEmit": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
     "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+
+    "strict": true,
+    "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
     "paths": {
       "~/*": ["./src/*"],
       "@server/*": ["./server/*"],
@@ -22,17 +26,8 @@
       "content/*": ["./content/*"],
       "utils/*": ["./utils/*"]
     },
-    "types": ["node", "vite-plugin-svgr/client"]
+    "types": ["node", "vite/client", "vite-plugin-svgr/client"]
   },
-  "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    "**/*.mjs",
-    "**/*.js"
-  ],
-  "exclude": [
-    "node_modules",
-    ".output",
-    "content/code-blocks"
-  ]
+  "include": ["**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.js"],
+  "exclude": ["node_modules", ".output", ".nitro", ".tanstack", "content/code-blocks"]
 }

@@ -1,7 +1,7 @@
 import { Switch } from "@headlessui/react";
 import clsx from "clsx";
-import type { JSX } from "react";
-import { FC, useRef } from "react";
+import type { FC, JSX } from "react";
+import { useRef } from "react";
 
 type ToggleSwitchProps = {
   enabled: boolean;

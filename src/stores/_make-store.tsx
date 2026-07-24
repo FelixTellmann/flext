@@ -1,4 +1,5 @@
-import { createContext, Dispatch, SetStateAction, useContext, useMemo, useState } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 
 export function makeStore<S>(defaultValue: S, displayName = "") {
   // Make a context for the store
@@ -9,7 +10,7 @@ export function makeStore<S>(defaultValue: S, displayName = "") {
   }
 
   // Make a provider that takes an initialValue
-  const Provider = ({ init = defaultValue, children }: { children: any; init?: S }) => {
+  const Provider = ({ init = defaultValue, children }: { children: ReactNode; init?: S }) => {
     // Make a new state instance
     const [state, setState] = useState<S>(init);
 

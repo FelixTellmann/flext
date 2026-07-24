@@ -3,12 +3,13 @@ import { useNotifications } from "~/stores/notifications-store";
 import { useTooltipStore } from "~/stores/tooltip-store";
 
 import { Toast } from "~/components/toast";
-import { FC, PropsWithChildren, lazy, Suspense, useEffect, useState } from "react";
+import type { FC, PropsWithChildren } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 //
 
 const ReactTooltip = lazy(() => import("react-tooltip"));
 
-export const LoadInitialData: FC<PropsWithChildren<any>> = ({ children }) => {
+export const LoadInitialData: FC<PropsWithChildren> = ({ children }) => {
   const [tooltip] = useTooltipStore();
   const [showTooltip, setShowTooltip] = useState(true);
   const [isGloballyMounted, setIsGloballyMounted] = useIsGloballyMounted();

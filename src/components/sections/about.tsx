@@ -1,7 +1,8 @@
 import { useTooltipStore } from "~/stores/tooltip-store";
 import { Image } from "~/components/image";
 import { ABOUT } from "content/about";
-import { FC, useCallback, useRef, useState } from "react";
+import type { FC } from "react";
+import { useCallback, useRef, useState } from "react";
 
 type AboutProps = {};
 

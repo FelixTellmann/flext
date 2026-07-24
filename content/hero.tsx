@@ -5,7 +5,7 @@ import { SiReact } from "@react-icons/all-files/si/SiReact";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
 import { SiTailwindcss } from "@react-icons/all-files/si/SiTailwindcss";
 import { Link } from "~/components/link";
-import { TECH } from "content/tech-stack";
+import { TECH, type TechIconProps } from "content/tech-stack";
 import party from "party-js";
 
 export const HERO = {
@@ -19,15 +19,15 @@ export const HERO = {
     TECH.nextjs,
     {
       name: "Node.js",
-      Icon: ({ className }) => <SiNodeDotJs className={className} />,
+      Icon: ({ className }: TechIconProps) => <SiNodeDotJs className={className} />,
     },
     {
       name: "Tailwind",
-      Icon: ({ className }) => <SiTailwindcss className={className} />,
+      Icon: ({ className }: TechIconProps) => <SiTailwindcss className={className} />,
     },
     {
       name: "Shopify",
-      Icon: ({ className }) => <SiShopify className={className} />,
+      Icon: ({ className }: TechIconProps) => <SiShopify className={className} />,
     },
   ] as const,
   body: (

@@ -1,6 +1,6 @@
 import { Link } from "~/components/link";
 import { SOCIAL_ACCOUNTS } from "content/social-accounts";
-import { FC } from "react";
+import type { FC } from "react";
 
 type FooterProps = {};
 

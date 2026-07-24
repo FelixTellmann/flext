@@ -2,7 +2,8 @@ import { useDebouncedEffect } from "~/hooks/use-debounce-effect";
 import clsx from "clsx";
 import { TIMELINEOBJECT } from "content/timeline";
 import { useInView } from "framer-motion";
-import { FC, useEffect, useRef, useState } from "react";
+import type { FC } from "react";
+import { useEffect, useRef, useState } from "react";
 import { scrollToX } from "utils/scroll-to";
 
 type TimelineProps = {};
@@ -37,7 +38,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
       const values = Object.values(TIMELINEOBJECT);
       const yearLength = keys.length;
       const yearIndex = keys.findIndex((key) => key === year);
-      const indexLength = TIMELINEOBJECT[year]?.length;
+      const indexLength = values[yearIndex]?.length;
       const totalIndex =
         values.flat().findIndex((val) => new Date(val.date).getFullYear() === +year) + +index;
 

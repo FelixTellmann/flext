@@ -1,6 +1,20 @@
 import { useResumeSectionInView } from "~/components/resume/use-resume-section-in-view";
+import type { FC, ReactNode } from "react";
 
-export const ResumeSectionDateEvents = ({
+type ResumeSectionDateEventsProps = {
+  name: ReactNode;
+  organization?: ReactNode;
+  city?: string | undefined;
+  country?: string | undefined;
+  dateFrom: string | Date;
+  dateTo: string | Date;
+  showDateRange: boolean;
+  description?: ReactNode;
+  responsibilities: { type: string[]; content: ReactNode }[];
+  bullets?: boolean;
+};
+
+export const ResumeSectionDateEvents: FC<ResumeSectionDateEventsProps> = ({
   name,
   organization,
   city,

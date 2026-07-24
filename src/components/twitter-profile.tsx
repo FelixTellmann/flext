@@ -1,7 +1,7 @@
 import { Image } from "~/components/image";
 import { Link } from "~/components/link";
-import { FC } from "react";
-import { components } from "twitter-api-sdk/dist/gen/openapi-types";
+import type { FC } from "react";
+import type { components } from "twitter-api-sdk/dist/gen/openapi-types";
 
 type TwitterProfileProps = components["schemas"]["User"];
 

@@ -67,266 +67,268 @@ import NextJs from "../src/assets/tech-logos/nextjs.svg?react";
 import Express from "../src/assets/tech-logos/express.svg?react";
 import Liquid from "../src/assets/tech-logos/liquid.svg?react";
 
+export type TechIconProps = { className?: string };
+
 export const TECH = {
   shopify: {
     name: "Shopify",
-    Icon: ({ className }) => <SiShopify className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiShopify className={className} />,
   },
   shopify_polaris: {
     name: "Shopify Polaris",
-    Icon: ({ className }) => <SiShopify className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiShopify className={className} />,
   },
   vend: {
     name: "Vend POS",
-    Icon: ({ className }) => <Vend className={className} />,
+    Icon: ({ className }: TechIconProps) => <Vend className={className} />,
   },
   typescript: {
     name: "TypeScript",
-    Icon: ({ className }) => <SiTypescript className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiTypescript className={className} />,
   },
   vercel: {
     name: "Vercel",
-    Icon: ({ className }) => <IoLogoVercel className={className} />,
+    Icon: ({ className }: TechIconProps) => <IoLogoVercel className={className} />,
   },
   netlify: {
     name: "Netlify",
-    Icon: ({ className }) => <SiNetlify className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiNetlify className={className} />,
   },
   sass: {
     name: "Sass",
-    Icon: ({ className }) => <IoLogoSass className={className} />,
+    Icon: ({ className }: TechIconProps) => <IoLogoSass className={className} />,
   },
   liquid: {
     name: "Liquid",
-    Icon: ({ className }) => <Liquid className={className} />,
+    Icon: ({ className }: TechIconProps) => <Liquid className={className} />,
   },
   nextjs: {
     name: "Next.js",
-    Icon: ({ className }) => <NextJs className={className} />,
+    Icon: ({ className }: TechIconProps) => <NextJs className={className} />,
   },
   markdown: {
     name: "Markdown",
-    Icon: ({ className }) => <SiMarkdown className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiMarkdown className={className} />,
   },
   mdx: {
     name: "Mdx",
-    Icon: ({ className }) => <Mdx className={className} />,
+    Icon: ({ className }: TechIconProps) => <Mdx className={className} />,
   },
   graphql: {
     name: "GraphQL",
-    Icon: ({ className }) => <SiGraphql className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiGraphql className={className} />,
   },
   reactjs: {
     name: "React.js",
-    Icon: ({ className }) => <SiReact className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiReact className={className} />,
   },
   tailwind: {
     name: "TailwindCSS",
-    Icon: ({ className }) => <SiTailwindcss className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiTailwindcss className={className} />,
   },
   prisma: {
     name: "Prisma",
-    Icon: ({ className }) => <Prisma className={className} />,
+    Icon: ({ className }: TechIconProps) => <Prisma className={className} />,
   },
   planetscale: {
     name: "PlanetScale",
-    Icon: ({ className }) => <PlanetScale className={className} />,
+    Icon: ({ className }: TechIconProps) => <PlanetScale className={className} />,
   },
   trpc: {
     name: "Trpc",
-    Icon: ({ className }) => <Trpc className={className} />,
+    Icon: ({ className }: TechIconProps) => <Trpc className={className} />,
   },
   aws: {
     name: "AWS",
-    Icon: ({ className }) => <FaAws className={className} />,
+    Icon: ({ className }: TechIconProps) => <FaAws className={className} />,
   },
   aws_amplify: {
     name: "Aws Amplify",
-    Icon: ({ className }) => <AwsAmplify className={className} />,
+    Icon: ({ className }: TechIconProps) => <AwsAmplify className={className} />,
   },
   aws_lambda: {
     name: "Aws Lambda",
-    Icon: ({ className }) => <AwsLambda className={className} />,
+    Icon: ({ className }: TechIconProps) => <AwsLambda className={className} />,
   },
   axios: {
     name: "Axios",
-    Icon: ({ className }) => <Axios className={className} />,
+    Icon: ({ className }: TechIconProps) => <Axios className={className} />,
   },
   chrome: {
     name: "Chrome",
-    Icon: ({ className }) => <SiGooglechrome className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiGooglechrome className={className} />,
   },
   css_3: {
     name: "CSS",
-    Icon: ({ className }) => <SiCss3 className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiCss3 className={className} />,
   },
   emmet: {
     name: "Emmet",
-    Icon: ({ className }) => <Emmet className={className} />,
+    Icon: ({ className }: TechIconProps) => <Emmet className={className} />,
   },
   eslint: {
     name: "Eslint",
-    Icon: ({ className }) => <SiEslint className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiEslint className={className} />,
   },
   facebook: {
     name: "Facebook",
-    Icon: ({ className }) => <SiFacebook className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiFacebook className={className} />,
   },
   figma: {
     name: "Figma",
-    Icon: ({ className }) => <SiFigma className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiFigma className={className} />,
   },
   sketch: {
     name: "Sketch",
-    Icon: ({ className }) => <SiSketch className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiSketch className={className} />,
   },
   firebase: {
     name: "Firebase",
-    Icon: ({ className }) => <SiFirebase className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiFirebase className={className} />,
   },
   framer: {
     name: "Framer",
-    Icon: ({ className }) => <SiFramer className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiFramer className={className} />,
   },
   git: {
     name: "Git",
-    Icon: ({ className }) => <SiGit className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiGit className={className} />,
   },
   github: {
     name: "Github",
-    Icon: ({ className }) => <SiGithub className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiGithub className={className} />,
   },
   headlessui: {
     name: "Headless Ui",
-    Icon: ({ className }) => <HeadlessUi className={className} />,
+    Icon: ({ className }: TechIconProps) => <HeadlessUi className={className} />,
   },
   html_5: {
     name: "HTML",
-    Icon: ({ className }) => <SiHtml5 className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiHtml5 className={className} />,
   },
   intellij_idea: {
     name: "Intellij Idea",
-    Icon: ({ className }) => <SiIntellijidea className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiIntellijidea className={className} />,
   },
   ionic: {
     name: "Ionic",
-    Icon: ({ className }) => <SiIonic className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiIonic className={className} />,
   },
   javascript: {
     name: "JavaScript",
-    Icon: ({ className }) => <SiJavascript className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiJavascript className={className} />,
   },
   jest: {
     name: "Jest",
-    Icon: ({ className }) => <SiJest className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiJest className={className} />,
   },
   jsdom: {
     name: "Jsdom",
-    Icon: ({ className }) => <Jsdom className={className} />,
+    Icon: ({ className }: TechIconProps) => <Jsdom className={className} />,
   },
   mysql: {
     name: "MySQL",
-    Icon: ({ className }) => <SiMysql className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiMysql className={className} />,
   },
   nodejs: {
     name: "Node.js",
-    Icon: ({ className }) => <SiNodeDotJs className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiNodeDotJs className={className} />,
   },
   express: {
     name: "Express",
-    Icon: ({ className }) => <Express className={className} />,
+    Icon: ({ className }: TechIconProps) => <Express className={className} />,
   },
   preact: {
     name: "Preact",
-    Icon: ({ className }) => <Preact className={className} />,
+    Icon: ({ className }: TechIconProps) => <Preact className={className} />,
   },
   prettier: {
     name: "Prettier",
-    Icon: ({ className }) => <SiPrettier className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiPrettier className={className} />,
   },
   react: {
     name: "React.js",
-    Icon: ({ className }) => <SiReact className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiReact className={className} />,
   },
   dev_tools: {
     name: "Dev Tools",
-    Icon: ({ className }) => <MdDesktopMac className={className} />,
+    Icon: ({ className }: TechIconProps) => <MdDesktopMac className={className} />,
   },
   office: {
     name: "MS Office",
-    Icon: ({ className }) => <SiMicrosoftoffice className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiMicrosoftoffice className={className} />,
   },
   react_query: {
     name: "React Query",
-    Icon: ({ className }) => <ReactQuery className={className} />,
+    Icon: ({ className }: TechIconProps) => <ReactQuery className={className} />,
   },
   redis: {
     name: "Redis",
-    Icon: ({ className }) => <SiRedis className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiRedis className={className} />,
   },
   remix: {
     name: "Remix",
-    Icon: ({ className }) => <Remix className={className} />,
+    Icon: ({ className }: TechIconProps) => <Remix className={className} />,
   },
   sendgrid: {
     name: "SendGrid",
-    Icon: ({ className }) => <Sendgrid className={className} />,
+    Icon: ({ className }: TechIconProps) => <Sendgrid className={className} />,
   },
   stylelint: {
     name: "Stylelint",
-    Icon: ({ className }) => <Stylelint className={className} />,
+    Icon: ({ className }: TechIconProps) => <Stylelint className={className} />,
   },
   swc: {
     name: "SWC",
-    Icon: ({ className }) => <Swc className={className} />,
+    Icon: ({ className }: TechIconProps) => <Swc className={className} />,
   },
   tailwindcss: {
     name: "Tailwindcss",
-    Icon: ({ className }) => <SiTailwindcss className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiTailwindcss className={className} />,
   },
   takealot: {
     name: "Takealot",
-    Icon: ({ className }) => <Takealot className={className} />,
+    Icon: ({ className }: TechIconProps) => <Takealot className={className} />,
   },
   turborepo: {
     name: "Turborepo",
-    Icon: ({ className }) => <Turborepo className={className} />,
+    Icon: ({ className }: TechIconProps) => <Turborepo className={className} />,
   },
   webpack: {
     name: "Webpack",
-    Icon: ({ className }) => <SiWebpack className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiWebpack className={className} />,
   },
   yarn: {
     name: "Yarn",
-    Icon: ({ className }) => <SiYarn className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiYarn className={className} />,
   },
   npm: {
     name: "NPM",
-    Icon: ({ className }) => <SiNpm className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiNpm className={className} />,
   },
   sql: {
     name: "SQL",
-    Icon: ({ className }) => <AiOutlineConsoleSql className={className} />,
+    Icon: ({ className }: TechIconProps) => <AiOutlineConsoleSql className={className} />,
   },
   ruby: {
     name: "Ruby",
-    Icon: ({ className }) => <SiRuby className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiRuby className={className} />,
   },
   php: {
     name: "PHP",
-    Icon: ({ className }) => <SiPhp className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiPhp className={className} />,
   },
   illustrator: {
     name: "Illustrator",
-    Icon: ({ className }) => <SiAdobeillustrator className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiAdobeillustrator className={className} />,
   },
   photoshop: {
     name: "Photoshop",
-    Icon: ({ className }) => <SiAdobephotoshop className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiAdobephotoshop className={className} />,
   },
   postman: {
     name: "Postman",
-    Icon: ({ className }) => <SiPostman className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiPostman className={className} />,
   },
   erply: {
     Icon: null,
@@ -342,46 +344,46 @@ export const TECH = {
   },
   wordpress: {
     name: "WordPress",
-    Icon: ({ className }) => <SiWordpress className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiWordpress className={className} />,
   },
   ftp: {
     name: "Ftp",
-    Icon: ({ className }) => <ImUpload className={className} />,
+    Icon: ({ className }: TechIconProps) => <ImUpload className={className} />,
   },
   meta: {
     name: "Meta Ads & Facebook Business suite",
-    Icon: ({ className }) => <ImUpload className={className} />,
+    Icon: ({ className }: TechIconProps) => <ImUpload className={className} />,
   },
   google: {
     name: "Google Ads, Merchant & Analytics",
-    Icon: ({ className }) => <ImUpload className={className} />,
+    Icon: ({ className }: TechIconProps) => <ImUpload className={className} />,
   },
   instagram: {
     name: "Instagram",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiInstagram className={className} />,
   },
   omnisend: {
     name: "Omnisend Email Marketing",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiInstagram className={className} />,
   },
   asana: {
     name: "Asana",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiInstagram className={className} />,
   },
   clockify: {
     name: "Clockify",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiInstagram className={className} />,
   },
   msTeams: {
     name: "Microsoft Teams",
-    Icon: ({ className }) => <SiMicrosoftteams className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiMicrosoftteams className={className} />,
   },
   zoom: {
     name: "Zoom",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiInstagram className={className} />,
   },
   slack: {
     name: "Slack",
-    Icon: ({ className }) => <SiInstagram className={className} />,
+    Icon: ({ className }: TechIconProps) => <SiInstagram className={className} />,
   },
 } as const;

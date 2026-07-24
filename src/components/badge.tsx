@@ -1,8 +1,9 @@
 import clsx from "clsx";
-import { FC, PropsWithChildren } from "react";
+import type { FC } from "react";
 import { capitalize } from "utils/capitalize";
 
 export type BadgeProps = {
+  children?: string;
   size?: "sm" | "md" | "lg";
   style?:
     | "plain"
@@ -15,7 +16,7 @@ export type BadgeProps = {
     | "accent";
 };
 
-export const Badge: FC<PropsWithChildren<BadgeProps>> = ({
+export const Badge: FC<BadgeProps> = ({
   children,
   size = "md",
   style = "plain",

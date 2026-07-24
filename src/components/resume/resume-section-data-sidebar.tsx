@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { FC, ReactElement } from "react";
+import type { FC, ReactElement } from "react";
 
 type ResumeSectionDateSidebarProps = {
   dateFrom: string | Date;

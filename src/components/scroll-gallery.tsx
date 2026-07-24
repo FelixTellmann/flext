@@ -1,9 +1,10 @@
 import { ArrowLongLeftIcon, ArrowLongRightIcon } from "@heroicons/react/24/solid";
-import { FC, PropsWithChildren, useCallback, useEffect, useRef, useState } from "react";
+import type { FC, PropsWithChildren } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { scrollToX } from "utils/scroll-to";
 
 export const ScrollGallery: FC<
-  PropsWithChildren<{ itemWidth: number; gapWidth: number; filter }>
+  PropsWithChildren<{ itemWidth: number; gapWidth: number; filter: string }>
 > = ({ itemWidth, gapWidth, children, filter }) => {
   const scrollContainerRef = useRef<HTMLElement>(null);
   const [scrollNavigation, setScrollNavigation] = useState({ prev: false, next: true });

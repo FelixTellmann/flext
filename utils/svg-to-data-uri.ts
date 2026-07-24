@@ -1,4 +1,4 @@
-const shorterNames = {
+const shorterNames: Record<string, RegExp> = {
   aqua: /#00ffff(ff)?(?!\w)|#0ff(f)?(?!\w)/gi,
   azure: /#f0ffff(ff)?(?!\w)/gi,
   beige: /#f5f5dc(ff)?(?!\w)/gi,
@@ -61,17 +61,17 @@ const REGEX = {
   quotes: /"/g,
 };
 
-function collapseWhitespace(str) {
+function collapseWhitespace(str: string) {
   return str.trim().replace(REGEX.whitespace, " ");
 }
 
-function dataURIPayload(string) {
+function dataURIPayload(string: string) {
   return encodeURIComponent(string).replace(REGEX.urlHexPairs, specialHexEncode);
 }
 
 // `#` gets converted to `%23`, so quite a few CSS named colors are shorter than
 // their equivalent URL-encoded hex codes.
-function colorCodeToShorterNames(string) {
+function colorCodeToShorterNames(string: string) {
   Object.keys(shorterNames).forEach((key) => {
     if (shorterNames[key].test(string)) {
       string = string.replace(shorterNames[key], key);
@@ -81,7 +81,7 @@ function colorCodeToShorterNames(string) {
   return string;
 }
 
-function specialHexEncode(match) {
+function specialHexEncode(match: string) {
   switch (
     match // Browsers tolerate these characters, and they're frequent
   ) {
@@ -98,7 +98,7 @@ function specialHexEncode(match) {
   }
 }
 
-export function svgToTinyDataUri(svgString) {
+export function svgToTinyDataUri(svgString: string) {
   if (typeof svgString !== "string") {
     throw new TypeError(`Expected a string, but received ${typeof svgString}`);
   }
@@ -111,6 +111,6 @@ export function svgToTinyDataUri(svgString) {
   return `data:image/svg+xml,${dataURIPayload(body)}`;
 }
 
-svgToTinyDataUri.toSrcset = function toSrcset(svgString) {
+svgToTinyDataUri.toSrcset = function toSrcset(svgString: string) {
   return svgToTinyDataUri(svgString).replace(/ /g, "%20");
 };

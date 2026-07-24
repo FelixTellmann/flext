@@ -1,6 +1,6 @@
 import { useInView } from "framer-motion";
-import type { JSX } from "react";
-import { FC, useCallback, useEffect, useRef, useState } from "react";
+import type { FC, JSX } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { delay } from "utils/delay";
 import { getRandomInteger } from "utils/get-random-integer";
 
@@ -43,7 +43,7 @@ export const Typewriter: FC<TypewriterProps> = ({
       const sentence = sentences[currentIndex] ?? [];
       for (let i = 0; i < sentence.length; i++) {
         await delay(Array.isArray(speed) ? getRandomInteger(speed) : speed);
-        let nextNode: any = null;
+        let nextNode: Node | null = null;
         const currentParent = sentence[i].parent;
         for (let j = i; j < sentence.length; j++) {
           if (currentParent !== sentence[j].parent) {
@@ -71,8 +71,8 @@ export const Typewriter: FC<TypewriterProps> = ({
       for (let i = sentence.length; i >= 0; i--) {
         await delay(Array.isArray(deleteSpeed) ? getRandomInteger(deleteSpeed) : deleteSpeed);
 
-        // @ts-ignore
-        sentence[i]?.element?.parentNode?.removeChild(sentence[i].element);
+        const written_element = sentence[i]?.element;
+        written_element?.parentNode?.removeChild(written_element);
       }
 
       setWriting(false);
@@ -85,9 +85,9 @@ export const Typewriter: FC<TypewriterProps> = ({
 
   useEffect(() => {
     const results: Sentence[] = [];
-    contentRef.current.forEach((element: HTMLElement, index) => {
+    contentRef.current.forEach((element, index) => {
       results[index] = results[index] ?? [];
-      const parseNodes = (parentNode: Node) => {
+      const parseNodes = (parentNode: Node | null) => {
         parentNode?.childNodes.forEach((node) => {
           if (node?.nodeName === "#text") {
             node?.textContent?.split("").forEach((letter) => {

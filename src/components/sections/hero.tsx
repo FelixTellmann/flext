@@ -6,8 +6,8 @@ import ToggleSwitch from "~/components/toggle-switch";
 import { TwitterProfile } from "~/components/twitter-profile";
 import { HERO } from "content/hero";
 import { useTheme } from "~/components/theme-provider";
-import { FC } from "react";
-import { components } from "twitter-api-sdk/dist/gen/openapi-types";
+import type { FC } from "react";
+import type { components } from "twitter-api-sdk/dist/gen/openapi-types";
 
 type HeroProps = {
   twitterData: components["schemas"]["User"] | null;

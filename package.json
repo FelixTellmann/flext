@@ -11,7 +11,7 @@
     "format": "biome format --write .",
     "lint": "biome lint .",
     "check": "biome check --write .",
-    "tsc": "tsc --noEmit",
+    "tsc": "tsc --extendedDiagnostics",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit introspect",
@@ -70,6 +70,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
+    "@total-typescript/ts-reset": "^0.6.1",
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^26.1.1",
     "@types/nodemailer": "^8.0.1",

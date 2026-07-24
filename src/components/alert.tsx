@@ -1,5 +1,5 @@
 import { CheckCircleIcon, ExclamationCircleIcon, InformationCircleIcon, XCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
-import { FC } from "react";
+import type { FC } from "react";
 
 export type AlertProps = {
   show: boolean;

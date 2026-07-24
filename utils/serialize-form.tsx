@@ -1,17 +1,18 @@
-export const serializeFormWithGroups = (formElement) => {
-  const obj = {};
+export const serializeFormWithGroups = (formElement: HTMLFormElement) => {
+  const obj: Record<string, FormDataEntryValue[]> = {};
   const formData = new FormData(formElement);
   for (const key of formData.keys()) {
     obj[key] = formData.getAll(key);
   }
-  return obj as { [T: string]: string[] };
+  return obj;
 };
 
-export const serializeForm = (formElement) => {
-  const obj = {};
+export const serializeForm = (formElement: HTMLFormElement) => {
+  const obj: Record<string, FormDataEntryValue> = {};
   const formData = new FormData(formElement);
   for (const key of formData.keys()) {
-    obj[key] = formData.get(key);
+    // key comes from formData.keys(), so get(key) can never be null
+    obj[key] = formData.get(key)!;
   }
-  return obj as { [T: string]: string[] };
+  return obj;
 };

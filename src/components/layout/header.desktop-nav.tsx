@@ -4,7 +4,7 @@ import { HoverEffect } from "~/components/layout/header.desktop-nav.hover-effect
 
 import { HEADER } from "content/layout";
 import { useLocation } from "@tanstack/react-router";
-import { FC } from "react";
+import type { FC } from "react";
 
 export const DesktopNav: FC = () => {
   const location = useLocation();

@@ -2,7 +2,8 @@ import { Link } from "~/components/link";
 import clsx from "clsx";
 import { HEADER } from "content/layout";
 import type { Property } from "csstype";
-import { FC, MouseEventHandler, useCallback } from "react";
+import type { FC, MouseEventHandler } from "react";
+import { useCallback } from "react";
 type BorderWidth = Property.BorderWidth;
 type Width = Property.Width;
 

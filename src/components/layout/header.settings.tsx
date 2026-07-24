@@ -3,7 +3,7 @@ import { Link } from "~/components/link";
 import clsx from "clsx";
 import DarkmodeIcon from "~/components/darkmode-icon";
 import { useTheme } from "~/components/theme-provider";
-import { FC } from "react";
+import type { FC } from "react";
 
 type ProfileNavProps = {
   showNav: boolean;

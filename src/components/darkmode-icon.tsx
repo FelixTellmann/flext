@@ -1,6 +1,6 @@
 import { m as motion, useMotionValue, useTransform } from "framer-motion";
 import { useTheme } from "~/components/theme-provider";
-import { FC } from "react";
+import type { FC } from "react";
 
 const DarkmodeIcon: FC = () => {
   const { theme, setTheme } = useTheme();

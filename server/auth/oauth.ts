@@ -69,6 +69,14 @@ export function buildAuthorizationUrl(provider: OAuthProvider, redirectUri: stri
   return `${config.authUrl}?${params.toString()}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
 export async function exchangeCodeForToken(
   provider: OAuthProvider,
   code: string,
@@ -91,7 +99,13 @@ export async function exchangeCodeForToken(
     }),
   });
 
-  return response.json();
+  const data: unknown = await response.json();
+
+  if (!isRecord(data) || typeof data.access_token !== "string") {
+    throw new Error(`OAuth token response from ${provider} did not include an access_token`);
+  }
+
+  return { ...data, access_token: data.access_token };
 }
 
 export async function fetchUserProfile(
@@ -104,16 +118,38 @@ export async function fetchUserProfile(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  const data = await response.json();
+  const data: unknown = await response.json();
+
+  if (!isRecord(data)) {
+    throw new Error(`OAuth profile response from ${provider} was not an object`);
+  }
 
   switch (provider) {
     case "github":
-      return { id: String(data.id), email: data.email, name: data.name || data.login, image: data.avatar_url };
+      return {
+        id: String(data.id),
+        email: readString(data.email),
+        name: readString(data.name) || readString(data.login),
+        image: typeof data.avatar_url === "string" ? data.avatar_url : undefined,
+      };
     case "google":
-      return { id: data.id, email: data.email, name: data.name, image: data.picture };
-    case "facebook":
-      return { id: data.id, email: data.email, name: data.name, image: data.picture?.data?.url };
+      return {
+        id: readString(data.id),
+        email: readString(data.email),
+        name: readString(data.name),
+        image: typeof data.picture === "string" ? data.picture : undefined,
+      };
+    case "facebook": {
+      const picture = isRecord(data.picture) ? data.picture : undefined;
+      const picture_data = picture && isRecord(picture.data) ? picture.data : undefined;
+      return {
+        id: readString(data.id),
+        email: readString(data.email),
+        name: readString(data.name),
+        image: picture_data && typeof picture_data.url === "string" ? picture_data.url : undefined,
+      };
+    }
     default:
-      return { id: data.id, email: data.email, name: data.name };
+      return { id: readString(data.id), email: readString(data.email), name: readString(data.name) };
   }
 }

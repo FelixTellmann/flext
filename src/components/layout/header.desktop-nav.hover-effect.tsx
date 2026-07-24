@@ -1,9 +1,20 @@
 import clsx from "clsx";
-import { FC, useCallback, useEffect, useRef, useState } from "react";
+import type { FC } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getParentNodeByTag } from "utils/get-parent-node-by-class";
 
+type NavHoverStyle = {
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+  opacity: number;
+  transition: string;
+  borderRadius: number | string;
+};
+
 export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
-  const [initialNavPosition, setInitialNavPosition] = useState({
+  const [initialNavPosition, setInitialNavPosition] = useState<NavHoverStyle>({
     width: 0,
     height: 0,
     left: 0,
@@ -17,20 +28,20 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
   // const [navHover, setNavHover] = useState(initialNavPosition);
 
   const setNavHover = useCallback(
-    ({ width, top, left, opacity, transition, height, borderRadius }) => {
+    ({ width, top, left, opacity, transition, height, borderRadius }: NavHoverStyle) => {
       const element = navHoverEffect.current as HTMLDivElement;
       element.style.width = `${width}px`;
       element.style.height = `${height}px`;
       element.style.left = `${left}px`;
       element.style.top = `${top}px`;
       element.style.transition = transition;
-      element.style.opacity = opacity;
-      element.style.borderRadius = borderRadius;
+      element.style.opacity = `${opacity}`;
+      element.style.borderRadius = `${borderRadius}`;
     },
     []
   );
 
-  const handleNavHover = useCallback((e) => {
+  const handleNavHover = useCallback((e: MouseEvent) => {
     const element = navHoverEffect.current as HTMLDivElement;
     if (e.target === e.currentTarget) {
       setNavHover(initialNavPosition);
@@ -54,9 +65,10 @@ export const HoverEffect: FC<{ className?: string }> = ({ className = "" }) => {
     }
   }, [initialNavPosition, setNavHover]);
 
-  const handleNavFocus = useCallback((e) => {
+  const handleNavFocus = useCallback((e: FocusEvent) => {
     const element = navHoverEffect.current as HTMLDivElement;
-    if (!e?.currentTarget?.matches(":focus-within")) {
+    const focus_target = e.currentTarget;
+    if (!(focus_target instanceof Element) || !focus_target.matches(":focus-within")) {
       setNavHover(initialNavPosition);
       return;
     }

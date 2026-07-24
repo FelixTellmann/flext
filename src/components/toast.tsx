@@ -1,7 +1,8 @@
 import { Transition } from "@headlessui/react";
 import { CheckCircleIcon, ExclamationCircleIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { produce } from "immer";
-import { FC, Fragment } from "react";
+import type { FC } from "react";
+import { Fragment } from "react";
 import { create } from "zustand";
 
 type ToastType = {
@@ -22,7 +23,7 @@ export const useToast = create<ToastStore>((set) => ({
   toasts: [],
   addToast: (toast) => {
     set(
-      produce((state) => {
+      produce((state: ToastStore) => {
         const currentToasts = state.toasts.filter(({ id }) => id !== toast.id);
         currentToasts.length = Math.min(currentToasts.length, 4);
         state.toasts = [...currentToasts, toast];
@@ -52,7 +53,7 @@ export const useToast = create<ToastStore>((set) => ({
   },
   removeToast: (id) => {
     set(
-      produce((state) => {
+      produce((state: ToastStore) => {
         state.toasts = state.toasts.filter((toast) => id !== toast.id);
       })
     );
