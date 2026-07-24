@@ -15,13 +15,12 @@
     "incremental": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
-      "~/*": ["src/*"],
-      "@server/*": ["server/*"],
+      "~/*": ["./src/*"],
+      "@server/*": ["./server/*"],
       "types/*": ["./@types/*"],
-      "content/*": ["content/*"],
-      "utils/*": ["utils/*"]
+      "content/*": ["./content/*"],
+      "utils/*": ["./utils/*"]
     },
     "types": ["node", "vite-plugin-svgr/client"]
   },
