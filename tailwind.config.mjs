@@ -1,27 +1,24 @@
-import plugin from "tailwindcss/plugin";
+import tailwindAspectRatio from "@tailwindcss/aspect-ratio";
+import tailwindForms from "@tailwindcss/forms";
+import tailwindTypography from "@tailwindcss/typography";
+import svgToDataUri from "mini-svg-data-uri";
+import tailwindChildren from "tailwind-children";
+import tailwindGradientMask from "tailwind-gradient-mask-image";
 import colors from "tailwindcss/colors";
 import defaultTheme from "tailwindcss/defaultTheme";
 import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
-import svgToDataUri from "mini-svg-data-uri";
-import tailwindForms from "@tailwindcss/forms";
-import tailwindTypography from "@tailwindcss/typography";
-import tailwindAspectRatio from "@tailwindcss/aspect-ratio";
-import tailwindChildren from "tailwind-children";
-import tailwindGradientMask from "tailwind-gradient-mask-image";
+import plugin from "tailwindcss/plugin";
 
 const { default: flattenPalette } = flattenColorPalette;
 
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}`;
+  return `${Number.parseInt(result[1], 16)} ${Number.parseInt(result[2], 16)} ${Number.parseInt(result[3], 16)}`;
 }
 
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./src/**/*.{js,ts,jsx,tsx}",
-    "./content/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./src/**/*.{js,ts,jsx,tsx}", "./content/**/*.{js,ts,jsx,tsx}"],
   darkMode: "class",
   mode: "jit",
   theme: {
@@ -54,8 +51,7 @@ export default {
         },
         float: {
           "0%, 100%": {
-            boxShadow:
-              "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(2, 132, 199, 0.2) 0px 25px 50px -12px",
+            boxShadow: "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(2, 132, 199, 0.2) 0px 25px 50px -12px",
             transform: "translate(0,0)",
           },
           "50%": {
@@ -77,16 +73,7 @@ export default {
       },
       fontFamily: {
         sans: ["Inter", ...defaultTheme.fontFamily.sans],
-        mono: [
-          "Consolas",
-          "ui-monospace",
-          "SFMono-Regular",
-          "Menlo",
-          "Monaco",
-          "Liberation Mono",
-          "Courier New",
-          "monospace",
-        ],
+        mono: ["Consolas", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Liberation Mono", "Courier New", "monospace"],
       },
       aspectRatio: {
         "4/3": "4 / 3",
@@ -219,12 +206,7 @@ export default {
       addVariant("group-hfa", [".group:hover &", ".group:focus &", ".group:active &"]);
       addVariant("selected", [".selected &", ".selected &", ".selected &"]);
       addVariant("peer-hfa", [".peer:hover ~ &", ".peer:focus ~ &", ".peer:active ~ &"]);
-      addVariant("group-hfva", [
-        ".group:hover &",
-        ".group:focus &",
-        ".group:focus-visible &",
-        ".group:active &",
-      ]);
+      addVariant("group-hfva", [".group:hover &", ".group:focus &", ".group:focus-visible &", ".group:active &"]);
       addUtilities({
         ".shape-geometric-precision": {
           "shape-rendering": "geometricPrecision",
@@ -249,31 +231,29 @@ export default {
           "bg-grid": (value) => {
             if (/var\(--/gi.test(value)) {
               const color = value.replace(/var\(--color-([\w-]+\d+)\)/gi, (_, match) => {
-                return hexToRgb(
-                  colors[match.split("-")[0].replace(/^gray$/gi, "trueGray")][+match.split("-")[1]]
-                );
+                return hexToRgb(colors[match.split("-")[0].replace(/^gray$/gi, "trueGray")][+match.split("-")[1]]);
               });
               return {
                 backgroundImage: `url("${svgToDataUri(
-                  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="${color}"><path d="M0 .5H31.5V32"/></svg>`
+                  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="${color}"><path d="M0 .5H31.5V32"/></svg>`,
                 )}")`,
               };
             }
             return {
               backgroundImage: `url("${svgToDataUri(
-                `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="${value}"><path d="M0 .5H31.5V32"/></svg>`
+                `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="${value}"><path d="M0 .5H31.5V32"/></svg>`,
               )}")`,
             };
           },
         },
-        { values: flattenPalette(theme("backgroundColor")), type: "color" }
+        { values: flattenPalette(theme("backgroundColor")), type: "color" },
       );
 
       matchUtilities(
         {
           highlight: (value) => ({ boxShadow: `inset 0 1px 0 0 ${value}` }),
         },
-        { values: flattenPalette(theme("backgroundColor")), type: "color" }
+        { values: flattenPalette(theme("backgroundColor")), type: "color" },
       );
       matchUtilities(
         {
@@ -289,7 +269,7 @@ export default {
             },
           }),
         },
-        { values: theme("spacing") }
+        { values: theme("spacing") },
       );
     },
     ({ addUtilities, theme }) => {
@@ -297,7 +277,7 @@ export default {
       const backgroundImage = (color) =>
         `linear-gradient(135deg, ${color} 10%, transparent 10%, transparent 50%, ${color} 50%, ${color} 60%, transparent 60%, transparent 100%)`;
       const themeColors = Object.entries(theme("backgroundColor")).filter(
-        ([, value]) => typeof value === "object" && value[400] && value[500]
+        ([, value]) => typeof value === "object" && value[400] && value[500],
       );
 
       addUtilities(
@@ -314,8 +294,8 @@ export default {
                 backgroundSize,
               },
             ];
-          })
-        )
+          }),
+        ),
       );
 
       addUtilities({

@@ -1,4 +1,4 @@
-import { type FC, type ImgHTMLAttributes } from "react";
+import type { FC, ImgHTMLAttributes } from "react";
 
 type ImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   aspectRatio?: number;
@@ -9,7 +9,19 @@ type ImageProps = ImgHTMLAttributes<HTMLImageElement> & {
   quality?: number;
 };
 
-export const Image: FC<ImageProps> = ({ pixelDensity = 1, preload, src, width, height, maxWidth, maxHeight, aspectRatio, quality, ...rest }) => {
+export const Image: FC<ImageProps> = ({
+  pixelDensity = 1,
+  preload,
+  src,
+  alt,
+  width,
+  height,
+  maxWidth,
+  maxHeight,
+  aspectRatio,
+  quality,
+  ...rest
+}) => {
   if (!src || src === "undefined") return null;
 
   const w = +(width ?? 0);
@@ -21,5 +33,5 @@ export const Image: FC<ImageProps> = ({ pixelDensity = 1, preload, src, width, h
 
   const normalizedSrc = typeof src === "string" ? src.replace(/^(http:)?\/\//, "https://") : src;
 
-  return <img {...rest} src={normalizedSrc} width={finalWidth} height={finalHeight} loading={preload ? "eager" : "lazy"} />;
+  return <img {...rest} alt={alt} src={normalizedSrc} width={finalWidth} height={finalHeight} loading={preload ? "eager" : "lazy"} />;
 };

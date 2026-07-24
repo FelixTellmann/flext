@@ -2,15 +2,17 @@
 @import "./theme.css";
 @import "./prism.css";
 
+/* biome-ignore lint/suspicious/noUnknownAtRules: @tailwind is a valid Tailwind 3 directive */
 @tailwind base;
+/* biome-ignore lint/suspicious/noUnknownAtRules: @tailwind is a valid Tailwind 3 directive */
 @tailwind components;
+/* biome-ignore lint/suspicious/noUnknownAtRules: @tailwind is a valid Tailwind 3 directive */
 @tailwind utilities;
 
 @page {
   size: A4 portrait;
   margin: 10mm 10mm 6mm 10mm;
 }
-
 
 .color-gray--slate {
   --color-gray-100: 241 245 249;
@@ -109,12 +111,12 @@
 
 @layer base {
   @font-face {
-    font-family: 'Inter';
+    font-family: "Inter";
     font-weight: 100 900;
     font-display: swap;
     font-style: normal;
-    font-named-instance: 'Regular';
-    src: url('/fonts/inter-var-latin.woff2') format('woff2');
+    font-named-instance: "Regular";
+    src: url("/fonts/inter-var-latin.woff2") format("woff2");
   }
 
   :root {
@@ -145,7 +147,4 @@
     background-size: 1.5em 1.5em;
     padding-right: 2.5rem;
   }
-
 }
-
-

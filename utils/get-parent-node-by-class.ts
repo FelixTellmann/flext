@@ -1,8 +1,4 @@
-export const getParentNodeByClass = (
-  target: HTMLElement,
-  className: string,
-  i = 0
-): HTMLElement | null => {
+export const getParentNodeByClass = (target: HTMLElement, className: string, i = 0): HTMLElement | null => {
   if (i > 40) {
     return null;
   }
@@ -15,11 +11,7 @@ export const getParentNodeByClass = (
   return null;
 };
 
-export const getParentNodeByTag = (
-  target: HTMLElement,
-  tagName: string,
-  i = 0
-): HTMLElement | null => {
+export const getParentNodeByTag = (target: HTMLElement, tagName: string, i = 0): HTMLElement | null => {
   if (i > 40) {
     return null;
   }

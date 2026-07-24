@@ -1,17 +1,17 @@
 import { relations } from "drizzle-orm";
 import {
-  user,
   account,
-  session,
-  post,
   comment,
-  habits,
-  habitTracking,
   food,
-  foodUnit,
-  foodUnitConversion,
   foodMethod,
   foodRated,
+  foodUnit,
+  foodUnitConversion,
+  habits,
+  habitTracking,
+  post,
+  session,
+  user,
 } from "./schema";
 
 // ─── User relations ──────────────────────────────────────────────────────────
@@ -64,12 +64,9 @@ export const habitsRelations = relations(habits, ({ one }) => ({
 }));
 
 // ─── HabitTracking relations ─────────────────────────────────────────────────
-export const habitTrackingRelations = relations(
-  habitTracking,
-  ({ many }) => ({
-    food: many(foodRated),
-  }),
-);
+export const habitTrackingRelations = relations(habitTracking, ({ many }) => ({
+  food: many(foodRated),
+}));
 
 // ─── Food relations ──────────────────────────────────────────────────────────
 export const foodRelations = relations(food, ({ one, many }) => ({
@@ -89,21 +86,18 @@ export const foodUnitRelations = relations(foodUnit, ({ many }) => ({
 }));
 
 // ─── FoodUnitConversion relations ────────────────────────────────────────────
-export const foodUnitConversionRelations = relations(
-  foodUnitConversion,
-  ({ one }) => ({
-    fromUnit: one(foodUnit, {
-      fields: [foodUnitConversion.fromUnitId],
-      references: [foodUnit.id],
-      relationName: "fromUnit",
-    }),
-    toUnit: one(foodUnit, {
-      fields: [foodUnitConversion.toUnitId],
-      references: [foodUnit.id],
-      relationName: "toUnit",
-    }),
+export const foodUnitConversionRelations = relations(foodUnitConversion, ({ one }) => ({
+  fromUnit: one(foodUnit, {
+    fields: [foodUnitConversion.fromUnitId],
+    references: [foodUnit.id],
+    relationName: "fromUnit",
   }),
-);
+  toUnit: one(foodUnit, {
+    fields: [foodUnitConversion.toUnitId],
+    references: [foodUnit.id],
+    relationName: "toUnit",
+  }),
+}));
 
 // ─── FoodMethod relations ────────────────────────────────────────────────────
 export const foodMethodRelations = relations(foodMethod, ({ many }) => ({

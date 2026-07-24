@@ -9,21 +9,19 @@ export const CV = {
   email: "elizabeth@tellmann.co.za",
   website: "https://lizt.dev",
   mobile: {
-    href: `tel:+763934356`,
+    href: "tel:+763934356",
     number: "+27 (0)76 393 4356",
   },
   intro: (
     <>
-      I am a passionate UX/UI Designer specializing in Ecommerce theme designs. With years of
-      experience designing Shopify sites, I have developed a deep understanding of the Shopify
-      platform and its unique design requirements. I work closely with clients to create custom
-      themes that are tailored to their specific needs, with a focus on delivering designs that are
-      not only visually stunning, but also easy to use and navigate.
+      I am a passionate UX/UI Designer specializing in Ecommerce theme designs. With years of experience designing Shopify sites, I have
+      developed a deep understanding of the Shopify platform and its unique design requirements. I work closely with clients to create
+      custom themes that are tailored to their specific needs, with a focus on delivering designs that are not only visually stunning, but
+      also easy to use and navigate.
       <br />
       <br />
-      My design process is collaborative and user-centred, with a strong emphasis on usability
-      testing and feedback. I believe that great design is not just about aesthetics, but also about
-      solving problems and creating meaningful experiences for users.
+      My design process is collaborative and user-centred, with a strong emphasis on usability testing and feedback. I believe that great
+      design is not just about aesthetics, but also about solving problems and creating meaningful experiences for users.
     </>
   ),
   eduction: [
@@ -63,8 +61,7 @@ export const CV = {
       city: "Cape Town",
       country: "South Africa",
       institution: "University of Cape Town",
-      certificate:
-        "Postgraduate Diploma in Business Management (NQF8) Specializing in Tourism and Events",
+      certificate: "Postgraduate Diploma in Business Management (NQF8) Specializing in Tourism and Events",
       level: "School",
       type: ["relevant"],
     },
@@ -109,8 +106,7 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content:
-            "Designed & Implemented two major website redesigns to improve the user experience",
+          content: "Designed & Implemented two major website redesigns to improve the user experience",
           type: ["relevant"],
         },
         {
@@ -140,23 +136,19 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content:
-            "Built a design guides & templates for websites, social media posts and marketing material.",
+          content: "Built a design guides & templates for websites, social media posts and marketing material.",
           type: ["relevant"],
         },
         {
-          content:
-            "In charge of 2 major Shopify Apps, covering design, App listing, and marketing sites.",
+          content: "In charge of 2 major Shopify Apps, covering design, App listing, and marketing sites.",
           type: ["relevant"],
         },
         {
-          content:
-            "Creating wireframes, prototypes, and high-fidelity designs for client projects.",
+          content: "Creating wireframes, prototypes, and high-fidelity designs for client projects.",
           type: ["relevant"],
         },
         {
-          content:
-            "Created a universal design system that could be adjusted for various e-commerce stores.",
+          content: "Created a universal design system that could be adjusted for various e-commerce stores.",
           type: ["relevant"],
         },
         {
@@ -184,8 +176,7 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content:
-            "Created the brand guide, social media templates, menu design, restaurant seating and decor.",
+          content: "Created the brand guide, social media templates, menu design, restaurant seating and decor.",
           type: ["relevant"],
         },
         {
@@ -193,8 +184,7 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content:
-            "Increased awareness and sales through Campaigns, promotions, events and business collaborations.",
+          content: "Increased awareness and sales through Campaigns, promotions, events and business collaborations.",
           type: ["relevant"],
         },
       ],
@@ -219,13 +209,11 @@ export const CV = {
           type: ["relevant"],
         },
         {
-          content:
-            "Presenting design concepts and solutions to clients, and incorporating client feedback into the design process.",
+          content: "Presenting design concepts and solutions to clients, and incorporating client feedback into the design process.",
           type: ["relevant"],
         },
         {
-          content:
-            "Creating wireframes, prototypes, and high-fidelity designs for websites & applications.",
+          content: "Creating wireframes, prototypes, and high-fidelity designs for websites & applications.",
           type: ["relevant"],
         },
       ],
@@ -477,10 +465,7 @@ export const CV = {
       sidebar: (
         <>
           Kids Living <br />
-          <Link
-            href="https://lizt.dev/kidsliving"
-            className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400"
-          >
+          <Link href="https://lizt.dev/kidsliving" className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400">
             lizt.dev/kidsliving
           </Link>
         </>
@@ -497,13 +482,11 @@ export const CV = {
               offering an extensive range of imported and locally manufactured high-end products. In
               addition to managing the E-commerce store & website, I also handle digital marketing,
               web maintenance, UX design, data structures, and testing of the site with a team.*/}
-              Redesign if the E-commerce website of a large retailer of kid's furniture while
-              creating a visually appealing and user-friendly website that would make it easy for
-              customers to find and purchase what they need. To ensure this, I implemented a variety
-              of strategies to both optimize the overall website structure and create a modern
-              design that was eye-catching and intuitive. Our work as a team resulted in an online
-              store that showcases Kids Living's extensive range of high-quality products, enabling
-              customers to have a seamless and enjoyable shopping experience.
+              Redesign if the E-commerce website of a large retailer of kid's furniture while creating a visually appealing and
+              user-friendly website that would make it easy for customers to find and purchase what they need. To ensure this, I implemented
+              a variety of strategies to both optimize the overall website structure and create a modern design that was eye-catching and
+              intuitive. Our work as a team resulted in an online store that showcases Kids Living's extensive range of high-quality
+              products, enabling customers to have a seamless and enjoyable shopping experience.
             </>
           ),
           type: ["relevant"],
@@ -516,10 +499,7 @@ export const CV = {
       sidebar: (
         <>
           Volkswagen <br />
-          <Link
-            href="https://lizt.dev/volkswagen"
-            className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400"
-          >
+          <Link href="https://lizt.dev/volkswagen" className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400">
             lizt.dev/volkswagen
           </Link>
         </>
@@ -532,10 +512,9 @@ export const CV = {
         {
           content: (
             <>
-              I was tasked to redesign and upgrade their digital presence to better reflect their
-              new brand identity. The secondary objective create an interface for a parts matching
-              functionality for vehicles based on release year, model, and trim with the exact
-              fitting parts for their model.
+              I was tasked to redesign and upgrade their digital presence to better reflect their new brand identity. The secondary
+              objective create an interface for a parts matching functionality for vehicles based on release year, model, and trim with the
+              exact fitting parts for their model.
             </>
           ),
           type: ["relevant"],
@@ -548,10 +527,7 @@ export const CV = {
       sidebar: (
         <>
           Lunatag <br />
-          <Link
-            href="https://lizt.dev/lunatag"
-            className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400"
-          >
+          <Link href="https://lizt.dev/lunatag" className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400">
             lizt.dev/lunatag
           </Link>
         </>
@@ -564,12 +540,10 @@ export const CV = {
         {
           content: (
             <>
-              LunaTag, is a Shopify app that enables users to tag their products on their images,
-              making their online store more engaging and shoppable. The goal of the project was to
-              simplify the process of adding product tags to images for Shopify store owners, while
-              also aligning with the requirements of the Shopify platform. Through a combination of
-              research, design, and testing, I was able to design an intuitive and effective app
-              that helps store owners better showcase their products and increase sales.{" "}
+              LunaTag, is a Shopify app that enables users to tag their products on their images, making their online store more engaging
+              and shoppable. The goal of the project was to simplify the process of adding product tags to images for Shopify store owners,
+              while also aligning with the requirements of the Shopify platform. Through a combination of research, design, and testing, I
+              was able to design an intuitive and effective app that helps store owners better showcase their products and increase sales.{" "}
             </>
           ),
           type: ["relevant"],
@@ -582,10 +556,7 @@ export const CV = {
       sidebar: (
         <>
           The Burger <br /> Exchange <br />
-          <Link
-            href="https://lizt.dev/exchange"
-            className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400"
-          >
+          <Link href="https://lizt.dev/exchange" className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400">
             lizt.dev/exchange
           </Link>
         </>
@@ -598,11 +569,9 @@ export const CV = {
         {
           content: (
             <>
-              Introducing Burger Exchange, a burger and grill restaurant that I co-owned and had the
-              pleasure of designing a custom website. The goal of the project was to create a
-              website that reflected the fun and trendy atmosphere of the restaurant, while also
-              making it easy for customers to find information, browse the menu, and make
-              reservations.
+              Introducing Burger Exchange, a burger and grill restaurant that I co-owned and had the pleasure of designing a custom website.
+              The goal of the project was to create a website that reflected the fun and trendy atmosphere of the restaurant, while also
+              making it easy for customers to find information, browse the menu, and make reservations.
             </>
           ),
           type: ["relevant"],
@@ -615,10 +584,7 @@ export const CV = {
       sidebar: (
         <>
           Demo Store <br />
-          <Link
-            href="https://lizt.dev/demo-store"
-            className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400"
-          >
+          <Link href="https://lizt.dev/demo-store" className="mt-2 block border-b border-b-gray-200 text-[10px] text-gray-400">
             lizt.dev/demo-store
           </Link>
         </>
@@ -631,11 +597,10 @@ export const CV = {
         {
           content: (
             <>
-              The store is based on the brand “De Eekhoorn” which is a high-quality Dutch Furniture
-              brand that focuses on designing and producing sturdy, contemporary and easy to
-              assemble furniture. The goal of this project was to create a visually appealing and
-              user-friendly E-commerce website that merchants can use to interact with the Shopify
-              theme and explore the LunaTag App functionality.
+              The store is based on the brand “De Eekhoorn” which is a high-quality Dutch Furniture brand that focuses on designing and
+              producing sturdy, contemporary and easy to assemble furniture. The goal of this project was to create a visually appealing and
+              user-friendly E-commerce website that merchants can use to interact with the Shopify theme and explore the LunaTag App
+              functionality.
             </>
           ),
           type: ["relevant"],
@@ -671,26 +636,11 @@ export const CV = {
         Icon: null,
       },
     ],
-    programmingLanguages: [
-      TECH.html_5,
-      TECH.css_3,
-      TECH.javascript,
-      TECH.liquid,
-      TECH.github,
-      TECH.vercel,
-    ],
+    programmingLanguages: [TECH.html_5, TECH.css_3, TECH.javascript, TECH.liquid, TECH.github, TECH.vercel],
     design: [TECH.figma, TECH.illustrator, TECH.sketch, TECH.photoshop, TECH.shopify_polaris],
     marketing: [TECH.meta, TECH.google, TECH.facebook, TECH.instagram],
     dataProviders: [TECH.shopify, TECH.vend, TECH.erply, TECH.dear, TECH.micros, TECH.wordpress],
-    tools: [
-      TECH.micros,
-      TECH.asana,
-      TECH.zoom,
-      TECH.slack,
-      TECH.msTeams,
-      TECH.postman,
-      TECH.office,
-    ],
+    tools: [TECH.micros, TECH.asana, TECH.zoom, TECH.slack, TECH.msTeams, TECH.postman, TECH.office],
   },
   certifications: [
     {
@@ -768,8 +718,10 @@ export const CV = {
       author: "Juan De Bruyn",
       title: "Restaurant Manager",
       company: "The Exchange Restaurant",
-      reference: `I have been fortunate enough to be working both along & with Felix Tellmann for the past 8 months. Felix has been an absolute light and strength in the team he runs. His approach to every challenge with a calm, firm & respectful attitude is something to be admired and to be learned by everyone. In spite of the challenges, this type of leadership makes a happy and productive work environment because it brings everyone together. I wish Felix all the best for his future endeavors. He is sure to make any challenge he takes on an absolute success.`,
+      reference:
+        "I have been fortunate enough to be working both along & with Felix Tellmann for the past 8 months. Felix has been an absolute light and strength in the team he runs. His approach to every challenge with a calm, firm & respectful attitude is something to be admired and to be learned by everyone. In spite of the challenges, this type of leadership makes a happy and productive work environment because it brings everyone together. I wish Felix all the best for his future endeavors. He is sure to make any challenge he takes on an absolute success.",
     },
   ],
-  personal: `After spending my childhood in Germany and early work career, I moved to Cape Town 14 years ago. Cooking and hosting dinners for family and friends are some of my favorite activities, and I enjoy connecting with people through good food, technology, and intelligent discussion. You will often find me on and around Table Mountain, hiking or running with my dog Alpha. I am very excited about the new age Space Race and the innovation it brings, and I would like to witness a rocket launch in my lifetime. It is also important to me to keep up with web technology and UX design developments by listening to podcasts, attending local events, attending conferences, and using Twitter.`,
+  personal:
+    "After spending my childhood in Germany and early work career, I moved to Cape Town 14 years ago. Cooking and hosting dinners for family and friends are some of my favorite activities, and I enjoy connecting with people through good food, technology, and intelligent discussion. You will often find me on and around Table Mountain, hiking or running with my dog Alpha. I am very excited about the new age Space Race and the innovation it brings, and I would like to witness a rocket launch in my lifetime. It is also important to me to keep up with web technology and UX design developments by listening to podcasts, attending local events, attending conferences, and using Twitter.",
 };

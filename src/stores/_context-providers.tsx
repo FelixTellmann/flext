@@ -1,10 +1,10 @@
+import { domAnimation, LazyMotion } from "framer-motion";
+import type { FC, PropsWithChildren } from "react";
+import { ThemeProvider } from "~/components/theme-provider";
 import { GloballyMountedProvider } from "~/stores/is-globally-mounted-store";
 import { NotificationsProvider } from "~/stores/notifications-store";
 import { PreloadedImagesProvider } from "~/stores/preloaded-images-store";
 import { TooltipProvider } from "~/stores/tooltip-store";
-import { ThemeProvider } from "~/components/theme-provider";
-import type { FC, PropsWithChildren } from "react";
-import { LazyMotion, domAnimation } from "framer-motion";
 
 export const ContextProviders: FC<PropsWithChildren> = ({ children }) => {
   return (

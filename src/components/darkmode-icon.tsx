@@ -1,6 +1,6 @@
 import { m as motion, useMotionValue, useTransform } from "framer-motion";
-import { useTheme } from "~/components/theme-provider";
 import type { FC } from "react";
+import { useTheme } from "~/components/theme-provider";
 
 const DarkmodeIcon: FC = () => {
   const { theme, setTheme } = useTheme();
@@ -32,13 +32,7 @@ const DarkmodeIcon: FC = () => {
 
   return (
     <motion.div animate={isDark ? "checked" : "unchecked"}>
-      <motion.svg
-        width="18"
-        height="18"
-        viewBox="0 0 25 25"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
+      <motion.svg width="18" height="18" viewBox="0 0 25 25" fill="none" xmlns="http://www.w3.org/2000/svg">
         <motion.path
           d="M12.4058 17.7625C15.1672 17.7625 17.4058 15.5239 17.4058 12.7625C17.4058 10.0011 15.1672 7.76251 12.4058 7.76251C9.64434 7.76251 7.40576 10.0011 7.40576 12.7625C7.40576 15.5239 9.64434 17.7625 12.4058 17.7625Z"
           stroke="currentColor"

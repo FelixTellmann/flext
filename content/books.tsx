@@ -705,8 +705,7 @@ export const BOOKS = [
   },
   {
     name: "Science of Self Discipline",
-    image:
-      "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1422804009i/3224947.jpg",
+    image: "https://images-na.ssl-images-amazon.com/images/S/compressed.photo.goodreads.com/books/1422804009i/3224947.jpg",
     url: "https://amzn.to/3RZM8EH",
     author: "Dr. Kerry L. Johnson",
     author_url: "",

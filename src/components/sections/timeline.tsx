@@ -1,14 +1,12 @@
-import { useDebouncedEffect } from "~/hooks/use-debounce-effect";
 import clsx from "clsx";
 import { TIMELINEOBJECT } from "content/timeline";
 import { useInView } from "framer-motion";
 import type { FC } from "react";
 import { useEffect, useRef, useState } from "react";
 import { scrollToX } from "utils/scroll-to";
+import { useDebouncedEffect } from "~/hooks/use-debounce-effect";
 
-type TimelineProps = {};
-
-export const Timeline: FC<TimelineProps> = ({}) => {
+export const Timeline: FC = () => {
   const [selected, setSelected] = useState("");
   const [initiated, setInitiated] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -19,14 +17,11 @@ export const Timeline: FC<TimelineProps> = ({}) => {
   useEffect(() => {
     if (!initiated && inView) {
       const container = scrollContainerRef.current as HTMLDivElement;
-      setTimeout(
-        () => {
-          const year = Object.keys(TIMELINEOBJECT)[0];
-          setInitiated(true);
-          setSelected(`${year}-${0}`);
-        },
-        50
-      );
+      setTimeout(() => {
+        const year = Object.keys(TIMELINEOBJECT)[0];
+        setInitiated(true);
+        setSelected(`${year}-${0}`);
+      }, 50);
     }
   }, [inView, initiated]);
 
@@ -39,8 +34,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
       const yearLength = keys.length;
       const yearIndex = keys.findIndex((key) => key === year);
       const indexLength = values[yearIndex]?.length;
-      const totalIndex =
-        values.flat().findIndex((val) => new Date(val.date).getFullYear() === +year) + +index;
+      const totalIndex = values.flat().findIndex((val) => new Date(val.date).getFullYear() === +year) + +index;
 
       const container = scrollContainerRef.current as HTMLDivElement;
 
@@ -48,10 +42,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
 
       const scrollTarget = totalIndex * 120;
 
-      if (
-        container.scrollLeft > scrollTarget - 120 ||
-        scrollTarget > container.scrollLeft + container.clientWidth - 240
-      ) {
+      if (container.scrollLeft > scrollTarget - 120 || scrollTarget > container.scrollLeft + container.clientWidth - 240) {
         scrollToX(200, scrollTarget, container);
       }
 
@@ -65,7 +56,7 @@ export const Timeline: FC<TimelineProps> = ({}) => {
       }
     },
     2400,
-    [selected, autoScroll, inView]
+    [selected, autoScroll, inView],
   );
 
   useDebouncedEffect(
@@ -73,29 +64,22 @@ export const Timeline: FC<TimelineProps> = ({}) => {
       setAutoScroll(true);
     },
     10000,
-    [autoScroll]
+    [autoScroll],
   );
 
   return (
-    <section className="mx-auto  max-w-6xl px-4 pb-16 md:px-8">
-      <div className="-mx-4 flex h-96 overflow-x-auto py-4 px-6 xl:mx-0" ref={scrollContainerRef}>
+    <section className="mx-auto max-w-6xl px-4 pb-16 md:px-8">
+      <div className="-mx-4 flex h-96 overflow-x-auto px-6 py-4 xl:mx-0" ref={scrollContainerRef}>
         {Object.entries(TIMELINEOBJECT).map(([year, events], yearIndex, years) => (
           <div key={year} className="relative">
-            <header className="absolute left-0 -translate-x-1/2 select-none text-xs font-semibold text-gray-400">
-              {year}
-            </header>
-            <div
-              className="mt-6 grid"
-              style={{ gridTemplateColumns: `repeat(${events.length}, 120px)` }}
-            >
+            <header className="absolute left-0 -translate-x-1/2 select-none font-semibold text-gray-400 text-xs">{year}</header>
+            <div className="mt-6 grid" style={{ gridTemplateColumns: `repeat(${events.length}, 120px)` }}>
               {events.map(({ heading, Icon, description }, index) => {
                 return (
-                  <section
-                    key={heading}
-                    className={clsx("relative", selected === `${year}-${index}` && "selected")}
-                  >
+                  <section key={heading} className={clsx("relative", selected === `${year}-${index}` && "selected")}>
                     <button
-                      className=" absolute flex -translate-x-1/2 flex-col items-center px-3 hfa:outline-none"
+                      type="button"
+                      className="absolute flex -translate-x-1/2 flex-col items-center px-3 hfa:outline-none"
                       onMouseOver={() => {
                         setAutoScroll(false);
                         setSelected(`${year}-${index}`);
@@ -114,22 +98,18 @@ export const Timeline: FC<TimelineProps> = ({}) => {
                       }}
                     >
                       <span className="sr-only">{`${year} - ${heading}`}</span>
-                      <div className="h-8 w-0.5 bg-gray-500 transition-all selected:h-[80px] selected:bg-sky-500"></div>
-                      <Icon className="mt-2 h-5 w-5 text-gray-500 transition-all d:text-gray-400 selected:text-gray-900 d:selected:text-white" />
+                      <div className="h-8 selected:h-[80px] w-0.5 bg-gray-500 selected:bg-sky-500 transition-all" />
+                      <Icon className="mt-2 h-5 w-5 d:selected:text-white d:text-gray-400 selected:text-gray-900 text-gray-500 transition-all" />
                     </button>
-                    <div className="absolute top-0 left-px h-2.5 w-[119px] bg-[image:linear-gradient(90deg,transparent_0px,transparent_9px,var(--line-color)_10px,var(--line-color)_10px)] bg-[length:10px_10px] [--line-color:theme(colors.gray.500)]"></div>
+                    <div className="absolute top-0 left-px h-2.5 w-[119px] bg-[image:linear-gradient(90deg,transparent_0px,transparent_9px,var(--line-color)_10px,var(--line-color)_10px)] bg-[length:10px_10px] [--line-color:theme(colors.gray.500)]" />
                     <main
                       className={clsx(
-                        "pointer-events-none relative mt-32 w-[17rem] opacity-0 transition-opacity  selected:pointer-events-auto selected:opacity-100",
-                        yearIndex === 0 && index === 0 ? "" : "-translate-x-1/2 text-center"
+                        "pointer-events-none selected:pointer-events-auto relative mt-32 w-[17rem] opacity-0 selected:opacity-100 transition-opacity",
+                        yearIndex === 0 && index === 0 ? "" : "-translate-x-1/2 text-center",
                       )}
                     >
-                      <h3 className="whitespace-nowrap font-semibold tracking-tight text-gray-800 d:text-gray-100">
-                        {heading}
-                      </h3>
-                      <p className="text-[15px] font-medium leading-relaxed tracking-tight text-gray-500">
-                        {description}
-                      </p>
+                      <h3 className="whitespace-nowrap font-semibold d:text-gray-100 text-gray-800 tracking-tight">{heading}</h3>
+                      <p className="font-medium text-[15px] text-gray-500 leading-relaxed tracking-tight">{description}</p>
                     </main>
                   </section>
                 );
@@ -139,12 +119,10 @@ export const Timeline: FC<TimelineProps> = ({}) => {
         ))}
 
         <div className="relative">
-          <header className="absolute left-0 -translate-x-1/2 text-xs font-semibold text-gray-400">
-            Today
-          </header>
+          <header className="absolute left-0 -translate-x-1/2 font-semibold text-gray-400 text-xs">Today</header>
           <div className="mt-6">
             <section className="relative">
-              <div className="h-8 w-0.5 bg-gray-500 pb-4"></div>
+              <div className="h-8 w-0.5 bg-gray-500 pb-4" />
             </section>
           </div>
         </div>

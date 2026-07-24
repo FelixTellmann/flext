@@ -1,9 +1,9 @@
 import { SiGithub } from "@react-icons/all-files/si/SiGithub";
-import { Link } from "~/components/link";
 import clsx from "clsx";
-import DarkmodeIcon from "~/components/darkmode-icon";
-import { useTheme } from "~/components/theme-provider";
 import type { FC } from "react";
+import DarkmodeIcon from "~/components/darkmode-icon";
+import { Link } from "~/components/link";
+import { useTheme } from "~/components/theme-provider";
 
 type ProfileNavProps = {
   showNav: boolean;
@@ -18,8 +18,8 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
       <button
         type="button"
         className={clsx(
-          "rounded p-2 text-gray-500 transition-colors d:text-gray-300 d:h:text-gray-50 md:h:text-gray-900",
-          showNav ? "h:text-gray-200" : "h:text-gray-900"
+          "rounded p-2 d:h:text-gray-50 d:text-gray-300 text-gray-500 transition-colors md:h:text-gray-900",
+          showNav ? "h:text-gray-200" : "h:text-gray-900",
         )}
         onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
       >
@@ -29,8 +29,8 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
       <Link
         href="https://github.com/FelixTellmann"
         className={clsx(
-          "rounded p-2 text-gray-500 transition-colors d:text-gray-300 d:h:text-gray-50 md:h:text-gray-900",
-          showNav ? "h:text-gray-200" : "h:text-gray-900"
+          "rounded p-2 d:h:text-gray-50 d:text-gray-300 text-gray-500 transition-colors md:h:text-gray-900",
+          showNav ? "h:text-gray-200" : "h:text-gray-900",
         )}
       >
         <span className="sr-only">Github</span>
@@ -39,7 +39,7 @@ export const ProfileNav: FC<ProfileNavProps> = ({ showNav }) => {
       <Link
         target="_blank"
         href="mailto:hello@flext.dev"
-        className="button-rainbow ml-4 hidden whitespace-nowrap px-4 py-1.5 text-sm font-medium tracking-tight text-gray-500 md:flex"
+        className="button-rainbow ml-4 hidden whitespace-nowrap px-4 py-1.5 font-medium text-gray-500 text-sm tracking-tight md:flex"
       >
         Lets work
       </Link>

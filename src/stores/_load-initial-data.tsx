@@ -1,10 +1,10 @@
+import type { FC, PropsWithChildren } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Toast } from "~/components/toast";
 import { useIsGloballyMounted } from "~/stores/is-globally-mounted-store";
 import { useNotifications } from "~/stores/notifications-store";
 import { useTooltipStore } from "~/stores/tooltip-store";
 
-import { Toast } from "~/components/toast";
-import type { FC, PropsWithChildren } from "react";
-import { lazy, Suspense, useEffect, useState } from "react";
 //
 
 const ReactTooltip = lazy(() => import("react-tooltip"));
@@ -18,18 +18,12 @@ export const LoadInitialData: FC<PropsWithChildren> = ({ children }) => {
 
   useEffect(() => {
     const hideTooltip = () => {
-      setTimeout(
-        () => {
-          setShowTooltip(false);
-          setTimeout(
-            () => {
-              setShowTooltip(true);
-            },
-            10
-          );
-        },
-        200
-      );
+      setTimeout(() => {
+        setShowTooltip(false);
+        setTimeout(() => {
+          setShowTooltip(true);
+        }, 10);
+      }, 200);
     };
     window.addEventListener("scroll", hideTooltip);
     return () => {
@@ -45,27 +39,27 @@ export const LoadInitialData: FC<PropsWithChildren> = ({ children }) => {
     <>
       {children}
       <Toast />
-      {isGloballyMounted && tooltip
-        ? <Suspense fallback={null}>
-            <ReactTooltip
-              place="bottom"
-              effect="solid"
-              wrapper="span"
-              arrowColor="white"
-              delayHide={500}
-              clickable={true}
-              // possibleCustomEventsOff="hide-global-tooltip"
-              className="relative !border-none !border-transparent !p-0"
-              getContent={(content) => {
-                return (
-                  <span className="pointer-events-auto block h-[calc(100%+1px)] w-[calc(100%+1px)] max-w-[calc(100vw-32px)] select-none rounded-sm border-card bg-white py-2 px-5 text-slate-700 opacity-100 shadow-xl">
-                    {content}
-                  </span>
-                );
-              }}
-            />
-          </Suspense>
-        : null}
+      {isGloballyMounted && tooltip ? (
+        <Suspense fallback={null}>
+          <ReactTooltip
+            place="bottom"
+            effect="solid"
+            wrapper="span"
+            arrowColor="white"
+            delayHide={500}
+            clickable={true}
+            // possibleCustomEventsOff="hide-global-tooltip"
+            className="!border-none !border-transparent !p-0 relative"
+            getContent={(content) => {
+              return (
+                <span className="pointer-events-auto block h-[calc(100%+1px)] w-[calc(100%+1px)] max-w-[calc(100vw-32px)] select-none rounded-sm border-card bg-white px-5 py-2 text-slate-700 opacity-100 shadow-xl">
+                  {content}
+                </span>
+              );
+            }}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 };

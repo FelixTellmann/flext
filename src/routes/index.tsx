@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
+import { Client } from "twitter-api-sdk";
 import { About } from "~/components/sections/about";
 import { Hero } from "~/components/sections/hero";
 import { PortfolioPreview } from "~/components/sections/portfolio-preview";
 import { Timeline } from "~/components/sections/timeline";
-import { Client } from "twitter-api-sdk";
 
 const fetchTwitterData = createServerFn({ method: "GET" }).handler(async () => {
   try {

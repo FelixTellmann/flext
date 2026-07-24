@@ -1,7 +1,7 @@
-import { createTransport } from "nodemailer";
 import { db } from "@server/db/drizzle";
 import { verificationToken } from "@server/db/schema";
 import { and, eq } from "drizzle-orm";
+import { createTransport } from "nodemailer";
 
 function getTransport() {
   return createTransport({
@@ -47,9 +47,7 @@ export async function verifyMagicLinkToken(email: string, token: string): Promis
   const record = records[0]!;
   if (new Date() > record.expires) return false;
 
-  await db
-    .delete(verificationToken)
-    .where(and(eq(verificationToken.identifier, email), eq(verificationToken.token, token)));
+  await db.delete(verificationToken).where(and(eq(verificationToken.identifier, email), eq(verificationToken.token, token)));
 
   return true;
 }

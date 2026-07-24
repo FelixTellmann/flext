@@ -1,8 +1,22 @@
 import { StarIcon } from "@heroicons/react/20/solid";
-import { BookOpenIcon, BuildingOffice2Icon, CakeIcon, ChartBarIcon, CodeBracketIcon, CodeBracketSquareIcon, ComputerDesktopIcon, FireIcon, LanguageIcon, SignalIcon, UserCircleIcon, WifiIcon } from "@heroicons/react/24/solid";
+import {
+  BookOpenIcon,
+  BuildingOffice2Icon,
+  CakeIcon,
+  ChartBarIcon,
+  CodeBracketIcon,
+  CodeBracketSquareIcon,
+  ComputerDesktopIcon,
+  FireIcon,
+  LanguageIcon,
+  SignalIcon,
+  UserCircleIcon,
+  WifiIcon,
+} from "@heroicons/react/24/solid";
 import { AiOutlineDollar } from "@react-icons/all-files/ai/AiOutlineDollar";
 import { BiGame } from "@react-icons/all-files/bi/BiGame";
 import { BiSticker } from "@react-icons/all-files/bi/BiSticker";
+import { BsQuestionCircleFill as BsFillPatchQuestionFill } from "@react-icons/all-files/bs/BsQuestionCircleFill";
 import { FaBaby } from "@react-icons/all-files/fa/FaBaby";
 import { FaChalkboardTeacher } from "@react-icons/all-files/fa/FaChalkboardTeacher";
 import { FaGraduationCap } from "@react-icons/all-files/fa/FaGraduationCap";
@@ -23,7 +37,6 @@ import { RiVirusLine } from "@react-icons/all-files/ri/RiVirusLine";
 import { RiWalkFill } from "@react-icons/all-files/ri/RiWalkFill";
 import { SiCoronaengine } from "@react-icons/all-files/si/SiCoronaengine";
 import { SiShopify } from "@react-icons/all-files/si/SiShopify";
-import { BsQuestionCircleFill as BsFillPatchQuestionFill } from "@react-icons/all-files/bs/BsQuestionCircleFill";
 
 export const TIMELINEOBJECT = {
   "1986": [
@@ -38,8 +51,7 @@ export const TIMELINEOBJECT = {
     {
       date: "1996-06-01",
       heading: "Online",
-      description:
-        "I was fortunate to explore the internet at the age of 10 using a 28.9KBit modem. I was absolutely mind blown 🤯",
+      description: "I was fortunate to explore the internet at the age of 10 using a 28.9KBit modem. I was absolutely mind blown 🤯",
       Icon: ({ className = "" }) => <WifiIcon className={className} />,
     },
   ],
@@ -54,8 +66,7 @@ export const TIMELINEOBJECT = {
     {
       date: "1997-06-01",
       heading: "First line of code",
-      description:
-        "My stepdad Franz thought me programming ⌨, building a calculator 🧮 and a racing game 👾 🏎 with Delphi and Pascal",
+      description: "My stepdad Franz thought me programming ⌨, building a calculator 🧮 and a racing game 👾 🏎 with Delphi and Pascal",
       Icon: ({ className = "" }) => <CodeBracketIcon className={className} />,
     },
   ],
@@ -63,8 +74,7 @@ export const TIMELINEOBJECT = {
     {
       date: "1999-01-01",
       heading: "Visit to SF",
-      description:
-        "Exploring the tech world as a teenager. I bought a brand new Laser Mouse 🖱 at the Metreon downtown San Fransisco.",
+      description: "Exploring the tech world as a teenager. I bought a brand new Laser Mouse 🖱 at the Metreon downtown San Fransisco.",
       Icon: ({ className = "" }) => <GiSuspensionBridge className={className} />,
     },
     {
@@ -87,8 +97,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2001-01-01",
       heading: "Game Modding",
-      description:
-        "I got into game Modding and started experimenting, mostly with Counter Strike & the HL engine.",
+      description: "I got into game Modding and started experimenting, mostly with Counter Strike & the HL engine.",
       Icon: ({ className = "" }) => <SiCoronaengine className={className} />,
     },
   ],
@@ -96,8 +105,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2002-01-01",
       heading: "First Visit to SA",
-      description:
-        "I went to South Africa for the first time, visiting St Francis Bay on the Garden Route.",
+      description: "I went to South Africa for the first time, visiting St Francis Bay on the Garden Route.",
       Icon: ({ className = "" }) => <GiAfrica className={className} />,
     },
   ],
@@ -123,8 +131,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2006-01-01",
       heading: "Second visit to SA",
-      description:
-        "I visited South Africa for the second time. This time, exploring Cape Town and I totally fell in love with it.",
+      description: "I visited South Africa for the second time. This time, exploring Cape Town and I totally fell in love with it.",
       Icon: ({ className = "" }) => <GiSouthAfrica className={className} />,
     },
   ],
@@ -146,8 +153,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2007-08-01",
       heading: "Learning English",
-      description:
-        "I took a deep dive into learning English within 3 months in South Africa, going from hating languages to 100% native.",
+      description: "I took a deep dive into learning English within 3 months in South Africa, going from hating languages to 100% native.",
       Icon: ({ className = "" }) => <LanguageIcon className={className} />,
     },
   ],
@@ -185,8 +191,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2010-01-01",
       heading: "World Cup 2010",
-      description:
-        "It was amazing to be in Cape Town during the World Cup 2010 in SA. Germany vs Argentina - 4:0",
+      description: "It was amazing to be in Cape Town during the World Cup 2010 in SA. Germany vs Argentina - 4:0",
       Icon: ({ className = "" }) => <GiSoccerBall className={className} />,
     },
   ],
@@ -219,15 +224,13 @@ export const TIMELINEOBJECT = {
     {
       date: "2013-06-01",
       heading: "Kitima Restaurant",
-      description:
-        "Joined the Best Asian Restaurant in South Africa as a Restaurant Manager overseeing a team of 50 employees.",
+      description: "Joined the Best Asian Restaurant in South Africa as a Restaurant Manager overseeing a team of 50 employees.",
       Icon: ({ className = "" }) => <IoMdRestaurant className={className} />,
     },
     {
       date: "2013-09-01",
       heading: "Training & Development",
-      description:
-        "I took on a specialized role focusing on training & development of the team to reach their full potential.",
+      description: "I took on a specialized role focusing on training & development of the team to reach their full potential.",
       Icon: ({ className = "" }) => <FaChalkboardTeacher className={className} />,
     },
   ],
@@ -309,8 +312,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2016-06-01",
       heading: "Tech + Restaurant",
-      description:
-        "I started Smart-up Online. An online training platform/SaaS for restaurant owners & managers to train their staff.",
+      description: "I started Smart-up Online. An online training platform/SaaS for restaurant owners & managers to train their staff.",
       Icon: ({ className = "" }) => <StarIcon className={className} />,
     },
   ],
@@ -340,15 +342,13 @@ export const TIMELINEOBJECT = {
     {
       date: "2018-01-01",
       heading: "First Custom Project",
-      description:
-        "I've built AlphabetPIX for a client as my first web-app, learning tons on a new tech domain.",
+      description: "I've built AlphabetPIX for a client as my first web-app, learning tons on a new tech domain.",
       Icon: ({ className = "" }) => <CodeBracketSquareIcon className={className} />,
     },
     {
       date: "2018-02-01",
       heading: "Move to Knysna",
-      description:
-        "My Wife and I made the decision to move to Knysna on the Garden Route to open a Restaurant.",
+      description: "My Wife and I made the decision to move to Knysna on the Garden Route to open a Restaurant.",
       Icon: ({ className = "" }) => <FaTruckMoving className={className} />,
     },
     {
@@ -370,8 +370,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2019-05-01",
       heading: "Namibia Holidays",
-      description:
-        "We survived our first holiday season at the restaurant and took a one week holiday which was simply mind blowing.",
+      description: "We survived our first holiday season at the restaurant and took a one week holiday which was simply mind blowing.",
       Icon: ({ className = "" }) => <GiAfrica className={className} />,
     },
     {
@@ -407,8 +406,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2020-04-01",
       heading: "Back to Web Dev",
-      description:
-        "I restarted my freelancing Web dev and got back in touch with clients, jumping into the booming ecommerce train.",
+      description: "I restarted my freelancing Web dev and got back in touch with clients, jumping into the booming ecommerce train.",
       Icon: ({ className = "" }) => <CodeBracketIcon className={className} />,
     },
     {
@@ -423,43 +421,37 @@ export const TIMELINEOBJECT = {
     {
       date: "2021-01-01",
       heading: "Dev tools",
-      description:
-        "I created created and maintain two open source dev tools: fx-style and shopify-ftp-access.",
+      description: "I created created and maintain two open source dev tools: fx-style and shopify-ftp-access.",
       Icon: ({ className = "" }) => <CodeBracketSquareIcon className={className} />,
     },
     {
       date: "2021-04-01",
       heading: "Otter Trail",
-      description:
-        "I went on a 5 day adventure hike carrying 15kg of gear & provisions for 45km on the Garden Route",
+      description: "I went on a 5 day adventure hike carrying 15kg of gear & provisions for 45km on the Garden Route",
       Icon: ({ className = "" }) => <RiWalkFill className={className} />,
     },
     {
       date: "2021-06-01",
       heading: "New Office",
-      description:
-        "We moved into our new office on Bree street with a stunning balcony and some great neighbours.",
+      description: "We moved into our new office on Bree street with a stunning balcony and some great neighbours.",
       Icon: ({ className = "" }) => <BuildingOffice2Icon className={className} />,
     },
     {
       date: "2021-08-01",
       heading: "ClickUpload",
-      description:
-        "I lead the creation of ClickUpload, a public Shopify app that allows users to upload files with their orders.",
+      description: "I lead the creation of ClickUpload, a public Shopify app that allows users to upload files with their orders.",
       Icon: ({ className = "" }) => <SiShopify className={className} />,
     },
     {
       date: "2021-11-01",
       heading: "shopify-typed-node-api",
-      description:
-        "I upgraded shopify-node-api to be fully typesafe and published it as an alternative to the non TS version.",
+      description: "I upgraded shopify-node-api to be fully typesafe and published it as an alternative to the non TS version.",
       Icon: ({ className = "" }) => <CodeBracketIcon className={className} />,
     },
     {
       date: "2021-02-01",
       heading: "Backend API integrations",
-      description:
-        "Over the year I got heavily involved in some backend custom integrations, building solutions with AWS for our clients.",
+      description: "Over the year I got heavily involved in some backend custom integrations, building solutions with AWS for our clients.",
       Icon: ({ className = "" }) => <StarIcon className={className} />,
     },
   ],
@@ -467,8 +459,7 @@ export const TIMELINEOBJECT = {
     {
       date: "2022-01-01",
       heading: "Lunalemon",
-      description:
-        "We've launched LunaLemon as a brand to reach a more international audience for app & headless ecommerce solutions.",
+      description: "We've launched LunaLemon as a brand to reach a more international audience for app & headless ecommerce solutions.",
       Icon: ({ className = "" }) => <ComputerDesktopIcon className={className} />,
     },
     {

@@ -13,10 +13,10 @@
 
   .token.tag,
   .token.class-name {
-    color: #B7E2F8;
+    color: #b7e2f8;
   }
   .token.tag > .token.punctuation {
-    color: #65C6FF;
+    color: #65c6ff;
   }
 
   .token.selector,
@@ -27,14 +27,14 @@
   }
 
   .token.constant {
-    @apply font-medium text-orange-400
+    @apply font-medium text-orange-400;
   }
   .token.script {
     @apply text-white font-normal;
-    color: #FD971F;
+    color: #fd971f;
   }
   .token.attr-name {
-    color: #A6E22E;
+    color: #a6e22e;
   }
   .token.builtin,
   .token.keyword,
@@ -42,7 +42,7 @@
   .token.pseudo-class,
   .token.important {
     @apply font-bold;
-    color: #F92672;
+    color: #f92672;
   }
 
   .token.attr-value,
@@ -90,8 +90,9 @@
     @apply text-slate-400/80;
   }
 
-  .code-inactive, .code-inactive *  {
-    @apply text-slate-400/50
+  .code-inactive,
+  .code-inactive * {
+    @apply text-slate-400/50;
     transition: 0.15s color;
   }
 
@@ -112,12 +113,11 @@
     @apply bg-rose-500/[0.15] border-rose-400 before:content-['-'] before:text-rose-400;
   }
 
-  pre[class^='language-diff-'] {
+  pre[class^="language-diff-"] {
     @apply flex px-9;
   }
 
-  pre[class^='language-diff-'] > code {
+  pre[class^="language-diff-"] > code {
     @apply flex-none min-w-full;
   }
-
 }

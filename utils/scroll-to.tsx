@@ -21,7 +21,7 @@ export const scrollToY = (
   duration: number,
   to: number,
   container: HTMLElement | Window = window,
-  callback: () => void = () => {}
+  callback: () => void = () => {},
 ): void => {
   const start = container instanceof HTMLElement ? container.scrollTop : container.scrollY;
 
@@ -39,7 +39,7 @@ export const scrollToY = (
         start,
         change,
         duration,
-      })
+      }),
     );
 
     if (currentTime < duration) {
@@ -56,7 +56,7 @@ export const scrollToX = (
   duration: number,
   to: number,
   container: HTMLElement | Window = window,
-  callback: () => void = () => {}
+  callback: () => void = () => {},
 ): void => {
   const start = container instanceof HTMLElement ? container.scrollLeft : container.scrollX;
 
@@ -74,7 +74,7 @@ export const scrollToX = (
         change,
         duration,
       }),
-      0
+      0,
     );
 
     if (currentTime < duration) {

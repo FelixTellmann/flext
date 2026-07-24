@@ -9,15 +9,14 @@ export const CV = {
   email: "hello@flext.dev",
   website: "https://flext.dev",
   mobile: {
-    href: `tel:+27760313590`,
+    href: "tel:+27760313590",
     number: "+27 (0)76 031 3590",
   },
   intro: (
     <>
-      I am a passionate self-taught software developer (and former restaurateur & chef) looking for
-      a new challenge. I specialize in front-end- and serverless backend- development using
-      Typescript, React.js, and Node.js. As an advocate for web performance, accessibility, and an
-      evangelist for the{" "}
+      I am a passionate self-taught software developer (and former restaurateur & chef) looking for a new challenge. I specialize in
+      front-end- and serverless backend- development using Typescript, React.js, and Node.js. As an advocate for web performance,
+      accessibility, and an evangelist for the{" "}
       <Link href="https://jamstack.org/" target="_blank">
         JAM Stack
       </Link>{" "}
@@ -25,9 +24,8 @@ export const CV = {
       <Link href="https://init.tips/#why" target="_blank">
         T3 stack
       </Link>
-      , I create amazing web applications to make the internet a better place. I love encountering
-      hard-to-solve-problems and approach them with patience, determination, and relentless
-      perseverance.
+      , I create amazing web applications to make the internet a better place. I love encountering hard-to-solve-problems and approach them
+      with patience, determination, and relentless perseverance.
     </>
   ),
   eduction: [
@@ -317,8 +315,7 @@ export const CV = {
           type: ["entrepreneurial"],
         },
         {
-          content:
-            "Event management from planning, purchasing, production, venue setup to on-the-day coordination.",
+          content: "Event management from planning, purchasing, production, venue setup to on-the-day coordination.",
           type: ["management"],
         },
         {
@@ -349,8 +346,7 @@ export const CV = {
           type: ["restaurant"],
         },
         {
-          content:
-            "Created standard recipe files for all menu items and daily production worksheets",
+          content: "Created standard recipe files for all menu items and daily production worksheets",
           type: ["restaurant", "management"],
         },
         {
@@ -447,8 +443,7 @@ export const CV = {
           type: ["web / tech dev"],
         },
         {
-          content:
-            "In charge of daily service operation, assisting waiters and filling in where needed",
+          content: "In charge of daily service operation, assisting waiters and filling in where needed",
           type: ["restaurant"],
         },
       ],
@@ -494,8 +489,7 @@ export const CV = {
           type: ["management"],
         },
         {
-          content:
-            "Created the company website & designed artworks for production according to vinyl specifications",
+          content: "Created the company website & designed artworks for production according to vinyl specifications",
           type: ["web / tech dev"],
         },
       ],
@@ -510,8 +504,7 @@ export const CV = {
       type: ["entrepreneurial", "restaurant", "management", "web / tech dev", "relevant"],
       responsibilities: [
         {
-          content:
-            "I partnered with my previous employer to develop and open a new Restaurant in the centre of Cape Town",
+          content: "I partnered with my previous employer to develop and open a new Restaurant in the centre of Cape Town",
           type: ["restaurant", "entrepreneurial", "management", "relevant"],
         },
         {
@@ -525,18 +518,15 @@ export const CV = {
           type: ["restaurant", "management", "relevant", "web / tech dev"],
         },
         {
-          content:
-            "Created the wine & cocktail list and worked closely with the head chef to establish the food menu",
+          content: "Created the wine & cocktail list and worked closely with the head chef to establish the food menu",
           type: ["restaurant", "management", "relevant"],
         },
         {
-          content:
-            "I developed the launch marketing campaign and the restaurants website using Wordpress",
+          content: "I developed the launch marketing campaign and the restaurants website using Wordpress",
           type: ["restaurant", "management", "web / tech dev", "relevant"],
         },
         {
-          content:
-            "Handled most financial aspects from budgeting to menu item costing, reporting directly to the owner",
+          content: "Handled most financial aspects from budgeting to menu item costing, reporting directly to the owner",
           type: ["restaurant", "management", "relevant"],
         },
       ],
@@ -577,8 +567,7 @@ export const CV = {
       type: ["management", "web / tech dev", "relevant"],
       responsibilities: [
         {
-          content:
-            "Developed custom Shopify themes for clients using Liquid, Javascript, HTML5 & SASS",
+          content: "Developed custom Shopify themes for clients using Liquid, Javascript, HTML5 & SASS",
           type: ["web / tech dev", "relevant"],
         },
         {
@@ -587,8 +576,7 @@ export const CV = {
           type: ["management", "relevant", "web / tech dev"],
         },
         {
-          content:
-            "Developed the Agency marketing site using React.js and Shopify as a headless cms",
+          content: "Developed the Agency marketing site using React.js and Shopify as a headless cms",
           type: ["web / tech dev", "relevant"],
         },
         {
@@ -596,13 +584,11 @@ export const CV = {
           type: ["web / tech dev", "relevant"],
         },
         {
-          content:
-            "Handled large scale data migrations, using database SQL queries and developed web-scrapers for legacy systems",
+          content: "Handled large scale data migrations, using database SQL queries and developed web-scrapers for legacy systems",
           type: ["web / tech dev", "relevant"],
         },
         {
-          content:
-            "Improved test coverage by writing unit and integration tests with Jest and Enzyme",
+          content: "Improved test coverage by writing unit and integration tests with Jest and Enzyme",
           type: ["web / tech dev", "relevant"],
         },
       ],
@@ -614,14 +600,7 @@ export const CV = {
       country: "South Africa",
       company: "The Burger Exchange (Pty) Ltd",
       title: "Co-Founder, Managing Director",
-      type: [
-        "management",
-        "web / tech dev",
-        "relevant",
-        "web / tech dev",
-        "restaurant",
-        "entrepreneurial",
-      ],
+      type: ["management", "web / tech dev", "relevant", "web / tech dev", "restaurant", "entrepreneurial"],
       responsibilities: [
         {
           content:
@@ -643,8 +622,7 @@ export const CV = {
           type: ["management", "relevant", "web / tech dev"],
         },
         {
-          content:
-            "Supported the overall marketing strategy with graphic design, food photography and I developed the restaurants website",
+          content: "Supported the overall marketing strategy with graphic design, food photography and I developed the restaurants website",
           type: ["web / tech dev", "relevant"],
         },
         {
@@ -753,14 +731,7 @@ export const CV = {
       TECH.framer,
       TECH.redis,
     ],
-    serviceProviders: [
-      TECH.vercel,
-      TECH.aws,
-      TECH.firebase,
-      TECH.netlify,
-      TECH.planetscale,
-      TECH.github,
-    ],
+    serviceProviders: [TECH.vercel, TECH.aws, TECH.firebase, TECH.netlify, TECH.planetscale, TECH.github],
     marketing: [TECH.vercel, TECH.aws, TECH.firebase, TECH.netlify, TECH.planetscale, TECH.github],
     dataProviders: [TECH.shopify, TECH.vend, TECH.erply, TECH.dear, TECH.micros, TECH.wordpress],
     tools: [
@@ -868,8 +839,10 @@ export const CV = {
       author: "Juan De Bruyn",
       title: "Restaurant Manager",
       company: "The Exchange Restaurant",
-      reference: `I have been fortunate enough to be working both along & with Felix Tellmann for the past 8 months. Felix has been an absolute light and strength in the team he runs. His approach to every challenge with a calm, firm & respectful attitude is something to be admired and to be learned by everyone. In spite of the challenges, this type of leadership makes a happy and productive work environment because it brings everyone together. I wish Felix all the best for his future endeavors. He is sure to make any challenge he takes on an absolute success.`,
+      reference:
+        "I have been fortunate enough to be working both along & with Felix Tellmann for the past 8 months. Felix has been an absolute light and strength in the team he runs. His approach to every challenge with a calm, firm & respectful attitude is something to be admired and to be learned by everyone. In spite of the challenges, this type of leadership makes a happy and productive work environment because it brings everyone together. I wish Felix all the best for his future endeavors. He is sure to make any challenge he takes on an absolute success.",
     },
   ],
-  personal: `After spending my childhood in Germany and early work career, I moved to Cape Town 14 years ago. Cooking and hosting dinners for family and friends are some of my favorite activities, and I enjoy connecting with people through good food, technology, and intelligent discussion. You will often find me on and around Table Mountain, hiking or running with my dog Alpha. I am very excited about the new age Space Race and the innovation it brings, and I would like to witness a rocket launch in my lifetime. It is also important to me to keep up with web technology and UX design developments by listening to podcasts, attending local events, attending conferences, and using Twitter.`,
+  personal:
+    "After spending my childhood in Germany and early work career, I moved to Cape Town 14 years ago. Cooking and hosting dinners for family and friends are some of my favorite activities, and I enjoy connecting with people through good food, technology, and intelligent discussion. You will often find me on and around Table Mountain, hiking or running with my dog Alpha. I am very excited about the new age Space Race and the innovation it brings, and I would like to witness a rocket launch in my lifetime. It is also important to me to keep up with web technology and UX design developments by listening to podcasts, attending local events, attending conferences, and using Twitter.",
 };

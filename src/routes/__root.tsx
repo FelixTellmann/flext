@@ -1,10 +1,10 @@
-import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
-import { ContextProviders } from "~/stores/_context-providers";
-import { LoadInitialData } from "~/stores/_load-initial-data";
-import { Header } from "~/components/layout/header";
-import { Footer } from "~/components/layout/footer";
+import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { SEO } from "content/seo";
 import { type FC, type PropsWithChildren, useEffect } from "react";
+import { Footer } from "~/components/layout/footer";
+import { Header } from "~/components/layout/header";
+import { ContextProviders } from "~/stores/_context-providers";
+import { LoadInitialData } from "~/stores/_load-initial-data";
 
 const RootDocument: FC<PropsWithChildren> = ({ children }) => {
   return (
@@ -55,7 +55,7 @@ const RootDocument: FC<PropsWithChildren> = ({ children }) => {
           }}
         />
       </head>
-      <body className="color-gray--slate bg-white [--line-color:theme(colors.gray.200/0.8)] d:bg-gray-900 d:bg-gradient-to-b d:from-black/40 d:to-black/40">
+      <body className="color-gray--slate bg-white d:bg-gradient-to-b d:bg-gray-900 d:from-black/40 d:to-black/40 [--line-color:theme(colors.gray.200/0.8)]">
         {children}
         <Scripts />
       </body>
@@ -97,7 +97,7 @@ function RootComponent() {
       <ContextProviders>
         <LoadInitialData>
           <Header />
-          <main className="min-h-screen print:!mx-auto print:!w-[1024px]">
+          <main className="print:!mx-auto print:!w-[1024px] min-h-screen">
             <Outlet />
           </main>
           <Footer />

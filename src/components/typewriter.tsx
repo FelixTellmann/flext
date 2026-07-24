@@ -38,7 +38,9 @@ export const Typewriter: FC<TypewriterProps> = ({
     async (currentIndex: number) => {
       if (writing) return;
       setWriting(true);
-      contentRef.current?.forEach((el) => el?.classList?.add("hidden"));
+      contentRef.current?.forEach((el) => {
+        el?.classList?.add("hidden");
+      });
       contentRef.current[currentIndex]?.classList?.remove("hidden");
       const sentence = sentences[currentIndex] ?? [];
       for (let i = 0; i < sentence.length; i++) {
@@ -76,11 +78,9 @@ export const Typewriter: FC<TypewriterProps> = ({
       }
 
       setWriting(false);
-      setCurrentSentenceIndex((current) =>
-        current + 1 === contentRef.current.length ? 0 : current + 1
-      );
+      setCurrentSentenceIndex((current) => (current + 1 === contentRef.current.length ? 0 : current + 1));
     },
-    [deleteSpeed, holdVisibleDuration, loop, sentences, speed, writing]
+    [deleteSpeed, holdVisibleDuration, loop, sentences, speed, writing],
   );
 
   useEffect(() => {
@@ -117,7 +117,9 @@ export const Typewriter: FC<TypewriterProps> = ({
       {items.map((item, index) => {
         return (
           <span
-            ref={(ref) => { contentRef.current[index] = ref; }}
+            ref={(ref) => {
+              contentRef.current[index] = ref;
+            }}
             key={index}
             aria-hidden
             className="hidden after:animate-blink after:content-['|']"

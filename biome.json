@@ -1,5 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -7,9 +12,17 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "maxSize": 2621440,
-    "includes": ["**/*"],
-    "excludes": ["**/@types/**/*.*", ".output/**/*.*"]
+    "includes": [
+      "**",
+      "!**/*.graphql",
+      "!**/@types/**/*.*",
+      "!src/routeTree.gen.ts",
+      "!content/code-blocks/**/*.*",
+      "!server/db/migrations/**/*.*",
+      "!.output/**/*.*",
+      "!public/**/*.*"
+    ],
+    "maxSize": 2621440
   },
   "formatter": {
     "enabled": true,
@@ -17,28 +30,39 @@
     "lineWidth": 140,
     "formatWithErrors": true
   },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "double"
-    }
-  },
-  "css": {
-    "parser": {
-      "tailwindDirectives": true
-    }
-  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
       "nursery": {
-        "useSortedClasses": { "level": "warn", "fix": "safe" }
+        "useSortedClasses": {
+          "level": "warn",
+          "fix": "safe"
+        }
       },
       "style": {
         "noParameterAssign": "off",
         "noNonNullAssertion": "off",
+        "noUnusedTemplateLiteral": {
+          "level": "error",
+          "fix": "safe"
+        },
+        "useSelfClosingElements": {
+          "level": "error",
+          "fix": "safe"
+        },
+        "useTemplate": {
+          "level": "warn",
+          "fix": "safe"
+        },
+        "useNodejsImportProtocol": {
+          "level": "warn",
+          "fix": "safe"
+        },
         "useAsConstAssertion": "error",
         "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
         "useSingleVarDeclarator": "error",
         "useNumberNamespace": "error",
         "noInferrableTypes": "error",
@@ -46,7 +70,18 @@
       },
       "complexity": {
         "noForEach": "off",
-        "useOptionalChain": { "level": "error", "fix": "safe" }
+        "noUselessCatch": {
+          "level": "error",
+          "fix": "safe"
+        },
+        "noUselessTernary": {
+          "level": "warn",
+          "fix": "safe"
+        },
+        "useOptionalChain": {
+          "level": "error",
+          "fix": "safe"
+        }
       },
       "a11y": {
         "useKeyWithClickEvents": "off",
@@ -57,21 +92,29 @@
       },
       "suspicious": {
         "noExplicitAny": "warn",
-        "noArrayIndexKey": "info"
+        "noArrayIndexKey": "info",
+        "noAssignInExpressions": "info",
+        "noGlobalIsNan": {
+          "level": "warn",
+          "fix": "safe"
+        }
       },
       "correctness": {
-        "useExhaustiveDependencies": { "level": "warn" },
+        "useExhaustiveDependencies": {
+          "level": "warn"
+        },
         "noUnusedVariables": "off",
         "noUnusedFunctionParameters": "off",
-        "noUnusedImports": "off"
+        "noUnusedImports": "off",
+        "noUnusedLabels": "off",
+        "noUnusedPrivateClassMembers": "off",
+        "useUniqueElementIds": "off"
       }
     }
   },
-  "assist": {
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
     }
   }
 }

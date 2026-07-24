@@ -1,15 +1,5 @@
-import {
-  mysqlTable,
-  varchar,
-  datetime,
-  int,
-  float,
-  boolean,
-  text,
-  uniqueIndex,
-  primaryKey,
-} from "drizzle-orm/mysql-core";
 import { sql } from "drizzle-orm";
+import { boolean, datetime, float, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 // ─── Post ────────────────────────────────────────────────────────────────────
 // Prisma uses @@unique([id]) instead of @id, so no auto-generated primary key
@@ -17,9 +7,7 @@ export const post = mysqlTable(
   "Post",
   {
     id: varchar("id", { length: 191 }).notNull(),
-    createdAt: datetime("createdAt", { fsp: 3 })
-      .default(sql`CURRENT_TIMESTAMP(3)`)
-      .notNull(),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
     updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
     views: int("views").default(0).notNull(),
     likes: int("likes").default(0).notNull(),
@@ -40,9 +28,7 @@ export const comment = mysqlTable("Comment", {
 // ─── Telemetry ───────────────────────────────────────────────────────────────
 export const telemetry = mysqlTable("Telemetry", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   name: varchar("name", { length: 50 }).notNull(),
 });
@@ -50,13 +36,9 @@ export const telemetry = mysqlTable("Telemetry", {
 // ─── HabitTracking ───────────────────────────────────────────────────────────
 export const habitTracking = mysqlTable("HabitTracking", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  date: datetime("date", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  date: datetime("date", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   sleepDuration: float("sleepDuration").default(0),
   dailyRoutineDuration: float("dailyRoutineDuration").default(0),
   readingDuration: float("readingDuration").default(0),
@@ -88,9 +70,7 @@ export const habitTracking = mysqlTable("HabitTracking", {
 // ─── Food ────────────────────────────────────────────────────────────────────
 export const food = mysqlTable("Food", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   name: varchar("name", { length: 191 }).notNull(),
   defaultUnitId: int("defaultUnitId").notNull(),
@@ -101,9 +81,7 @@ export const food = mysqlTable("Food", {
 // ─── FoodUnit ────────────────────────────────────────────────────────────────
 export const foodUnit = mysqlTable("FoodUnit", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   name: varchar("name", { length: 191 }).notNull(),
   abbreviation: varchar("abbreviation", { length: 191 }).notNull(),
@@ -112,9 +90,7 @@ export const foodUnit = mysqlTable("FoodUnit", {
 // ─── FoodUnitConversion ──────────────────────────────────────────────────────
 export const foodUnitConversion = mysqlTable("FoodUnitConversion", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   fromUnitId: int("fromUnitId").notNull(),
   toUnitId: int("toUnitId").notNull(),
@@ -124,9 +100,7 @@ export const foodUnitConversion = mysqlTable("FoodUnitConversion", {
 // ─── FoodMethod ──────────────────────────────────────────────────────────────
 export const foodMethod = mysqlTable("FoodMethod", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   method: varchar("method", { length: 191 }).notNull(),
 });
@@ -134,9 +108,7 @@ export const foodMethod = mysqlTable("FoodMethod", {
 // ─── FoodRated ───────────────────────────────────────────────────────────────
 export const foodRated = mysqlTable("FoodRated", {
   id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   foodId: int("foodId").notNull(),
   unitId: int("unitId").notNull(),
@@ -168,9 +140,7 @@ export const account = mysqlTable(
     oauth_token: varchar("oauthToken", { length: 191 }),
   },
   (table) => ({
-    providerProviderAccountIdUnique: uniqueIndex(
-      "Account_provider_providerAccountId_key",
-    ).on(table.provider, table.providerAccountId),
+    providerProviderAccountIdUnique: uniqueIndex("Account_provider_providerAccountId_key").on(table.provider, table.providerAccountId),
   }),
 );
 
@@ -184,9 +154,7 @@ export const session = mysqlTable(
     expires: datetime("expires", { fsp: 3 }).notNull(),
   },
   (table) => ({
-    sessionTokenUnique: uniqueIndex("Session_sessionToken_key").on(
-      table.sessionToken,
-    ),
+    sessionTokenUnique: uniqueIndex("Session_sessionToken_key").on(table.sessionToken),
   }),
 );
 
@@ -200,9 +168,7 @@ export const user = mysqlTable(
     emailVerified: datetime("emailVerified", { fsp: 3 }),
     password: varchar("password", { length: 191 }),
     image: varchar("image", { length: 191 }),
-    registeredAt: datetime("registeredAt", { fsp: 3 }).default(
-      sql`CURRENT_TIMESTAMP(3)`,
-    ),
+    registeredAt: datetime("registeredAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`),
     acceptMarketing: boolean("acceptMarketing").default(true),
   },
   (table) => ({
@@ -220,18 +186,14 @@ export const verificationToken = mysqlTable(
   },
   (table) => ({
     tokenUnique: uniqueIndex("VerificationToken_token_key").on(table.token),
-    identifierTokenUnique: uniqueIndex(
-      "VerificationToken_identifier_token_key",
-    ).on(table.identifier, table.token),
+    identifierTokenUnique: uniqueIndex("VerificationToken_identifier_token_key").on(table.identifier, table.token),
   }),
 );
 
 // ─── Habits ──────────────────────────────────────────────────────────────────
 export const habits = mysqlTable("Habits", {
   id: varchar("id", { length: 191 }).primaryKey(),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   data: text("data").notNull(),
   level: int("level").default(0).notNull(),
@@ -241,9 +203,7 @@ export const habits = mysqlTable("Habits", {
 // ─── Books ───────────────────────────────────────────────────────────────────
 export const books = mysqlTable("Books", {
   id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  createdAt: datetime("createdAt", { fsp: 3 })
-    .default(sql`CURRENT_TIMESTAMP(3)`)
-    .notNull(),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
   updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
   read: boolean("read").default(false).notNull(),
   published: boolean("published").default(false).notNull(),

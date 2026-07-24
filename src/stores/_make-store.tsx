@@ -22,10 +22,7 @@ export function makeStore<S>(defaultValue: S, displayName = "") {
     // const contextValue = useMemo(() => [state, boundActions], [state]);
     // Memoize the context value to update when the state does
 
-    const contextValue = useMemo<[S, Dispatch<SetStateAction<S>>]>(
-      () => [state, setState],
-      [state]
-    );
+    const contextValue = useMemo<[S, Dispatch<SetStateAction<S>>]>(() => [state, setState], [state]);
     // Provide the store to children
     return <context.Provider value={contextValue}>{children}</context.Provider>;
   };

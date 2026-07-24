@@ -1,20 +1,19 @@
+import { db } from "@server/db/drizzle";
+import { account, user } from "@server/db/schema";
 import bcrypt from "bcrypt";
 import { eq } from "drizzle-orm";
-import { db } from "@server/db/drizzle";
-import { user, account } from "@server/db/schema";
 import { isValidPassword } from "utils/validate-password";
 import validate from "validator";
 
 type CredentialsResult =
   | { success: true; user: { id: string; email: string; name: string; image: string | null; emailVerified: Date | null } }
-  | { success: false; error: "validation-error" | "account-exists" | "account-not-found" | "incorrect-password" | "email-not-verified"; providers?: string[] };
+  | {
+      success: false;
+      error: "validation-error" | "account-exists" | "account-not-found" | "incorrect-password" | "email-not-verified";
+      providers?: string[];
+    };
 
-export async function signUp(input: {
-  name: string;
-  email: string;
-  password: string;
-  marketing?: boolean;
-}): Promise<CredentialsResult> {
+export async function signUp(input: { name: string; email: string; password: string; marketing?: boolean }): Promise<CredentialsResult> {
   if (!isValidPassword(input.password) || !validate.isEmail(input.email) || validate.isEmpty(input.name)) {
     return { success: false, error: "validation-error" };
   }
@@ -47,10 +46,7 @@ export async function signUp(input: {
   };
 }
 
-export async function signIn(input: {
-  email: string;
-  password: string;
-}): Promise<CredentialsResult> {
+export async function signIn(input: { email: string; password: string }): Promise<CredentialsResult> {
   if (!isValidPassword(input.password) || !validate.isEmail(input.email)) {
     return { success: false, error: "validation-error" };
   }

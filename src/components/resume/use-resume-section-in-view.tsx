@@ -14,12 +14,7 @@ export type ResumeSectionInViewStore = {
     // | "tech support"
     | "entrepreneurial";
   selectFilter: (filter: ResumeSectionInViewStore["filter"][0]) => void;
-  updateSection: (
-    id: keyof ResumeSectionInViewStore["sections"],
-    showing: boolean,
-    centerVisible: boolean,
-    fullyVisible: boolean
-  ) => void;
+  updateSection: (id: keyof ResumeSectionInViewStore["sections"], showing: boolean, centerVisible: boolean, fullyVisible: boolean) => void;
   toggleSectionShowing: (id: keyof ResumeSectionInViewStore["sections"]) => void;
   showSection: (id: keyof ResumeSectionInViewStore["sections"]) => void;
 };
@@ -39,28 +34,28 @@ export const useResumeSectionInView = create<ResumeSectionInViewStore>((set) => 
     set(
       produce((state) => {
         state.filter = filter;
-      })
+      }),
     );
   },
   updateSection: (id, showing, centerVisible, fullyVisible) => {
     set(
       produce((state) => {
         state.sections[id] = { showing, centerVisible, fullyVisible };
-      })
+      }),
     );
   },
   toggleSectionShowing: (id) => {
     set(
       produce((state) => {
         state.sections[id].showing = !state.sections[id].showing;
-      })
+      }),
     );
   },
   showSection: (id) => {
     set(
       produce((state) => {
         state.sections[id].showing = true;
-      })
+      }),
     );
   },
 }));

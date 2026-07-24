@@ -1,19 +1,19 @@
 @font-face {
-  font-family: 'Inter var';
+  font-family: "Inter var";
   font-weight: 100 900;
   font-display: swap;
   font-style: normal;
-  font-named-instance: 'Regular';
-  src: url('/fonts/Inter-roman-latin.var.woff2') format('woff2');
+  font-named-instance: "Regular";
+  src: url("/fonts/Inter-roman-latin.var.woff2") format("woff2");
 }
 
 @font-face {
-  font-family: 'Inter var';
+  font-family: "Inter var";
   font-weight: 100 900;
   font-display: swap;
   font-style: italic;
-  font-named-instance: 'Italic';
-  src: url('/fonts/Inter-italic-latin.var.woff2') format('woff2');
+  font-named-instance: "Italic";
+  src: url("/fonts/Inter-italic-latin.var.woff2") format("woff2");
 }
 
 .focus-border:focus {
@@ -23,10 +23,12 @@
 }
 
 html {
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-button, input, textarea {
+button,
+input,
+textarea {
   font: inherit;
 }
 
@@ -58,7 +60,9 @@ input::-webkit-inner-spin-button {
 }
 
 button {
-  &:hover:not(:focus-visible), &:focus:not(:focus-visible), &:active:not(:focus-visible) {
+  &:hover:not(:focus-visible),
+  &:focus:not(:focus-visible),
+  &:active:not(:focus-visible) {
     outline: none;
   }
 }

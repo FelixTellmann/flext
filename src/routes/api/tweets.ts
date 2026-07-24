@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Client } from "twitter-api-sdk";
 import { TWEETS } from "content/tweets";
+import { Client } from "twitter-api-sdk";
 
 async function handle({ request }: { request: Request }) {
   const client = new Client(process.env.TWITTER_CLIENT_BEARER_TOKEN!);

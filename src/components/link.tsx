@@ -40,6 +40,7 @@ export const Link: FC<PropsWithChildren<LinkProps>> = ({
 
   if (!href) {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: onClick is a rare passthrough; the no-href fallback must stay a span to preserve layout across call sites
       <span onClick={onClick} {...anchorProps}>
         {children}
       </span>

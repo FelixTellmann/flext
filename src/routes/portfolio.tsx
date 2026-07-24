@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { type FC } from "react";
+import type { FC } from "react";
 
 export const Route = createFileRoute("/portfolio")({
   component: PortfolioPage,

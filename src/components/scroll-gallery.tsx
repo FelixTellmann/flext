@@ -3,9 +3,12 @@ import type { FC, PropsWithChildren } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { scrollToX } from "utils/scroll-to";
 
-export const ScrollGallery: FC<
-  PropsWithChildren<{ itemWidth: number; gapWidth: number; filter: string }>
-> = ({ itemWidth, gapWidth, children, filter }) => {
+export const ScrollGallery: FC<PropsWithChildren<{ itemWidth: number; gapWidth: number; filter: string }>> = ({
+  itemWidth,
+  gapWidth,
+  children,
+  filter,
+}) => {
   const scrollContainerRef = useRef<HTMLElement>(null);
   const [scrollNavigation, setScrollNavigation] = useState({ prev: false, next: true });
   const [isScrolling, setIsScrolling] = useState(false);
@@ -15,15 +18,10 @@ export const ScrollGallery: FC<
     const scrollContainer = scrollContainerRef.current as HTMLDivElement;
     scrollContainer.classList.remove("snap-x");
     setIsScrolling(true);
-    scrollToX(
-      200,
-      Math.max(scrollContainer?.scrollLeft - itemWidth - gapWidth, 0),
-      scrollContainer,
-      () => {
-        setIsScrolling(false);
-        scrollContainer.classList.add("snap-x");
-      }
-    );
+    scrollToX(200, Math.max(scrollContainer?.scrollLeft - itemWidth - gapWidth, 0), scrollContainer, () => {
+      setIsScrolling(false);
+      scrollContainer.classList.add("snap-x");
+    });
   }, [gapWidth, isScrolling, itemWidth]);
 
   const handleClickNext = useCallback(() => {
@@ -42,9 +40,7 @@ export const ScrollGallery: FC<
     const updateScrollNavigation = () => {
       setScrollNavigation(() => ({
         prev: scrollContainer?.scrollLeft > 0,
-        next:
-          scrollContainer.children[scrollContainer.children.length - 1]?.getBoundingClientRect()
-            .right > window.innerWidth,
+        next: scrollContainer.children[scrollContainer.children.length - 1]?.getBoundingClientRect().right > window.innerWidth,
       }));
     };
 
@@ -68,13 +64,14 @@ export const ScrollGallery: FC<
     <>
       <div className="relative">
         <main
-          className="sm:scrollbar-none group relative flex snap-x snap-mandatory scroll-pl-[max(var(--slider-padding),calc((100%-72rem)/2+var(--slider-padding)))] gap-8 overflow-x-auto py-12 px-[max(var(--slider-padding),calc((100%-72rem)/2+var(--slider-padding)))] [--slider-padding:2rem]"
+          className="sm:scrollbar-none group relative flex snap-x snap-mandatory scroll-pl-[max(var(--slider-padding),calc((100%-72rem)/2+var(--slider-padding)))] gap-8 overflow-x-auto px-[max(var(--slider-padding),calc((100%-72rem)/2+var(--slider-padding)))] py-12 [--slider-padding:2rem]"
           ref={scrollContainerRef}
         >
           {children}
         </main>
         <button
-          className="absolute left-10 bottom-0 hidden items-center gap-2 py-2 px-4 text-sm text-gray-500 transition-all duration-75 disabled:text-gray-300 h:text-gray-900 disabled:h:text-gray-300 d:text-gray-300 d:disabled:text-gray-700 d:hfa:text-gray-50 d:disabled:hfa:text-gray-700 md:flex"
+          type="button"
+          className="absolute bottom-0 left-10 hidden items-center gap-2 px-4 py-2 d:hfa:text-gray-50 d:text-gray-300 h:text-gray-900 text-gray-500 text-sm transition-all duration-75 d:disabled:hfa:text-gray-700 d:disabled:text-gray-700 disabled:h:text-gray-300 disabled:text-gray-300 md:flex"
           onClick={handleClickPrevious}
           disabled={!scrollNavigation.prev}
         >
@@ -83,7 +80,8 @@ export const ScrollGallery: FC<
         </button>
 
         <button
-          className="absolute right-10 bottom-0 hidden items-center gap-2 py-2 px-4 text-sm text-gray-500 transition-all duration-75 disabled:text-gray-300 h:text-gray-900 h:text-gray-900 disabled:h:text-gray-300 d:text-gray-300 d:disabled:text-gray-700 d:hfa:text-gray-50 d:disabled:hfa:text-gray-700 md:flex"
+          type="button"
+          className="absolute right-10 bottom-0 hidden items-center gap-2 px-4 py-2 d:hfa:text-gray-50 d:text-gray-300 h:text-gray-900 h:text-gray-900 text-gray-500 text-sm transition-all duration-75 d:disabled:hfa:text-gray-700 d:disabled:text-gray-700 disabled:h:text-gray-300 disabled:text-gray-300 md:flex"
           onClick={handleClickNext}
           disabled={!scrollNavigation.next}
         >

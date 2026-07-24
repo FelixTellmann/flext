@@ -48,9 +48,12 @@ import AwsAmplify from "../src/assets/tech-logos/aws_amplify.svg?react";
 import AwsLambda from "../src/assets/tech-logos/aws_lambda.svg?react";
 import Axios from "../src/assets/tech-logos/axios.svg?react";
 import Emmet from "../src/assets/tech-logos/emmet.svg?react";
+import Express from "../src/assets/tech-logos/express.svg?react";
 import HeadlessUi from "../src/assets/tech-logos/headlessui.svg?react";
 import Jsdom from "../src/assets/tech-logos/jsdom.svg?react";
+import Liquid from "../src/assets/tech-logos/liquid.svg?react";
 import Mdx from "../src/assets/tech-logos/mdx.svg?react";
+import NextJs from "../src/assets/tech-logos/nextjs.svg?react";
 import PlanetScale from "../src/assets/tech-logos/planetscale.svg?react";
 import Preact from "../src/assets/tech-logos/preact.svg?react";
 import Prisma from "../src/assets/tech-logos/prisma.svg?react";
@@ -63,9 +66,6 @@ import Takealot from "../src/assets/tech-logos/takealot.svg?react";
 import Trpc from "../src/assets/tech-logos/trpc.svg?react";
 import Turborepo from "../src/assets/tech-logos/turborepo.svg?react";
 import Vend from "../src/assets/tech-logos/vend_pos.svg?react";
-import NextJs from "../src/assets/tech-logos/nextjs.svg?react";
-import Express from "../src/assets/tech-logos/express.svg?react";
-import Liquid from "../src/assets/tech-logos/liquid.svg?react";
 
 export type TechIconProps = { className?: string };
 

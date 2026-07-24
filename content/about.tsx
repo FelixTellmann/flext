@@ -19,12 +19,8 @@ const AdelphiFamily = "/images/about/profile-adelphi.jpg";
 export const ABOUT = {
   stats: [
     {
-      statistic: `${
-        new Date(Date.now() - new Date("1986-01-08T01:30:00").getTime()).getFullYear() - 1970
-      }`,
-      tooltip: `${Math.round(
-        (Date.now() - new Date("1986-01-08T01:30:00").getTime()) / 1000
-      )} seconds`,
+      statistic: `${new Date(Date.now() - new Date("1986-01-08T01:30:00").getTime()).getFullYear() - 1970}`,
+      tooltip: `${Math.round((Date.now() - new Date("1986-01-08T01:30:00").getTime()) / 1000)} seconds`,
       caption: "Years Old",
     },
     {
@@ -46,17 +42,14 @@ export const ABOUT = {
   description: (
     <>
       <p>
-        I'm a Cape Town based Web Developer and Entrepreneur. My focus area for the past few years
-        has been front-end development with <strong>Next.js</strong>, <strong>Typescript</strong>{" "}
-        and <strong>TailwindCSS</strong> to create beautiful user- and developer experiences that
-        bring delight.
+        I'm a Cape Town based Web Developer and Entrepreneur. My focus area for the past few years has been front-end development with{" "}
+        <strong>Next.js</strong>, <strong>Typescript</strong> and <strong>TailwindCSS</strong> to create beautiful user- and developer
+        experiences that bring delight.
       </p>
       <p>
-        I’ve spent most of my life deeply interested in technology and food, continuously building
-        things with both. As a teenager, I was a classic computer nerd, spending most of my times
-        messing with the computer, doing 1 of 4 things: Modding games and figuring things out.
-        Tinkering with hardware, building computers. Developing websites with FrontPage 98 and
-        Flash. And of course, playing games.
+        I’ve spent most of my life deeply interested in technology and food, continuously building things with both. As a teenager, I was a
+        classic computer nerd, spending most of my times messing with the computer, doing 1 of 4 things: Modding games and figuring things
+        out. Tinkering with hardware, building computers. Developing websites with FrontPage 98 and Flash. And of course, playing games.
       </p>
       <p>Most of that is still true today.</p>
     </>

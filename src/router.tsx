@@ -17,9 +17,7 @@ export const getRouter = () => {
       ...rqContext,
     },
     defaultPreload: "intent",
-    Wrap: ({ children }: { children: React.ReactNode }) => (
-      <TanstackQueryProvider {...rqContext}>{children}</TanstackQueryProvider>
-    ),
+    Wrap: ({ children }: { children: React.ReactNode }) => <TanstackQueryProvider {...rqContext}>{children}</TanstackQueryProvider>,
   });
 
   setupRouterSsrQueryIntegration({ router, queryClient: rqContext.queryClient });
