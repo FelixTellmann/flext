@@ -42,3 +42,6 @@ firebaseAdminKey.json
 
 # Deploy
 .vercel
+
+# QA evidence images — kept locally alongside their report, too heavy for git history
+docs/testing/*-screenshots/
