@@ -6,7 +6,8 @@ The original PlanetScale free tier is dead. You need a new MySQL-compatible data
 
 - **ORM:** Drizzle ORM (`drizzle-orm/mysql2`)
 - **Driver:** `mysql2/promise`
-- **Schema:** `server/db/schema.ts` (13 tables: Books, Post, Comment, User, Account, Session, etc.)
+- **Schema:** `server/db/schema.ts` — **5 tables** as of 2026-07-26 (Books, User, Account, Session,
+  VerificationToken). It held 15; the ten with no live consumers were deleted, see the audit below.
 - **Config:** `drizzle.config.ts`
 - **Connection:** `server/db/drizzle.ts` (strips `?sslaccept=strict` from URL, passes `ssl: {}`)
 
@@ -19,7 +20,7 @@ Before picking a provider, note what actually touches the database. Only **four 
 | --- | --- |
 | `Books` | **Live today.** Four queries total: one `select`, two `insert`, one `votes + 1` update |
 | `User`, `Account`, `Session`, `VerificationToken` | **Needed only when `/auth/*` ships** — the UI is still five scaffold stubs, so nothing exercises them yet |
-| `Comment`, `Telemetry`, `HabitTracking`, `Food`, `FoodUnit`, `FoodUnitConversion`, `FoodMethod`, `FoodRated`, `Habits` | **Zero live consumers.** Verified by grep across `server/` and `src/` (the one `comment` hit was a CSS token class in `prism.css`) |
+| `Post`, `Comment`, `Telemetry`, `HabitTracking`, `Food`, `FoodUnit`, `FoodUnitConversion`, `FoodMethod`, `FoodRated`, `Habits` | **Zero live consumers — all ten deleted 2026-07-26.** Verified by grep across `server/` and `src/` (the one `comment` hit was a CSS token class in `prism.css`; the blog is hardcoded TSX, so `Post.views`/`likes` were never read or written) |
 
 Two consequences:
 
@@ -27,8 +28,8 @@ Two consequences:
    persistence and a proper hosted database. If it does not, the only thing the database buys you is a
    persistent vote counter on `/books` — everything else on the site is static content in `content/*.tsx`.
 2. **A schema port is far cheaper than this document assumed.** Options A and B were weighed against
-   "rewriting 13 tables". The real number is **5** (Books + the four auth tables), and the other nine
-   should be deleted rather than migrated. That makes Postgres/SQLite genuinely viable instead of costly.
+   "rewriting 13 tables". The real number is **5** (Books + the four auth tables) — the other ten have
+   since been deleted rather than migrated. That makes Postgres/SQLite viable rather than costly.
 
 Also worth knowing: `/books` currently renders a **static fallback** (`src/routes/books.tsx:30-55`) whenever
 the database is unreachable, which is why the page still works with 87 books and zero votes. That fallback
@@ -147,7 +148,7 @@ If a dump exists, restoring into self-hosted MySQL is a straight `mysql < dump.s
 unchanged. If not, `/books` can be re-seeded from `content/books.tsx` (the seed snippet under Option D
 does exactly this), and the auth tables start empty — which costs nothing, since `/auth/*` has no users yet.
 
-Note the nine unused tables were deleted from `server/db/schema.ts` on 2026-07-26. A restored dump would
+Note the ten unused tables were deleted from `server/db/schema.ts` on 2026-07-26. A restored dump would
 still contain them; drop them manually if the data is not wanted.
 
 ## Recommendation (2026-07-26, superseded by Option E above)
@@ -155,18 +156,17 @@ still contain them; drop them manually if the data is not wanted.
 **Decide auth first, because it decides this.**
 
 - **If `/auth/*` ships:** take **Option B (Neon Postgres)**. Free, serverless, no cold-start pain on a
-  personal site, and Drizzle's Postgres support is the best-trodden path. Port only the five live tables
-  and drop the other nine. Turso is also fine, but SQLite buys nothing here and Postgres is the safer
-  long-term default.
+  personal site, and Drizzle's Postgres support is the best-trodden path. Only the five live tables need
+  porting. Turso is also fine, but SQLite buys nothing here and Postgres is the safer long-term default.
 - **If `/auth/*` is not shipping soon:** don't take a hosted database at all. One list of books and a
   vote counter does not justify it. Either keep the static content as the source of truth and remove the
   vote feature, or keep the database code and run **Option D (local MySQL via Docker)** so `/books`
   works in development without a monthly bill or a production dependency.
 - **Avoid Option C ($39/mo)** unless the paid tier is wanted for reasons beyond this site — it is the
-  most expensive way to keep nine unused tables alive.
+  most expensive way to keep a five-table schema alive.
 
-Whichever path is chosen, delete the nine dead tables from `server/db/schema.ts` first. That shrinks the
-migration, the generated SQL, and the mental model all at once.
+The ten dead tables have already been removed from `server/db/schema.ts`, which shrinks whatever
+migration comes next along with the generated SQL and the mental model.
 
 **Not yet done and needs your say-so:** no schema changes, migrations, seeds, or writes of any kind have
 been run. `bun run db:generate` output would be surfaced for you to apply.
