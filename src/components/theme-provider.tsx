@@ -40,14 +40,24 @@ function applyTheme(resolved: string) {
 }
 
 export const ThemeProvider: FC<PropsWithChildren<{ attribute?: string }>> = ({ children }) => {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
-  const [resolvedTheme, setResolvedTheme] = useState(() => resolveTheme(getInitialTheme()));
+  const [theme, setThemeState] = useState<Theme>("system");
+  const [resolvedTheme, setResolvedTheme] = useState("light");
+  const [mounted, setMounted] = useState(false);
+
+  // The stored theme is read after mount, never during render: the server cannot know it, so reading
+  // it during the first client render would disagree with the server output and trip hydration.
+  // Colours do not flash meanwhile — the anti-flash script in __root has already dressed <html>.
+  useEffect(() => {
+    setThemeState(getInitialTheme());
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    const resolved = theme === "system" ? getSystemTheme() : theme;
+    if (!mounted) return;
+    const resolved = resolveTheme(theme);
     setResolvedTheme(resolved);
     applyTheme(resolved);
-  }, [theme]);
+  }, [theme, mounted]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");

@@ -8,7 +8,9 @@ import { LoadInitialData } from "~/stores/_load-initial-data";
 
 const RootDocument: FC<PropsWithChildren> = ({ children }) => {
   return (
-    <html lang="en">
+    // The anti-flash script below dresses <html> with the theme class and color-scheme before React
+    // hydrates, so the server markup is expected to differ here.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta content="width=device-width, initial-scale=1" name="viewport" />

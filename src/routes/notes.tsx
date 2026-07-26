@@ -29,16 +29,18 @@ function NotesPage() {
           my restaurant job (not for good yet) to embrace my childhood passion of software development full-time.
           <br />
           Core message:
-          <ul>
-            <li>Welcome (name)</li>
-            <li>1 sentence who am I</li>
-            <li>What is my specialization / focus</li>
-            <li>A personal touch - not just a robot</li>
-            <li>what can a reader get here</li>
-            <li>where I've come from</li>
-            <li>cta link - Read more about me</li>
-            <li>cta primary - Hire / lets work</li>
-          </ul>
+        </p>
+        <ul>
+          <li>Welcome (name)</li>
+          <li>1 sentence who am I</li>
+          <li>What is my specialization / focus</li>
+          <li>A personal touch - not just a robot</li>
+          <li>what can a reader get here</li>
+          <li>where I've come from</li>
+          <li>cta link - Read more about me</li>
+          <li>cta primary - Hire / lets work</li>
+        </ul>
+        <p>
           Hi, I'm Felix Tellmann. Fullstack web-developer (and ex Restaurateur) with a strong sense for business success, currently living
           in Cape Town. I specialize in building beautiful websites and web apps from small to large. I have worked many times through the
           steps to create a new website or app, from the initial idea to feature breakdown, design, development, launch and marketing, yet
@@ -78,14 +80,14 @@ function NotesPage() {
             their spend their honeymoon in Cape Town and we went on a Wine-tram outing in Franchschoek.
             <br />
             Holidays:
-            <ul>
-              <li>Otter Trail</li>
-              <li>Citrusdal - Cederkloof x2</li>
-              <li>Wilderness</li>
-              <li>Train - Pringle Bay</li>
-              <li />
-            </ul>
           </p>
+          <ul>
+            <li>Otter Trail</li>
+            <li>Citrusdal - Cederkloof x2</li>
+            <li>Wilderness</li>
+            <li>Train - Pringle Bay</li>
+            <li />
+          </ul>
         </section>
       </section>
     </>

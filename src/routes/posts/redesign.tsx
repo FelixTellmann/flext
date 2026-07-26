@@ -52,17 +52,17 @@ function RedesignPage() {
           Yea, if your goal looks anything like that, you'll probably never start (I certainly wouldn't), there is absolutely nothing SMART
           about that. Let's break it down into its parts and make it useful.
         </p>
+        <p>Here are the individual parts for the website:</p>
+        <ul>
+          <li>Beautifully designed</li>
+          <li>High performant</li>
+          <li>Next gen tech</li>
+          <li>Clean coded</li>
+          <li>user interactive</li>
+          <li>Lots of features</li>
+          <li>Great dev experience</li>
+        </ul>
         <p>
-          Here are the individual parts for the website:
-          <ul>
-            <li>Beautifully designed</li>
-            <li>High performant</li>
-            <li>Next gen tech</li>
-            <li>Clean coded</li>
-            <li>user interactive</li>
-            <li>Lots of features</li>
-            <li>Great dev experience</li>
-          </ul>
           And its also possible to group them a bit into common themes: <br />
           There is a <strong>user-experience (UX)</strong> side, which includes the design, interactivity, and variety of features.On the
           other side is the <strong>developer-experience (DX)</strong>, which covers the tech stack, coding practices, and anything else
@@ -85,22 +85,20 @@ function RedesignPage() {
           desired features from the start and then ranking them in order of importance. Its always possible to keep on adding features
           later, but its important to start off with a small and achievable list.
         </p>
-        <p>
-          Heres whats needed:
-          <ol>
-            <li>
-              <u>List</u> all features in any order, include all ideas (divergent thinking)
-            </li>
-            <li>
-              <u>Rank</u> each feature in order of importance, creating a <em>must</em> have, <em>should</em> have, and <em>could</em> have
-              list.
-            </li>
-            <li>
-              <u>Elaborate & break down</u> content requirements from the top down, covering all must have, and the top should have items,
-              while ignoring all could have features for now.
-            </li>
-          </ol>
-        </p>
+        <p>Heres whats needed:</p>
+        <ol>
+          <li>
+            <u>List</u> all features in any order, include all ideas (divergent thinking)
+          </li>
+          <li>
+            <u>Rank</u> each feature in order of importance, creating a <em>must</em> have, <em>should</em> have, and <em>could</em> have
+            list.
+          </li>
+          <li>
+            <u>Elaborate & break down</u> content requirements from the top down, covering all must have, and the top should have items,
+            while ignoring all could have features for now.
+          </li>
+        </ol>
         <h4>Design</h4>
         <p>
           As mentioned above, I want to create a beautifully designed website. But what do I mean with beautifully design? Well I'm not
@@ -121,26 +119,26 @@ function RedesignPage() {
         </p>
         <p>
           Here are my requirements for the <u>design</u> process:
-          <ol>
-            <li>
-              Each Page needs a list of <u>sections</u> that kinda act as an outline
-            </li>
-            <li>
-              Each section needs an <u>inspiration art-board</u> (Illustrator file) with design examples
-            </li>
-            <li>
-              Additionally to the feature content list, each section should have a content structure brief.
-              <i>
-                It should be detailed to the point that for design to work a paragraph should be around 25 words, images of a specific
-                aspect ratio & quality.
-              </i>
-            </li>
-            <li>
-              To make widely different design inspirations work together, its important to use an <u>iterative process</u>, focusing on 1-2
-              Sections at most at a time with development of a Section before taking on another area of the site.
-            </li>
-          </ol>
         </p>
+        <ol>
+          <li>
+            Each Page needs a list of <u>sections</u> that kinda act as an outline
+          </li>
+          <li>
+            Each section needs an <u>inspiration art-board</u> (Illustrator file) with design examples
+          </li>
+          <li>
+            Additionally to the feature content list, each section should have a content structure brief.
+            <i>
+              It should be detailed to the point that for design to work a paragraph should be around 25 words, images of a specific aspect
+              ratio & quality.
+            </i>
+          </li>
+          <li>
+            To make widely different design inspirations work together, its important to use an <u>iterative process</u>, focusing on 1-2
+            Sections at most at a time with development of a Section before taking on another area of the site.
+          </li>
+        </ol>
       </main>
     </article>
   );

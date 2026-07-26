@@ -3,8 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import clsx from "clsx";
 import { BOOKS } from "content/books";
-import { type FC, useCallback, useState } from "react";
-import shortUUID from "short-uuid";
+import { type FC, useCallback, useId, useState } from "react";
 import { Image } from "~/components/image";
 import { Link } from "~/components/link";
 import { orpc } from "~/integrations/orpc";
@@ -64,7 +63,9 @@ export const Route = createFileRoute("/books")({
 });
 
 const StarRating: FC<{ rating: number }> = ({ rating }) => {
-  const gradientId = shortUUID.generate();
+  // useId is stable across server and client, unlike a fresh UUID per render; the colons it contains
+  // are stripped because the value goes into a url(#...) reference.
+  const gradientId = useId().replace(/:/g, "");
 
   return (
     <figure className="flex h-[22px] items-center justify-center">
