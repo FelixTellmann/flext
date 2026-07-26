@@ -29,9 +29,8 @@ resolves after mount), and the `data-tip="… seconds"` counter still mismatched
 at module load. Both re-verified: the icon inverts correctly in both themes, and `/`'s console is
 clean across full reloads.
 
-**Still open:** the `/auth/*` UI (item 7), the trivia in the tables below, the `/posts/redesign`
-prose dark variant, and mobile verification — `resize_window` still cannot shrink the viewport
-(`outerWidth` changed 1440 → 751 but `innerWidth` stayed pinned at 1440).
+**Still open:** the `/auth/*` UI (item 7), the trivia in the tables below, and the `/posts/redesign`
+prose dark variant. Mobile has since been verified at 614px — see the "Mobile pass" section.
 
 ## How this was reviewed
 
@@ -43,10 +42,11 @@ before being called a gap, and the headline findings were additionally confirmed
 
 ### Coverage limitations (read before trusting a "no gap" verdict)
 
-- **Mobile was never tested.** Chrome is in macOS fullscreen; `resize_window` reports success but the
-  viewport stays at desktop width (verified via `window.innerWidth` by three separate agents). Every
-  mobile-only concern — the hamburger overlay, the resume mobile footer tooltips, responsive breakpoints
-  — is **unverified**. Take Chrome out of fullscreen and this can be closed out in one pass.
+- **Mobile was tested at 614px, not at true phone width.** See the "Mobile pass" section below. Chrome
+  clamps its minimum window width to ~614px on macOS, which is under Tailwind's `sm` breakpoint (640px)
+  so mobile layouts and the hamburger nav do engage — but anything specific to ~390px (tight text
+  wrapping, cramped touch targets) remains **unverified** and needs a real device or DevTools device
+  emulation.
 - **Print styles** (`print:` utilities on `/resume` and `/liz`) were not tested.
 - **The local database is not serving data** (see S7), so `/books` was reviewed as rendering-only.
 - Comparisons ran at whatever width the window had (1440–1728px), but always **identical on both sides**,
@@ -303,6 +303,45 @@ These have no production counterpart (prod 404s, having used NextAuth's `/api/au
 feature gap rather than a visual-parity regression — but it is a blocker for closing the migration.
 
 ---
+
+## Mobile pass (2026-07-26, after the fixes)
+
+Run at **614px** — Chrome's minimum window width on macOS. `matchMedia('(max-width: 640px)')` returned
+true throughout, so mobile layouts and the hamburger nav were genuinely active. Requests for 390px and
+380px both clamped to 614, so **true phone width remains untested**.
+
+**Result: all seven routes pass.** `/`, `/resume`, `/notes`, `/books`, `/liz`, `/posts/redesign` and
+`/portfolio` matched production fold by fold in both light and dark. No layout breakage, clipping,
+image-fit problems or touch-target collisions were found.
+
+- **Horizontal overflow: none anywhere.** `scrollWidth === clientWidth === 614` on every route, both
+  sites, both themes.
+- **Console: zero hydration errors** across all seven routes — the fixes hold at mobile width. The only
+  output is the `/books` duplicate-ISBN key warnings (S7), which cannot be compared against production
+  because React strips key warnings in production builds.
+- **Mobile nav overlay: pixel-identical to production** on `/` and `/resume` — dashed leader lines,
+  right-aligned descriptions, rainbow CTA, close icon.
+- **`/resume` mobile footer tooltips: pass.** The collapsed 40px strip expands correctly and the GitHub
+  tooltip lands at exactly the same position and size on both sites (310, 685 · 81×36). It slightly
+  overlaps the "Cape Town" text — identically on production.
+- **Theme toggle and dark readability: pass**, confirming S1 at mobile width. After a full reload with
+  `theme=dark`, `/notes` is white-on-navy with `colorScheme: dark` and the header shows the moon; light
+  shows the sun. `/portfolio`'s "Work" is readable in dark on both sites.
+
+### Newly discovered pre-existing issues (reproduce identically on production — not regressions)
+
+- **The `/resume` and `/liz` fixed mobile footer stays white in dark mode.** `--resume-footer-bg` is
+  hard-set to `rgb(248 250 252/1)` (gray-50) with no dark override. A genuine bug on both sites, and a
+  small fix if you want it.
+- `/notes`, `/portfolio` and `/posts/redesign` have **zero horizontal padding at mobile** — text sits
+  flush against x=0. Identical on production.
+
+### Worth knowing about the S1 fix
+
+If the `dark` class is ever added to `<html>` *without* the accompanying `color-scheme` update — as a
+JS-only toggle would do — `/notes` renders black-on-black again. No current user path does this, but it
+means the fix depends on `color-scheme` being set alongside the class, never on the class alone. Keep
+them together in any future theme work.
 
 ## Confirmed *not* regressions
 
