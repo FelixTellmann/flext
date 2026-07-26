@@ -112,7 +112,45 @@ Keep the exact same code, just point to a local MySQL instance.
 
 6. **Verify:** Restart the dev server and visit `/books` — should load from the DB now.
 
-## Recommendation (2026-07-26)
+## Option E: self-hosted MySQL on the existing Hetzner/Coolify server (added 2026-07-26)
+
+**This is the best fit and supersedes the recommendation below.** The server already exists, so there is
+no new bill, and — unlike Turso or Neon — **no schema port at all**: `drizzle-orm/mysql2` and every table
+definition stay exactly as they are. Coolify ships a one-click MySQL service with volume-backed storage.
+
+Two code changes are needed in `server/db/drizzle.ts`, both already described under Option D: drop
+`mode: "planetscale"` and replace the PlanetScale `ssl: {}` handling with the server's own TLS setup —
+pass the CA explicitly, e.g. `ssl: { ca: readFileSync(process.env.DATABASE_CA_PATH) }`. Do **not** reach
+for `rejectUnauthorized: false`; that disables certificate verification and exposes the connection to
+interception. Either add the server's CA to the trust store or issue a proper certificate (Coolify can
+provision one via Let's Encrypt).
+
+What to weigh against the managed options:
+
+- **Backups are now yours.** Coolify can schedule dumps to S3-compatible storage; set that up on day one,
+  because nothing else will.
+- **Reachability.** If the site is deployed somewhere other than that Hetzner box, the database must be
+  exposed over the network — put it behind the private network or a firewall allowlist rather than a
+  public port, and keep TLS on.
+- **It is a machine you maintain** (updates, disk, restarts). That is the real cost, not money.
+
+### Can the original PlanetScale database be reconnected?
+
+**Almost certainly not.** PlanetScale deleted free-tier databases when the tier ended; the branch and its
+data are gone unless the account was upgraded in time. Two things to check before assuming loss:
+
+1. Log into PlanetScale — if the database still lists as hibernated/archived rather than deleted, a paid
+   plan may restore it long enough to export.
+2. Look for an existing dump (`.sql`) locally or in any backup.
+
+If a dump exists, restoring into self-hosted MySQL is a straight `mysql < dump.sql` and everything works
+unchanged. If not, `/books` can be re-seeded from `content/books.tsx` (the seed snippet under Option D
+does exactly this), and the auth tables start empty — which costs nothing, since `/auth/*` has no users yet.
+
+Note the nine unused tables were deleted from `server/db/schema.ts` on 2026-07-26. A restored dump would
+still contain them; drop them manually if the data is not wanted.
+
+## Recommendation (2026-07-26, superseded by Option E above)
 
 **Decide auth first, because it decides this.**
 

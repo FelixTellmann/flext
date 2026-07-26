@@ -30,11 +30,13 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string(),
 
   // OAuth - Twitter
-  TWITTER_CLIENT_ID: z.string(),
-  TWITTER_CLIENT_SECRET: z.string(),
-  TWITTER_CLIENT_BEARER_TOKEN: z.string(),
-  TWITTER_CLIENT_ID_2022_08: z.string(),
-  TWITTER_CLIENT_SECRET_2022_08: z.string(),
+  // Optional while the API access is being re-keyed: the hero profile card is skipped when the
+  // fetch fails, so a missing token degrades gracefully rather than failing env validation at boot.
+  TWITTER_CLIENT_ID: z.string().optional(),
+  TWITTER_CLIENT_SECRET: z.string().optional(),
+  TWITTER_CLIENT_BEARER_TOKEN: z.string().optional(),
+  TWITTER_CLIENT_ID_2022_08: z.string().optional(),
+  TWITTER_CLIENT_SECRET_2022_08: z.string().optional(),
 
   // OAuth - Facebook
   FACEBOOK_CLIENT_ID: z.string(),

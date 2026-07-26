@@ -17,107 +17,6 @@ export const post = mysqlTable(
   }),
 );
 
-// ─── Comment ─────────────────────────────────────────────────────────────────
-export const comment = mysqlTable("Comment", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  postId: varchar("postId", { length: 191 }).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-  comment: varchar("comment", { length: 191 }).default("").notNull(),
-});
-
-// ─── Telemetry ───────────────────────────────────────────────────────────────
-export const telemetry = mysqlTable("Telemetry", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  name: varchar("name", { length: 50 }).notNull(),
-});
-
-// ─── HabitTracking ───────────────────────────────────────────────────────────
-export const habitTracking = mysqlTable("HabitTracking", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  date: datetime("date", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  sleepDuration: float("sleepDuration").default(0),
-  dailyRoutineDuration: float("dailyRoutineDuration").default(0),
-  readingDuration: float("readingDuration").default(0),
-  gamesDuration: float("gamesDuration").default(0),
-  tvDuration: float("tvDuration").default(0),
-  clientWorkDuration: float("clientWorkDuration").default(0),
-  appWorkDuration: float("appWorkDuration").default(0),
-  sideProjectsDuration: float("sideProjectsDuration").default(0),
-  cookingDuration: float("cookingDuration").default(0),
-  eatingDuration: float("eatingDuration").default(0),
-  drivingDuration: float("drivingDuration").default(0),
-  socialsDuration: float("socialsDuration").default(0),
-  exerciseDuration: float("exerciseDuration").default(0),
-  familyDuration: float("familyDuration").default(0),
-  choresDuration: float("choresDuration").default(0),
-  travelDuration: float("travelDuration").default(0),
-  learningDuration: float("learningDuration").default(0),
-  otherDuration: float("otherDuration").default(0),
-  durationNotes: varchar("durationNotes", { length: 191 }).default(""),
-  wakeTime: datetime("wakeTime", { fsp: 3 }),
-  maui: boolean("maui"),
-  morningTeeth: boolean("morningTeeth"),
-  eveningTeeth: boolean("eveningTeeth"),
-  weight: float("weight"),
-  workTime: datetime("workTime", { fsp: 3 }),
-  exercise: varchar("exercise", { length: 191 }),
-});
-
-// ─── Food ────────────────────────────────────────────────────────────────────
-export const food = mysqlTable("Food", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  defaultUnitId: int("defaultUnitId").notNull(),
-  defaultQuantity: float("defaultQuantity").notNull(),
-  defaultPrice: float("defaultPrice").notNull(),
-});
-
-// ─── FoodUnit ────────────────────────────────────────────────────────────────
-export const foodUnit = mysqlTable("FoodUnit", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  abbreviation: varchar("abbreviation", { length: 191 }).notNull(),
-});
-
-// ─── FoodUnitConversion ──────────────────────────────────────────────────────
-export const foodUnitConversion = mysqlTable("FoodUnitConversion", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  fromUnitId: int("fromUnitId").notNull(),
-  toUnitId: int("toUnitId").notNull(),
-  multiply: float("multiply").notNull(),
-});
-
-// ─── FoodMethod ──────────────────────────────────────────────────────────────
-export const foodMethod = mysqlTable("FoodMethod", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  method: varchar("method", { length: 191 }).notNull(),
-});
-
-// ─── FoodRated ───────────────────────────────────────────────────────────────
-export const foodRated = mysqlTable("FoodRated", {
-  id: int("id").primaryKey().autoincrement(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  foodId: int("foodId").notNull(),
-  unitId: int("unitId").notNull(),
-  foodMethodId: int("foodMethodId").notNull(),
-  quantity: float("quantity").notNull(),
-  rating: float("rating").notNull(),
-  habitTrackingId: int("habitTrackingId"),
-});
-
 // ─── Account ─────────────────────────────────────────────────────────────────
 // Prisma @map directives rename DB columns: e.g. refresh_token → "refreshToken" in DB
 export const account = mysqlTable(
@@ -189,16 +88,6 @@ export const verificationToken = mysqlTable(
     identifierTokenUnique: uniqueIndex("VerificationToken_identifier_token_key").on(table.identifier, table.token),
   }),
 );
-
-// ─── Habits ──────────────────────────────────────────────────────────────────
-export const habits = mysqlTable("Habits", {
-  id: varchar("id", { length: 191 }).primaryKey(),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  data: text("data").notNull(),
-  level: int("level").default(0).notNull(),
-  userId: varchar("userId", { length: 191 }).notNull(),
-});
 
 // ─── Books ───────────────────────────────────────────────────────────────────
 export const books = mysqlTable("Books", {
