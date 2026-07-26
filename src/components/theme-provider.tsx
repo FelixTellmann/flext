@@ -31,6 +31,14 @@ function resolveTheme(theme: Theme): string {
   return theme;
 }
 
+// color-scheme must track the class: without it the UA keeps its light-mode defaults, so any text
+// without an explicit colour renders black on the dark background (and so do native form controls).
+function applyTheme(resolved: string) {
+  const is_dark = resolved === "dark";
+  document.documentElement.classList.toggle("dark", is_dark);
+  document.documentElement.style.colorScheme = is_dark ? "dark" : "light";
+}
+
 export const ThemeProvider: FC<PropsWithChildren<{ attribute?: string }>> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
   const [resolvedTheme, setResolvedTheme] = useState(() => resolveTheme(getInitialTheme()));
@@ -38,7 +46,7 @@ export const ThemeProvider: FC<PropsWithChildren<{ attribute?: string }>> = ({ c
   useEffect(() => {
     const resolved = theme === "system" ? getSystemTheme() : theme;
     setResolvedTheme(resolved);
-    document.documentElement.classList.toggle("dark", resolved === "dark");
+    applyTheme(resolved);
   }, [theme]);
 
   useEffect(() => {
@@ -47,7 +55,7 @@ export const ThemeProvider: FC<PropsWithChildren<{ attribute?: string }>> = ({ c
       if (theme === "system") {
         const resolved = getSystemTheme();
         setResolvedTheme(resolved);
-        document.documentElement.classList.toggle("dark", resolved === "dark");
+        applyTheme(resolved);
       }
     };
     mediaQuery.addEventListener("change", handler);

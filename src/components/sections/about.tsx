@@ -1,6 +1,6 @@
 import { ABOUT } from "content/about";
 import type { FC } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Image } from "~/components/image";
 import { useTooltipStore } from "~/stores/tooltip-store";
 
@@ -12,6 +12,21 @@ export const About: FC<AboutProps> = (props) => {
   const [images, setImages] = useState(ABOUT.images);
   const [tooltip, setTooltip] = useTooltipStore();
   const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // The photos ship with !opacity-0 so a half-decoded image never flashes in; they are revealed once
+  // loaded. next/image did this via onLoadingComplete, which has no equivalent on the plain <img>.
+  const revealImage = useCallback((index: number) => {
+    for (const image of document.querySelectorAll(`[data-about-image-index="${index}"]`)) {
+      image.classList.remove("!opacity-0");
+    }
+  }, []);
+
+  // Server-rendered images can finish loading before hydration attaches onLoad, so those never fire it.
+  useEffect(() => {
+    for (const image of document.querySelectorAll<HTMLImageElement>("[data-about-image-index]")) {
+      if (image.complete) image.classList.remove("!opacity-0");
+    }
+  }, []);
 
   const handleImageClick = useCallback(() => {
     setTooltip(false);
@@ -64,6 +79,7 @@ export const About: FC<AboutProps> = (props) => {
                 preload
                 className="!opacity-0 absolute top-0 left-0 rounded-xl border-2 border-gray-50/80 d:border-gray-600/80 object-cover shadow-gray-700/5 shadow-lg transition-all duration-300 group-focus-visible:border-sky-500"
                 data-about-image-index={index}
+                onLoad={() => revealImage(index)}
                 style={{
                   transform:
                     focusImageIndex > index

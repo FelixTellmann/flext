@@ -3,10 +3,10 @@ import clsx from "clsx";
 import { useInView } from "framer-motion";
 import type { FC, PropsWithChildren } from "react";
 import { useEffect, useRef } from "react";
-import { useWindowSize } from "react-use";
 import { toKebabCase } from "utils/to-kebab-case";
 import type { ResumeSectionInViewStore } from "~/components/resume/use-resume-section-in-view";
 import { useResumeSectionInView } from "~/components/resume/use-resume-section-in-view";
+import { useWindowSize } from "~/hooks/use-window-size";
 
 export const ResumeSection: FC<PropsWithChildren<{ title: string; className?: string }>> = ({ title, children, className = "" }) => {
   const sectionContentRef = useRef<HTMLElement>(null);
