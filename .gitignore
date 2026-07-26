@@ -31,6 +31,9 @@ firebaseAdminKey.json
 *.iml
 .DS_Store
 
+# Session scratch — kickoff prompts, throwaway notes (never committed)
+/tmp/
+
 # Claude working state (settings + skills stay tracked)
 .claude/worktrees/
 .claude/state/
