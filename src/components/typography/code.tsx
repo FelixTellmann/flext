@@ -1,6 +1,8 @@
 import clsx from "clsx";
 import Prism from "prismjs";
-import "prismjs/themes/prism-okaidia.css";
+// No Prism theme stylesheet here on purpose: the site's own theme lives in src/styles/prism.css
+// (loaded via tailwind.css). Importing one also drags in its sizing — font-size: 1em, line-height:
+// 1.5, padding: 1em, margin: .5em 0 — which overrides the caller's text size and clips the editor.
 import "prismjs/components/prism-jsx";
 import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-tsx";
