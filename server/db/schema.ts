@@ -1,22 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, datetime, float, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
-// ─── Post ────────────────────────────────────────────────────────────────────
-// Prisma uses @@unique([id]) instead of @id, so no auto-generated primary key
-export const post = mysqlTable(
-  "Post",
-  {
-    id: varchar("id", { length: 191 }).notNull(),
-    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-    views: int("views").default(0).notNull(),
-    likes: int("likes").default(0).notNull(),
-  },
-  (table) => ({
-    idUnique: uniqueIndex("Post_id_key").on(table.id),
-  }),
-);
-
 // ─── Account ─────────────────────────────────────────────────────────────────
 // Prisma @map directives rename DB columns: e.g. refresh_token → "refreshToken" in DB
 export const account = mysqlTable(
