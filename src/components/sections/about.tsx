@@ -21,6 +21,16 @@ export const About: FC<AboutProps> = (props) => {
     }
   }, []);
 
+  const [liveTooltips, setLiveTooltips] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    const resolved: Record<number, string> = {};
+    ABOUT.stats.forEach(({ tooltip }, index) => {
+      if (typeof tooltip === "function") resolved[index] = tooltip();
+    });
+    setLiveTooltips(resolved);
+  }, []);
+
   // Server-rendered images can finish loading before hydration attaches onLoad, so those never fire it.
   useEffect(() => {
     for (const image of document.querySelectorAll<HTMLImageElement>("[data-about-image-index]")) {
@@ -98,7 +108,11 @@ export const About: FC<AboutProps> = (props) => {
           <header className="grid max-w-xl grid-cols-2 gap-4 text-center sm:grid-cols-4 sm:text-left">
             {ABOUT.stats.map(({ statistic, caption, tooltip }, index) => {
               return (
-                <figure key={caption + index} data-tip={tooltip} className="spacing-1 cursor-help select-none">
+                <figure
+                  key={caption + index}
+                  data-tip={typeof tooltip === "function" ? liveTooltips[index] : tooltip}
+                  className="spacing-1 cursor-help select-none"
+                >
                   <span className="bg-gradient-to-r from-cyan-500 to-blue-600 bg-clip-text font-extrabold text-4xl text-transparent tracking-tighter">
                     {statistic}
                   </span>

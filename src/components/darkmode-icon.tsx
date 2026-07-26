@@ -1,5 +1,5 @@
 import { m as motion, useMotionValue, useTransform } from "framer-motion";
-import type { FC } from "react";
+import { type FC, useEffect } from "react";
 import { useTheme } from "~/components/theme-provider";
 
 const DarkmodeIcon: FC = () => {
@@ -29,6 +29,13 @@ const DarkmodeIcon: FC = () => {
   const scaleSun = useMotionValue(isDark ? 0 : 1);
   const pathLengthMoon = useTransform(scaleMoon, [0.6, 1], [0, 1]);
   const pathLengthSun = useTransform(scaleSun, [0.6, 1], [0, 1]);
+
+  // useMotionValue only captures its initial value, and the theme is unknown until after mount, so
+  // the icon would stay stuck on the sun until the next click without this.
+  useEffect(() => {
+    scaleMoon.set(isDark ? 1 : 0);
+    scaleSun.set(isDark ? 0 : 1);
+  }, [isDark, scaleMoon, scaleSun]);
 
   return (
     <motion.div animate={isDark ? "checked" : "unchecked"}>

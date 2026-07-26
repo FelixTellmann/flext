@@ -20,7 +20,9 @@ export const ABOUT = {
   stats: [
     {
       statistic: `${new Date(Date.now() - new Date("1986-01-08T01:30:00").getTime()).getFullYear() - 1970}`,
-      tooltip: `${Math.round((Date.now() - new Date("1986-01-08T01:30:00").getTime()) / 1000)} seconds`,
+      // Resolved on the client after mount: baking this at module load gives the server a value
+      // frozen at boot and the browser a fresher one, which React reports as a hydration mismatch.
+      tooltip: () => `${Math.round((Date.now() - new Date("1986-01-08T01:30:00").getTime()) / 1000)} seconds`,
       caption: "Years Old",
     },
     {
