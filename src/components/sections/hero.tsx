@@ -114,7 +114,9 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
             </div>
           )}
         </section>
-        <div className="background pointer-events-none absolute inset-0 -z-30 z-0 select-none">
+        {/* Only -z-30, never a second z utility: this sat behind a conflicting z-0 whose winner
+            depended on class order, so sorting the classes pushed the glow over the code editor. */}
+        <div className="background pointer-events-none absolute inset-0 -z-30 select-none">
           <div className="relative top-1/2 left-1/2 h-2/3 w-1/2 -translate-y-[30%] rounded-full bg-gradient-radial from-emerald-600/30 to-sky-600/5 blur-2xl" />
         </div>
       </div>
