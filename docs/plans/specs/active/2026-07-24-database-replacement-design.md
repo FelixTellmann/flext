@@ -135,18 +135,90 @@ What to weigh against the managed options:
   public port, and keep TLS on.
 - **It is a machine you maintain** (updates, disk, restarts). That is the real cost, not money.
 
+## Migration runbook — the 24-hour PlanetScale window (added 2026-07-26)
+
+The data is recoverable: PlanetScale allows re-opening the database for 24 hours. Treat that window as
+**export-only**. Do not use it to test the new server, tune the schema, or debug anything — get a
+verified dump onto local disk, then close it and work at leisure. Everything below except Phase 1 can
+be done before the window opens, or after it closes.
+
+### Phase 0 — prepare first, so the window is spent only on the transfer
+
+```bash
+brew install planetscale/tap/pscale mysql-client   # pscale CLI + a mysql/mysqldump binary
+pscale auth login
+```
+
+Have the Coolify MySQL service created and its credentials to hand. Nothing here needs the window open.
+
+### Phase 1 — the moment access opens: dump everything
+
+Use the PlanetScale CLI. It understands Vitess and avoids the statements a plain `mysqldump` trips over:
+
+```bash
+pscale database dump <DATABASE> <BRANCH> --output ./pscale-dump
+```
+
+If you prefer `mysqldump` with the connection string from the dashboard, these flags matter — PlanetScale
+rejects table locks and the GTID/tablespace statements the default invocation emits:
+
+```bash
+mysqldump --host=<HOST> --user=<USER> --password=<PASSWORD> \
+  --ssl-mode=VERIFY_IDENTITY --ssl-ca=/etc/ssl/cert.pem \
+  --single-transaction --skip-lock-tables --no-tablespaces --set-gtid-purged=OFF \
+  <DATABASE> > flext-full.sql
+```
+
+**Dump every table, not just the five the app still uses.** Discarding data later is free; a second
+window may not be. The nine tables deleted from the schema on 2026-07-26 may still hold data.
+
+**Verify before closing the window** — a dump you have not inspected is not a backup:
+
+```bash
+ls -lh flext-full.sql                        # non-trivial size
+grep -c "INSERT INTO" flext-full.sql         # > 0
+grep -oE "CREATE TABLE \`[A-Za-z]+\`" flext-full.sql | sort -u   # expected tables present
+grep -c "INSERT INTO \`Books\`" flext-full.sql                    # Books is the row that matters
+```
+
+`Books` is the only table with data worth keeping — roughly 95 rows including the vote counts. The auth
+tables are empty, since `/auth/*` has never had users.
+
+### Phase 2 — restore locally and confirm (no time pressure)
+
+```bash
+docker run -d --name flext-mysql -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=flext -p 3306:3306 mysql:8
+mysql -h127.0.0.1 -uroot -proot flext < flext-full.sql
+mysql -h127.0.0.1 -uroot -proot flext -e "SELECT COUNT(*) FROM Books; SELECT name, votes FROM Books ORDER BY votes DESC LIMIT 5;"
+```
+
+Point `DATABASE_URL` at it, restart the dev server, and check `/books` shows the real list with non-zero
+votes rather than the 87-row static fallback. That single check proves the whole chain end to end.
+
+### Phase 3 — load into Coolify and switch over
+
+Same restore against the Coolify MySQL, then update `DATABASE_URL` and adjust `server/db/drizzle.ts`:
+drop `mode: "planetscale"` (line 17), and replace the `sslaccept=strict` stripping (line 8) plus the
+empty `ssl: {}` (line 12) with the server's real TLS config — the CA passed explicitly, never
+`rejectUnauthorized: false`.
+
+### Phase 4 — afterwards
+
+- Drop the ten tables no longer in the schema, if the data is not wanted.
+- Fix `src/routes/books.tsx:40`, where the static fallback derives `id` from `isbn10`. With the database
+  live the fallback stops running, so the duplicate-key warnings and the silently-failing upvote both go
+  away on their own — but the fallback stays wrong for the next outage.
+
 ### Can the original PlanetScale database be reconnected?
 
-**Almost certainly not.** PlanetScale deleted free-tier databases when the tier ended; the branch and its
-data are gone unless the account was upgraded in time. Two things to check before assuming loss:
+**Yes — resolved 2026-07-26.** PlanetScale allows re-opening the database for 24 hours, so the data is
+recoverable; see the runbook above. An earlier draft of this document assumed the data was lost, which
+was wrong.
 
-1. Log into PlanetScale — if the database still lists as hibernated/archived rather than deleted, a paid
-   plan may restore it long enough to export.
-2. Look for an existing dump (`.sql`) locally or in any backup.
-
-If a dump exists, restoring into self-hosted MySQL is a straight `mysql < dump.sql` and everything works
-unchanged. If not, `/books` can be re-seeded from `content/books.tsx` (the seed snippet under Option D
-does exactly this), and the auth tables start empty — which costs nothing, since `/auth/*` has no users yet.
+Restoring into self-hosted MySQL is a straight `mysql < dump.sql` and the app works unchanged, since
+Option E keeps the MySQL driver and schema as they are. Should a dump ever prove unusable, `/books` can
+still be re-seeded from `content/books.tsx` (the snippet under Option D) — that loses the vote counts but
+nothing else, and the auth tables start empty regardless.
 
 Note the ten unused tables were deleted from `server/db/schema.ts` on 2026-07-26. A restored dump would
 still contain them; drop them manually if the data is not wanted.
