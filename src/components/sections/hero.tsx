@@ -1,7 +1,7 @@
 import { HeartIcon, MoonIcon, StarIcon, SunIcon } from "@heroicons/react/24/solid";
 import { HERO } from "content/hero";
+import { TWITTER_PROFILE } from "content/twitter-profile";
 import type { FC } from "react";
-import type { components } from "twitter-api-sdk/dist/gen/openapi-types";
 import { Badge } from "~/components/badge";
 import { CodeEditor } from "~/components/code-editor";
 import { Link } from "~/components/link";
@@ -9,10 +9,7 @@ import { useTheme } from "~/components/theme-provider";
 import ToggleSwitch from "~/components/toggle-switch";
 import { TwitterProfile } from "~/components/twitter-profile";
 
-type HeroProps = {
-  twitterData: components["schemas"]["User"] | null;
-};
-export const Hero: FC<HeroProps> = ({ twitterData }) => {
+export const Hero: FC = () => {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -108,11 +105,9 @@ export const Hero: FC<HeroProps> = ({ twitterData }) => {
               />
             </div>
           </div>
-          {twitterData && (
-            <div className="absolute hidden sm:top-24 sm:-right-5 sm:block lg:top-full lg:-left-64">
-              <TwitterProfile {...twitterData} />
-            </div>
-          )}
+          <div className="absolute hidden sm:top-24 sm:-right-5 sm:block lg:top-full lg:-left-64">
+            <TwitterProfile {...TWITTER_PROFILE} />
+          </div>
         </section>
         {/* Only -z-30, never a second z utility: this sat behind a conflicting z-0 whose winner
             depended on class order, so sorting the classes pushed the glow over the code editor. */}

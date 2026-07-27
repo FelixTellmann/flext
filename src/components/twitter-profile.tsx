@@ -1,11 +1,9 @@
+import type { TwitterProfileData } from "content/twitter-profile";
 import type { FC } from "react";
-import type { components } from "twitter-api-sdk/dist/gen/openapi-types";
 import { Image } from "~/components/image";
 import { Link } from "~/components/link";
 
-type TwitterProfileProps = components["schemas"]["User"];
-
-export const TwitterProfile: FC<TwitterProfileProps> = ({ profile_image_url, name, username, description, public_metrics }) => {
+export const TwitterProfile: FC<TwitterProfileData> = ({ profile_image_url, name, username, description, public_metrics }) => {
   return (
     <section className="spacing-2 max-w-xs animate-float rounded-lg border-2 border-gray-400/30 bg-white/90 d:bg-gray-800 p-4 backdrop-blur-md will-change-transform lg:bg-white/80">
       <header className="flex gap-4">
