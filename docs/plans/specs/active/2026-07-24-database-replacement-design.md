@@ -135,6 +135,15 @@ What to weigh against the managed options:
   public port, and keep TLS on.
 - **It is a machine you maintain** (updates, disk, restarts). That is the real cost, not money.
 
+**Confirmed 2026-07-27 — treat this as decided, not proposed.** The email management suite
+(`specs/active/2026-07-27-email-management-design.md`) deploys to the same Hetzner/Coolify server and
+adds thirteen MySQL tables plus real row volume, which settles the question the audit above left open:
+there *is* now a workload that justifies a hosted database, and it is MySQL-shaped, so Option E wins on
+both counts. Two knock-on requirements from that spec: backups genuinely matter now (a lost `action`
+table means lost undo history, not just lost vote counts), and mailbox credentials are stored
+AES-256-GCM encrypted in the database with the key held in `MAIL_ENCRYPTION_KEY` — so **a database dump
+is not sufficient to restore a working system**, and the key must be backed up separately.
+
 ## Migration runbook — the 24-hour PlanetScale window (added 2026-07-26)
 
 The data is recoverable: PlanetScale allows re-opening the database for 24 hours. Treat that window as
