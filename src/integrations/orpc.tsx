@@ -5,6 +5,7 @@ import { createRouterClient } from "@orpc/server";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { ORPCRouter } from "@server/orpc";
 import { orpcRouter } from "@server/orpc";
+import { createContext } from "@server/orpc/context";
 import { createIsomorphicFn } from "@tanstack/react-start";
 
 const origin = () => globalThis?.location?.origin ?? `http://localhost:${process.env.PORT ?? 3000}`;
@@ -12,7 +13,7 @@ const origin = () => globalThis?.location?.origin ?? `http://localhost:${process
 const getORPCClient = createIsomorphicFn()
   .server(() =>
     createRouterClient(orpcRouter, {
-      context: async () => ({}),
+      context: createContext,
     }),
   )
   .client((): RouterClient<typeof orpcRouter> => {

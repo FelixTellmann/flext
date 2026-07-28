@@ -1,17 +1,12 @@
+import type { AuthJWT } from "@server/auth/jwt";
+import { readSession } from "@server/auth/session";
 import { db } from "@server/db/drizzle";
 
 export type ORPCContext = {
   db: typeof db;
-  session: {
-    user_id: string;
-    email: string;
-    name: string;
-  } | null;
+  session: AuthJWT | null;
 };
 
-export function createContext(): ORPCContext {
-  return {
-    db,
-    session: null,
-  };
+export async function createContext(): Promise<ORPCContext> {
+  return { db, session: await readSession() };
 }
