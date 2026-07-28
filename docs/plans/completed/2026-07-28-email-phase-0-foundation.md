@@ -739,3 +739,19 @@ Automated checks cover types, lint, and the crypto module. These need a browser 
 **Deliberately out of scope:** OAuth sign-in (the Twitter provider throws, `state` is never persisted or validated, and `Account` linking is unwritten — a half-wired OAuth flow with no CSRF check is worse than none), magic-link sign-in, and the `Session` table (auth is stateless JWT by design). None are needed for a single-operator admin gate. `env.ts` at the repo root is left untouched and remains unenforced; `server/env.ts` supersedes it for server-side values.
 
 **Not started until Phase 1:** every `server/mail/` module other than `crypto/`, all thirteen new tables, and any IMAP connection.
+
+---
+
+**Completed: 2026-07-28**
+- Verified: `bun run tsc` exit 0; `bun test` 5 pass / 0 fail (AES-256-GCM round-trip, per-call IV
+  uniqueness, tampered ciphertext, tampered auth tag, unknown key_version); `bunx biome check` clean
+  across all 16 touched files; production `bun run build` clean, with `.output/public` grepped for
+  `bcrypt`, `mysql2`, `createPool`, `jose`, `createDecipheriv`, `flext_session`, `JWT_SECRET`,
+  `MAIL_ENCRYPTION_KEY`, `ADMIN_EMAIL`, `DATABASE_URL` — zero hits; cookie `secure: true` confirmed
+  statically inlined at build time rather than depending on runtime `NODE_ENV`; unset `JWT_SECRET`
+  confirmed to fail closed (jose throws on both sign and verify); six tasks each reviewed against
+  their own diff, plus a whole-branch review.
+- Open: manual browser QA of the six checks under "Manual verification" above — silence = confirmed.
+  Not yet deployed to Coolify, so `DATABASE_URL`, `MAIL_ENCRYPTION_KEY` and `ADMIN_EMAIL` have never
+  been exercised against the real environment. Sign-in has no rate limiting (recorded in
+  `docs/plans/ideas.md` for phase 1).
