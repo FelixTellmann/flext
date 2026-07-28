@@ -175,7 +175,7 @@ export type EncryptedCredential = {
 const CURRENT_KEY_VERSION = 1;
 const IV_BYTES = 12;
 
-function encryption_key(): Buffer {
+function encryptionKey(): Buffer {
   return Buffer.from(serverEnv().MAIL_ENCRYPTION_KEY, "hex");
 }
 
@@ -183,7 +183,7 @@ export function encryptCredential(plaintext: string): EncryptedCredential {
   // A fresh IV per record is mandatory under GCM. Reusing one does not raise an
   // error — it silently destroys both confidentiality and unforgeability.
   const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv("aes-256-gcm", encryption_key(), iv);
+  const cipher = createCipheriv("aes-256-gcm", encryptionKey(), iv);
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
 
   return {
@@ -199,7 +199,7 @@ export function decryptCredential(record: EncryptedCredential): string {
     throw new Error(`Unsupported credential key_version ${record.key_version}`);
   }
 
-  const decipher = createDecipheriv("aes-256-gcm", encryption_key(), Buffer.from(record.iv, "base64"));
+  const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(record.iv, "base64"));
   decipher.setAuthTag(Buffer.from(record.auth_tag, "base64"));
 
   return Buffer.concat([decipher.update(Buffer.from(record.ciphertext, "base64")), decipher.final()]).toString("utf8");
@@ -213,10 +213,10 @@ Env is seeded before the dynamic import because `serverEnv()` caches on first re
 ```ts
 import { describe, expect, test } from "bun:test";
 
-process.env.DATABASE_URL ??= "mysql://test:test@localhost:3306/test";
-process.env.JWT_SECRET ??= "x".repeat(32);
-process.env.MAIL_ENCRYPTION_KEY ??= "a".repeat(64);
-process.env.ADMIN_EMAIL ??= "test@example.com";
+process.env.DATABASE_URL = "mysql://test:test@localhost:3306/test";
+process.env.JWT_SECRET = "x".repeat(32);
+process.env.MAIL_ENCRYPTION_KEY = "a".repeat(64);
+process.env.ADMIN_EMAIL = "test@example.com";
 
 const { encryptCredential, decryptCredential } = await import("./credentials");
 
@@ -366,24 +366,24 @@ git add server/auth/session.ts && git commit -m "feat: add session cookie helper
 
 The `ADMIN_EMAIL` check is what makes this single-user: even if another `User` row exists, only one address can obtain a session.
 
+`signIn(data)` is called unconditionally, before the `ADMIN_EMAIL` comparison, and its result is combined with the `is_admin` check in a single condition. Do not "optimise" this back into an early return that skips `signIn()` for a non-admin email — an early return makes a non-admin request finish faster than an admin one (the bcrypt compare never runs), which is a timing side-channel that discloses whether an email is the admin address before any password is checked.
+
 ```tsx
+import { signIn } from "@server/auth/credentials";
+import { startSession } from "@server/auth/session";
+import { serverEnv } from "@server/env";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { type FC, useState } from "react";
-import { signIn } from "@server/auth/credentials";
-import { serverEnv } from "@server/env";
-import { startSession } from "@server/auth/session";
+import { z } from "zod";
 
 const submitSignIn = createServerFn({ method: "POST" })
-  .validator((input: { email: string; password: string }) => input)
+  .validator(z.object({ email: z.string(), password: z.string() }).parse)
   .handler(async ({ data }) => {
-    if (data.email.toLowerCase() !== serverEnv().ADMIN_EMAIL.toLowerCase()) {
-      return { ok: false as const, message: "Invalid email or password." };
-    }
-
     const result = await signIn(data);
+    const is_admin = data.email.toLowerCase() === serverEnv().ADMIN_EMAIL.toLowerCase();
 
-    if (!result.success) {
+    if (!is_admin || !result.success) {
       return { ok: false as const, message: "Invalid email or password." };
     }
 
@@ -406,7 +406,7 @@ const SignInPage: FC = () => {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
-      <h1 className="text-2xl font-semibold text-zinc-800 dark:text-zinc-100">Sign in</h1>
+      <h1 className="font-semibold text-2xl text-zinc-800 dark:text-dark-headings">Sign in</h1>
       <form
         className="mt-6 flex flex-col gap-4"
         onSubmit={async (event) => {
@@ -435,7 +435,7 @@ const SignInPage: FC = () => {
           autoComplete="username"
           required
           placeholder="Email"
-          className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-zinc-300 px-3 py-2 dark:border-dark-border dark:bg-dark-card"
         />
         <input
           name="password"
@@ -443,16 +443,16 @@ const SignInPage: FC = () => {
           autoComplete="current-password"
           required
           placeholder="Password"
-          className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-zinc-300 px-3 py-2 dark:border-dark-border dark:bg-dark-card"
         />
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-zinc-800 px-3 py-2 text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-md bg-accent px-3 py-2 text-white disabled:opacity-60 dark:bg-accent-dark dark:text-dark-bg"
         >
           {pending ? "Signing in…" : "Sign in"}
         </button>
-        {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+        {error ? <p className="text-danger text-sm">{error}</p> : null}
       </form>
     </div>
   );
@@ -525,12 +525,12 @@ There is no route protection anywhere in the app today. This adds a single layou
 - [ ] **Step 1: Create `src/routes/admin/route.tsx`**
 
 ```tsx
+import { readSession } from "@server/auth/session";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { FC } from "react";
-import { readSession } from "@server/auth/session";
 
-const fetchSession = createServerFn({ method: "GET" }).handler(async () => {
+const fetchSession = createServerFn({ method: "POST" }).handler(async () => {
   return readSession();
 });
 
@@ -539,9 +539,9 @@ const AdminLayout: FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      <header className="mb-8 flex items-baseline justify-between border-b border-zinc-200 pb-4 dark:border-zinc-800">
-        <h1 className="text-lg font-semibold text-zinc-800 dark:text-zinc-100">Admin</h1>
-        <span className="text-sm text-zinc-500">{session.email}</span>
+      <header className="mb-8 flex items-baseline justify-between border-zinc-200 border-b pb-4 dark:border-dark-border">
+        <h1 className="font-semibold text-lg text-zinc-800 dark:text-dark-headings">Admin</h1>
+        <span className="text-sm text-zinc-500 dark:text-dark-text">{session.email}</span>
       </header>
       <Outlet />
     </div>
@@ -562,6 +562,8 @@ export const Route = createFileRoute("/admin")({
 });
 ```
 
+A `GET` server function returning a signed-in user's session payload is cacheable by any proxy or CDN placed in front of the app later; `POST` is not.
+
 - [ ] **Step 2: Create `src/routes/admin/index.tsx`**
 
 A placeholder landing page. Phase 2 replaces its contents with the Sender Policy and Needs Action surfaces.
@@ -571,7 +573,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type { FC } from "react";
 
 const AdminHome: FC = () => {
-  return <p className="text-zinc-600 dark:text-zinc-400">Mailbox management arrives in phase 1.</p>;
+  return <p className="text-zinc-600 dark:text-dark-text">Mailbox management arrives in phase 1.</p>;
 };
 
 export const Route = createFileRoute("/admin/")({
