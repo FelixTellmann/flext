@@ -8,13 +8,10 @@ import { type FC, useState } from "react";
 const submitSignIn = createServerFn({ method: "POST" })
   .validator((input: { email: string; password: string }) => input)
   .handler(async ({ data }) => {
-    if (data.email.toLowerCase() !== serverEnv().ADMIN_EMAIL.toLowerCase()) {
-      return { ok: false as const, message: "Invalid email or password." };
-    }
-
     const result = await signIn(data);
+    const is_admin = data.email.toLowerCase() === serverEnv().ADMIN_EMAIL.toLowerCase();
 
-    if (!result.success) {
+    if (!is_admin || !result.success) {
       return { ok: false as const, message: "Invalid email or password." };
     }
 
@@ -79,7 +76,7 @@ const SignInPage: FC = () => {
         <button
           type="submit"
           disabled={pending}
-          className="rounded-md bg-accent px-3 py-2 text-accent-contrast disabled:opacity-60 dark:bg-accent-dark dark:text-accent-contrast-dark"
+          className="rounded-md bg-accent px-3 py-2 text-white disabled:opacity-60 dark:bg-accent-dark dark:text-dark-bg"
         >
           {pending ? "Signing in…" : "Sign in"}
         </button>
