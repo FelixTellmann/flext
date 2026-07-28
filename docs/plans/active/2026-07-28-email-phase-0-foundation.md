@@ -133,6 +133,7 @@ Mailbox passwords are stored encrypted so a database dump alone is inert (spec Â
 - Create: `server/mail/crypto/credentials.ts`
 - Create: `server/mail/crypto/credentials.test.ts`
 - Modify: `package.json`
+- Modify: `tsconfig.json`
 
 **Interfaces:**
 - Consumes: `serverEnv()` from Task 1.
@@ -144,7 +145,21 @@ Mailbox passwords are stored encrypted so a database dump alone is inert (spec Â
   ```
   Phase 1 stores these four fields as four columns on the `Mailbox` table.
 
-- [ ] **Step 1: Create `server/mail/crypto/credentials.ts`**
+- [ ] **Step 1: Make `bun:test` typecheck**
+
+`tsconfig.json` has `include: ["**/*.ts", â€¦]` and `types: ["node", "vite/client", "vite-plugin-svgr/client"]`, so `bun run tsc` typechecks test files but cannot resolve `bun:test`. Without this step, Step 5 fails with `Cannot find module 'bun:test'`.
+
+```bash
+bun add -d @types/bun
+```
+
+Then add `"bun"` to the `types` array in `tsconfig.json`:
+
+```json
+    "types": ["node", "bun", "vite/client", "vite-plugin-svgr/client"],
+```
+
+- [ ] **Step 2: Create `server/mail/crypto/credentials.ts`**
 
 ```ts
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
@@ -191,7 +206,7 @@ export function decryptCredential(record: EncryptedCredential): string {
 }
 ```
 
-- [ ] **Step 2: Create `server/mail/crypto/credentials.test.ts`**
+- [ ] **Step 3: Create `server/mail/crypto/credentials.test.ts`**
 
 Env is seeded before the dynamic import because `serverEnv()` caches on first read.
 
@@ -239,7 +254,7 @@ describe("credential encryption", () => {
 });
 ```
 
-- [ ] **Step 3: Add the test script to `package.json`**
+- [ ] **Step 4: Add the test script to `package.json`**
 
 Insert into `"scripts"`, after `"tsc"`:
 
@@ -247,7 +262,7 @@ Insert into `"scripts"`, after `"tsc"`:
     "test": "bun test",
 ```
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 5: Verify**
 
 Run: `bun test server/mail/crypto/credentials.test.ts`
 Expected: 5 pass, 0 fail. The tamper tests must actually throw â€” if either passes silently, the auth tag is not being verified and the module is unsafe to use.
@@ -255,10 +270,10 @@ Expected: 5 pass, 0 fail. The tamper tests must actually throw â€” if either pas
 Run: `bun run tsc && bunx biome check --fix server/mail/crypto/`
 Expected: no errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add server/mail/crypto/credentials.ts server/mail/crypto/credentials.test.ts package.json && git commit -m "feat: add AES-256-GCM credential encryption with per-record IV" -- server/mail/crypto/credentials.ts server/mail/crypto/credentials.test.ts package.json
+git add server/mail/crypto/credentials.ts server/mail/crypto/credentials.test.ts package.json tsconfig.json bun.lock && git commit -m "feat: add AES-256-GCM credential encryption with per-record IV" -- server/mail/crypto/credentials.ts server/mail/crypto/credentials.test.ts package.json tsconfig.json bun.lock
 ```
 
 ---
