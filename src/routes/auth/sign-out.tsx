@@ -1,9 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { endSession } from "@server/auth/session";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 
-export const Route = createFileRoute("/auth/sign-out")({
-  component: SignOutPage,
+const submitSignOut = createServerFn({ method: "POST" }).handler(async () => {
+  endSession();
+  return { ok: true as const };
 });
 
-function SignOutPage() {
-  return <div>Signed Out</div>;
-}
+export const Route = createFileRoute("/auth/sign-out")({
+  beforeLoad: async () => {
+    await submitSignOut();
+    throw redirect({ to: "/auth/sign-in" });
+  },
+});
