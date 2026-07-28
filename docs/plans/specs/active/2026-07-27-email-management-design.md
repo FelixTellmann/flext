@@ -278,7 +278,10 @@ Library: `imapflow` (maintained, same author as the existing `nodemailer` depend
 
 ## 3. Data model
 
-Thirteen tables, MySQL via Drizzle, extending `server/db/schema.ts`.
+Fourteen tables, MySQL via Drizzle, extending `server/db/schema.ts`. (Thirteen below plus
+`mailbox_observed_address`, added during Phase 1 planning: §1.10 needs the distinct `Delivered-To`
+values a mailbox has actually received, and a dedicated table gives that without a per-message column
+carrying a value that repeats across tens of thousands of rows.)
 
 | Table | Purpose |
 |---|---|
@@ -309,7 +312,10 @@ state, client, topic, `trashed_at`, `opened_at`, `disappeared_at`.
   detection needs *opened **after** the action* — a bare `is_read` flag cannot express either.
 - `disappeared_at` records messages that vanished server-side (§4).
 
-Uniqueness: `(mailbox_id, gm_msgid)` where `flavor = gmail`, `(mailbox_id, folder, uid)` otherwise.
+Uniqueness: `(mailbox_id, gm_msgid)` where `flavor = gmail`, `(mailbox_id, folder, uid_validity, uid)` otherwise.
+Including the `uid_validity` generation in the generic key is what lets the §11 re-key write the new UIDs
+without colliding with the rows it is replacing; keying on `(mailbox, folder, uid)` alone would deadlock
+that migration against its own unique index.
 
 **`action`** is the single journal for both real and shadow decisions: `status ∈ shadow | pending |
 applied | failed | undone`, with `sender_policy_id` recorded on every row. That policy reference is what
