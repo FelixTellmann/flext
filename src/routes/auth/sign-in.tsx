@@ -4,9 +4,10 @@ import { serverEnv } from "@server/env";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { type FC, useState } from "react";
+import { z } from "zod";
 
 const submitSignIn = createServerFn({ method: "POST" })
-  .validator((input: { email: string; password: string }) => input)
+  .validator(z.object({ email: z.string(), password: z.string() }).parse)
   .handler(async ({ data }) => {
     const result = await signIn(data);
     const is_admin = data.email.toLowerCase() === serverEnv().ADMIN_EMAIL.toLowerCase();

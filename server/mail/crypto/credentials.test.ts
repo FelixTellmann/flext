@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-process.env.DATABASE_URL ??= "mysql://test:test@localhost:3306/test";
-process.env.JWT_SECRET ??= "x".repeat(32);
-process.env.MAIL_ENCRYPTION_KEY ??= "a".repeat(64);
-process.env.ADMIN_EMAIL ??= "test@example.com";
+process.env.DATABASE_URL = "mysql://test:test@localhost:3306/test";
+process.env.JWT_SECRET = "x".repeat(32);
+process.env.MAIL_ENCRYPTION_KEY = "a".repeat(64);
+process.env.ADMIN_EMAIL = "test@example.com";
 
 const { encryptCredential, decryptCredential } = await import("./credentials");
 

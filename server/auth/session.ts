@@ -1,3 +1,4 @@
+import { serverEnv } from "@server/env";
 import { deleteCookie, getCookie, setCookie } from "@tanstack/react-start/server";
 import { type AuthJWT, signJWT, verifyJWT } from "./jwt";
 
@@ -30,5 +31,11 @@ export async function readSession(): Promise<AuthJWT | null> {
     return null;
   }
 
-  return verifyJWT(token);
+  const payload = await verifyJWT(token);
+
+  if (!payload || payload.email.toLowerCase() !== serverEnv().ADMIN_EMAIL.toLowerCase()) {
+    return null;
+  }
+
+  return payload;
 }

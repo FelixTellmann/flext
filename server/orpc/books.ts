@@ -3,13 +3,14 @@ import { db } from "@server/db/drizzle";
 import { books } from "@server/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { authed } from "./base";
 
 export const booksProcedures = {
   get: os.handler(async () => {
     return db.select().from(books).limit(1000);
   }),
 
-  add: os
+  add: authed
     .input(
       z.object({
         read: z.boolean().optional(),
@@ -30,7 +31,7 @@ export const booksProcedures = {
       return result;
     }),
 
-  addMany: os
+  addMany: authed
     .input(
       z.array(
         z.object({

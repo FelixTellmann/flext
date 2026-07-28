@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { FC } from "react";
 
-const fetchSession = createServerFn({ method: "GET" }).handler(async () => {
+const fetchSession = createServerFn({ method: "POST" }).handler(async () => {
   return readSession();
 });
 

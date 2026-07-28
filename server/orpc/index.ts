@@ -1,8 +1,8 @@
-import { os } from "@orpc/server";
+import { pub } from "./base";
 import { booksProcedures } from "./books";
 import { fetchProcedures } from "./fetch";
 
-export const orpcRouter = os.router({
+export const orpcRouter = pub.router({
   books: booksProcedures,
   fetch: fetchProcedures,
 });
