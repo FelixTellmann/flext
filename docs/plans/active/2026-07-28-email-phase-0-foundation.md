@@ -300,6 +300,7 @@ git add server/mail/crypto/credentials.ts server/mail/crypto/credentials.test.ts
 - [ ] **Step 1: Create `server/auth/session.ts`**
 
 ```ts
+import { serverEnv } from "@server/env";
 import { deleteCookie, getCookie, setCookie } from "@tanstack/react-start/server";
 import { type AuthJWT, signJWT, verifyJWT } from "./jwt";
 
@@ -332,9 +333,20 @@ export async function readSession(): Promise<AuthJWT | null> {
     return null;
   }
 
-  return verifyJWT(token);
+  const payload = await verifyJWT(token);
+
+  if (!payload || payload.email.toLowerCase() !== serverEnv().ADMIN_EMAIL.toLowerCase()) {
+    return null;
+  }
+
+  return payload;
 }
 ```
+
+The `ADMIN_EMAIL` re-check is deliberate and load-bearing: without it the single-operator
+invariant would be enforced only once, at token mint in `sign-in.tsx`, and every downstream
+consumer would admit any payload signed with `JWT_SECRET`. It also gives `serverEnv()` a
+first-request trigger, so a malformed environment surfaces as a clear error early.
 
 - [ ] **Step 2: Verify**
 
@@ -680,7 +692,19 @@ Change the server-side branch's `context: async () => ({})` to `context: createC
 - [ ] **Step 5: Verify**
 
 Run: `bun run tsc && bunx biome check --fix server/orpc/ src/routes/api/orpc/\$.ts src/integrations/orpc.tsx`
-Expected: no errors. Existing `booksProcedures` are unchanged — they are built on bare `os`, which stays compatible; they simply ignore the context.
+Expected: no errors.
+
+Note on what shipped, which went beyond this step as originally written: the final review found
+that `authed` was defined here but never applied, leaving `books.add` and `books.addMany` reachable
+unauthenticated at `POST /api/orpc`. Those two are now built on `authed`. `books.get` and
+`books.upvote` deliberately stay on bare `os` — both are called from the public books page
+(`src/routes/books.tsx:30` and `:106`) with no sign-in, so gating either would break a live feature.
+
+Gating them in turn required `server/orpc/index.ts` to build the router on `pub` rather than the
+bare `os` singleton, so the router's declared initial context matches what `authed` procedures
+need. This is a type-level change only: `Builder.$context()` resets middlewares to empty, so
+`enhanceRouter` merges nothing into the still-`os` procedures and their runtime behaviour is
+unchanged.
 
 - [ ] **Step 6: Commit**
 
