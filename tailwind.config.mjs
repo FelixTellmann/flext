@@ -2,7 +2,6 @@ import tailwindAspectRatio from "@tailwindcss/aspect-ratio";
 import tailwindForms from "@tailwindcss/forms";
 import tailwindTypography from "@tailwindcss/typography";
 import svgToDataUri from "mini-svg-data-uri";
-import tailwindChildren from "tailwind-children";
 import tailwindGradientMask from "tailwind-gradient-mask-image";
 import colors from "tailwindcss/colors";
 import defaultTheme from "tailwindcss/defaultTheme";
@@ -185,7 +184,6 @@ export default {
     tailwindForms,
     tailwindTypography,
     tailwindAspectRatio,
-    tailwindChildren,
     tailwindGradientMask,
     plugin(({ addVariant, addUtilities }) => {
       addVariant("hfa", ["&:hover", "&:focus", "&:active"]);
