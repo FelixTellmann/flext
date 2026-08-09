@@ -8,7 +8,9 @@ import defaultTheme from "tailwindcss/defaultTheme";
 import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
 import plugin from "tailwindcss/plugin";
 
-const { default: flattenPalette } = flattenColorPalette;
+// Node's CJS interop hands us the module object (fn on .default); Bun unwraps __esModule
+// and hands us the function directly. The container builds under Bun, local vite under Node.
+const flattenPalette = flattenColorPalette.default ?? flattenColorPalette;
 
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
