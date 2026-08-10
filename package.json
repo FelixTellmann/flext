@@ -43,6 +43,7 @@
     "csstype": "^3.2.3",
     "drizzle-orm": "^0.45.2",
     "framer-motion": "^12.42.2",
+    "imapflow": "1.6.1",
     "immer": "^11.1.15",
     "jose": "^6.2.4",
     "mini-svg-data-uri": "^1.4.4",
