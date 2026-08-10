@@ -863,7 +863,7 @@
 - Consumes: `MailboxConnection` (Task 3), `buildTlsOptions` (Task 4), the provider types (Task 5), `HEADER_FIELDS` / `parseHeaderBlock` (Task 6).
 - Produces: `createImapProvider(connection: MailboxConnection): Promise<MailboxProvider>`.
 
-- [ ] **Step 1: Write `server/mail/providers/imap.ts`**
+- [x] **Step 1: Write `server/mail/providers/imap.ts`**
   ```ts
   import type { MailboxConnection } from "@server/mail/mailbox";
   import { HEADER_FIELDS, parseHeaderBlock } from "@server/mail/providers/headers";
@@ -1084,11 +1084,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/providers/imap.ts`
   Expected: tsc passes. Then confirm the read-only invariant: `grep -n "getMailboxLock" server/mail/providers/imap.ts` shows `{ readOnly: true }` on every call, and `grep -rn "messageFlagsAdd\|messageFlagsSet\|messageMove\|messageCopy\|messageDelete\|append(" server/mail` returns nothing.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/providers/imap.ts && git commit -m "feat: add the read-only imapflow provider"
   ```
