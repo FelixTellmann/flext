@@ -1313,7 +1313,7 @@
   - `selectSentFolders(folders: FolderInfo[]): string[]`
   - `buildUidRange(last_seen_uid: number): string`, `dropStaleUids<T extends { uid: number }>(items: T[], last_seen_uid: number): T[]`, `highestUid(items: Array<{ uid: number }>, fallback: number): number`, `batchUidRanges(input: { uid_next: number; batch_size: number }): string[]`
 
-- [ ] **Step 1: Write `server/mail/sync/uid-range.ts`**
+- [x] **Step 1: Write `server/mail/sync/uid-range.ts`**
   ```ts
   export function buildUidRange(last_seen_uid: number): string {
     return `${last_seen_uid + 1}:*`;
@@ -1341,7 +1341,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/mail/sync/uid-range.test.ts`**
+- [x] **Step 2: Write `server/mail/sync/uid-range.test.ts`**
   ```ts
   import { expect, test } from "bun:test";
   import { batchUidRanges, buildUidRange, dropStaleUids, highestUid } from "./uid-range";
@@ -1369,7 +1369,7 @@
   });
   ```
 
-- [ ] **Step 3: Write `server/mail/sync/folders.ts`**
+- [x] **Step 3: Write `server/mail/sync/folders.ts`**
   ```ts
   import type { FolderInfo } from "@server/mail/providers/types";
   import type { MailboxFlavor } from "@server/mail/types";
@@ -1389,7 +1389,7 @@
   }
   ```
 
-- [ ] **Step 4: Write `server/mail/sync/cursor.ts`**
+- [x] **Step 4: Write `server/mail/sync/cursor.ts`**
   ```ts
   import { db } from "@server/db/drizzle";
   import { mailboxCursor } from "@server/db/schema";
@@ -1450,11 +1450,11 @@
   }
   ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
   Run: `bun test server/mail/sync/uid-range.test.ts && bun run tsc && bunx biome check --fix server/mail/sync/uid-range.ts server/mail/sync/uid-range.test.ts server/mail/sync/folders.ts server/mail/sync/cursor.ts`
   Expected: 4 tests pass; tsc clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   ```bash
   git add server/mail/sync/uid-range.ts server/mail/sync/uid-range.test.ts server/mail/sync/folders.ts server/mail/sync/cursor.ts && git commit -m "feat: add sync cursors, folder selection and uid range helpers"
   ```
