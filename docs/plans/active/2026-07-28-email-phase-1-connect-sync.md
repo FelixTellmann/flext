@@ -37,13 +37,13 @@
 - Consumes: nothing.
 - Produces: the `imapflow` module (ships its own types at `lib/imap-flow.d.ts`), and `bun:test` types so `<name>.test.ts` files typecheck under `bun run tsc`.
 
-- [ ] **Step 1: Install `imapflow` and the Bun test types**
+- [x] **Step 1: Install `imapflow` and the Bun test types**
   ```bash
   bun add imapflow@1.6.1
   bun add -d @types/bun
   ```
 
-- [ ] **Step 2: Register the Bun types and a test script**
+- [x] **Step 2: Register the Bun types and a test script**
   In `tsconfig.json`, add `"bun"` to `compilerOptions.types`:
   ```json
   "types": ["node", "bun", "vite/client", "vite-plugin-svgr/client"]
@@ -53,11 +53,11 @@
   "test": "bun test",
   ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
   Run: `bun run tsc && bunx biome check --fix package.json tsconfig.json`
   Expected: tsc passes with no new errors; `bun pm ls | grep imapflow` shows `imapflow@1.6.1`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add package.json tsconfig.json bun.lock && git commit -m "chore: add imapflow and bun test types for the mail suite"
   ```
@@ -75,13 +75,13 @@
 - Consumes: nothing.
 - Produces: `mailbox`, `mailboxCursor`, `message`, `sender`, `mailboxObservedAddress`, `syncRun` Drizzle tables; row types `typeof mailbox.$inferSelect` etc. used by every later task.
 
-- [ ] **Step 1: Extend the schema imports**
+- [x] **Step 1: Extend the schema imports**
   In `server/db/schema.ts` replace the mysql-core import line with:
   ```ts
   import { boolean, datetime, float, index, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
   ```
 
-- [ ] **Step 2: Append the Phase 1 tables**
+- [x] **Step 2: Append the Phase 1 tables**
   Append to `server/db/schema.ts`:
   ```ts
   // ─── Mailbox ─────────────────────────────────────────────────────────────────
@@ -259,7 +259,7 @@
   );
   ```
 
-- [ ] **Step 3: Add the relations**
+- [x] **Step 3: Add the relations**
   Append to `server/db/relations.ts`, and extend its import to `import { account, mailbox, mailboxCursor, mailboxObservedAddress, message, sender, session, syncRun, user } from "./schema";`:
   ```ts
   // ─── Mailbox relations ───────────────────────────────────────────────────────
@@ -307,16 +307,16 @@
   }));
   ```
 
-- [ ] **Step 4: Generate the migration and surface the SQL**
+- [x] **Step 4: Generate the migration and surface the SQL**
   Run: `bun run db:generate`
   Then read the newly created `server/db/migrations/*.sql` and **print its full contents in the session output** so the user can apply it manually against the Coolify MySQL instance.
   **Do NOT run `bun run db:push` or `bun run db:migrate`, and do not execute the SQL yourself.** The generated files under `server/db/migrations/**` are drizzle-kit output — never hand-edit them.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
   Run: `bun run tsc && bunx biome check --fix server/db/schema.ts server/db/relations.ts`
   Expected: tsc passes; the migration SQL contains `CREATE TABLE \`Mailbox\``, `\`MailboxCursor\``, `\`Message\``, `\`Sender\``, `\`MailboxObservedAddress\``, `\`SyncRun\``.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   ```bash
   git add server/db/schema.ts server/db/relations.ts server/db/migrations && git commit -m "feat: add the phase 1 mail schema (mailbox, cursor, message, sender, sync run)"
   ```
