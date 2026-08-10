@@ -1,0 +1,23 @@
+;;
+;; Domain:     flext.dev.
+;; Updated:    2026-08-10 — cutover to Hetzner/Coolify (136.243.1.51)
+;;
+;; IMPORT NOTES:
+;;   1. Before importing, delete the OLD A records (apex, www, *, dev, local,
+;;      test, www.dev) and the _domainconnect CNAME. Cloudflare's import merges
+;;      rather than replaces, so leftovers collide as duplicate keys.
+;;   2. KEEP the 5 MX, 3 CAA and 1 TXT records already in the zone — they are
+;;      unchanged and deliberately not in this file, so the import cannot
+;;      collide with them. Deleting the MX records would break mail; deleting
+;;      the letsencrypt.org CAA would block Coolify's certificate.
+;;   3. "cf_tags=cf-proxied:false" imports these as DNS-only (grey cloud), and
+;;      they MUST stay grey: proxying blocks Coolify's Let's Encrypt HTTP-01
+;;      validation, and .dev is HSTS-preloaded so there is no HTTP fallback.
+;;   4. The wildcard sends every subdomain to the Hetzner box, replacing the
+;;      old dev/local/test entries that pointed at dead Vercel-era IPs.
+;;
+
+;; A Records — the Hetzner/Coolify box, DNS-only
+flext.dev.	1	IN	A	136.243.1.51 ; cf_tags=cf-proxied:false
+www.flext.dev.	1	IN	A	136.243.1.51 ; cf_tags=cf-proxied:false
+*.flext.dev.	1	IN	A	136.243.1.51 ; cf_tags=cf-proxied:false

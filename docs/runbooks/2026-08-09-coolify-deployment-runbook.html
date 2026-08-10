@@ -1,0 +1,678 @@
+<meta charset="utf-8">
+<title>flext.dev · Coolify deployment runbook</title>
+<style>
+  :root {
+    --paper: #f6f6f3;
+    --surface: #ffffff;
+    --ink: #232a2c;
+    --muted: #66716f;
+    --line: #dde2dd;
+    --accent: #12686d;
+    --accent-soft: #e3efee;
+    --warn: #8a5a00;
+    --warn-bg: #fbf3df;
+    --risk: #9e3039;
+    --risk-bg: #f9ecec;
+    --code-bg: #eef1ed;
+    --done: #3e7d4e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14181a;
+      --surface: #1b2124;
+      --ink: #dce2df;
+      --muted: #8b9693;
+      --line: #2c3437;
+      --accent: #57bfc4;
+      --accent-soft: #1d2e30;
+      --warn: #d8a94b;
+      --warn-bg: #2a2416;
+      --risk: #e08087;
+      --risk-bg: #2c1b1d;
+      --code-bg: #20272a;
+      --done: #7fbf8d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #14181a;
+    --surface: #1b2124;
+    --ink: #dce2df;
+    --muted: #8b9693;
+    --line: #2c3437;
+    --accent: #57bfc4;
+    --accent-soft: #1d2e30;
+    --warn: #d8a94b;
+    --warn-bg: #2a2416;
+    --risk: #e08087;
+    --risk-bg: #2c1b1d;
+    --code-bg: #20272a;
+    --done: #7fbf8d;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  main { max-width: 780px; margin: 0 auto; }
+
+  /* ── header ─────────────────────────────── */
+  .masthead { padding: 56px 0 28px; border-bottom: 2px solid var(--ink); }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(28px, 5vw, 40px);
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .standfirst { color: var(--muted); max-width: 62ch; margin: 0; }
+  .statusbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .statusbar b { color: var(--ink); font-weight: 600; }
+  #progress b { color: var(--accent); }
+
+  /* ── phase sections ─────────────────────── */
+  .phase { margin-top: 48px; }
+  .phase-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 4px; }
+  .phase-num {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 4px;
+    padding: 3px 9px;
+    white-space: nowrap;
+  }
+  .phase h2 { font-size: 22px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .phase-where {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 16px 0;
+  }
+  .phase > p { color: var(--muted); max-width: 66ch; }
+
+  /* ── steps ──────────────────────────────── */
+  .steps { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .step {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .step input[type="checkbox"] {
+    width: 18px; height: 18px;
+    margin-top: 3px;
+    accent-color: var(--done);
+    cursor: pointer;
+  }
+  .step-body { min-width: 0; }
+  .step-body > label { font-weight: 600; cursor: pointer; display: block; }
+  .step.checked { border-color: var(--done); }
+  .step.checked > .step-body > label { color: var(--muted); text-decoration: line-through; }
+  .step-body p { margin: 6px 0 0; color: var(--muted); font-size: 14.5px; max-width: 64ch; }
+  .step-body p b, .step-body li b { color: var(--ink); }
+
+  /* ── code ───────────────────────────────── */
+  .codewrap { position: relative; margin: 10px 0 2px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 0;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+  p code, li code, td code, label code {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .copy {
+    position: absolute; top: 7px; right: 7px;
+    font: 600 11px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 5px 8px;
+    cursor: pointer;
+  }
+  .copy:hover, .copy:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+
+  /* ── callouts ───────────────────────────── */
+  .callout {
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 14px 0 0;
+    font-size: 14.5px;
+  }
+  .callout p { margin: 0; max-width: none; }
+  .callout .tag {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .callout.warn { background: var(--warn-bg); color: var(--ink); }
+  .callout.warn .tag { color: var(--warn); }
+  .callout.risk { background: var(--risk-bg); color: var(--ink); }
+  .callout.risk .tag { color: var(--risk); }
+  .callout.note { background: var(--accent-soft); color: var(--ink); }
+  .callout.note .tag { color: var(--accent); }
+
+  /* ── tables ─────────────────────────────── */
+  .tablewrap { overflow-x: auto; margin: 12px 0 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; background: var(--surface); }
+  th, td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  th {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  td:first-child { white-space: nowrap; }
+
+  ul.plain { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 14.5px; }
+  ul.plain li { margin: 4px 0; }
+  ul.plain li::marker { color: var(--accent); }
+
+  .sources { margin-top: 64px; border-top: 2px solid var(--ink); padding-top: 20px; }
+  .sources h2 { font-size: 17px; }
+  .sources td { font-size: 13px; }
+
+  a { color: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .step { transition: border-color 0.15s ease; }
+  }
+</style>
+
+<main>
+  <header class="masthead">
+    <p class="eyebrow">Runbook · 2026-08-09 · flext</p>
+    <h1>Move flext.dev to the Hetzner box: Coolify, MySQL, and the DNS cutover</h1>
+    <p class="standfirst">
+      One top-to-bottom checklist consolidating the PlanetScale export runbook, the phase 0 env
+      table, and the Dockerfile deploy settings. The code is fully deploy-ready as of commit
+      <code>31d7caa</code>; none of the infrastructure below exists yet. Checkboxes persist in this
+      browser, so you can close the page and pick up where you left off.
+    </p>
+  </header>
+
+  <div class="statusbar">
+    <span id="progress"><b>0</b> / <span id="total">0</span> steps done</span>
+    <span>code: <b>ready</b> (Dockerfile + healthcheck on main)</span>
+    <span>infra: <b>not started</b></span>
+    <span>dns: <b>unchanged</b></span>
+  </div>
+
+  <!-- ═══════════════ PHASE 1 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 1</span><h2>Preflight — no window, no risk</h2></div>
+    <p class="phase-where">where: local terminal + PlanetScale dashboard + password manager</p>
+    <p>Everything here is safe to do today and none of it is time-boxed. The goal is that when the
+       PlanetScale window opens, it is spent only on the transfer.</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-1-1">
+        <div class="step-body">
+          <label for="s-1-1">Check the PlanetScale dashboard: can the database still be re-opened?</label>
+          <div class="callout risk"><span class="tag">Risk</span>
+            <p>The export runbook was written on 2026-07-26, two weeks ago. If the 24-hour re-open
+               offer was tied to a deadline, it may have lapsed. Check this <b>first</b> — it decides
+               whether Phase 3 runs at all. If the data is gone: skip Phases 3–4, and in Phase 5 use
+               the schema-generate + reseed path instead. The only loss is the <code>/books</code>
+               vote counts; the auth tables were always empty.</p>
+          </div>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-1-2">
+        <div class="step-body">
+          <label for="s-1-2">Install the export tooling and authenticate</label>
+          <div class="codewrap"><pre>brew install planetscale/tap/pscale mysql-client
+pscale auth login</pre></div>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-1-3">
+        <div class="step-body">
+          <label for="s-1-3">Generate <code>MAIL_ENCRYPTION_KEY</code> and <code>JWT_SECRET</code>, store both in the password manager</label>
+          <div class="codewrap"><pre>openssl rand -hex 32   # MAIL_ENCRYPTION_KEY (64 hex chars)
+openssl rand -hex 32   # JWT_SECRET (≥ 32 chars required)</pre></div>
+          <div class="callout warn"><span class="tag">Back up separately</span>
+            <p>Mailbox credentials are stored AES-256-GCM encrypted with
+               <code>MAIL_ENCRYPTION_KEY</code>. A database dump <b>without this key restores nothing
+               usable</b> — it must live somewhere that is not the database and not only Coolify.</p>
+          </div>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-1-4">
+        <div class="step-body">
+          <label for="s-1-4">Decide <code>ADMIN_EMAIL</code></label>
+          <p>The single account permitted to sign in to <code>/admin</code>. Presumably
+             <code>felixtellmann@gmail.com</code>.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-1-5">
+        <div class="step-body">
+          <label for="s-1-5">Note the Hetzner server's public IPv4 (and IPv6, if any)</label>
+          <p>Needed for the DNS records in Phase 6. It's on the server overview in the Hetzner
+             console, or in Coolify under the server settings.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ PHASE 2 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 2</span><h2>Coolify: create the MySQL service</h2></div>
+    <p class="phase-where">where: Coolify dashboard</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-2-1">
+        <div class="step-body">
+          <label for="s-2-1">Add a MySQL 8 service (Coolify's one-click database), volume-backed</label>
+          <p>Database name <code>flext</code>. Confirm the data directory is on a persistent volume.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-2-2">
+        <div class="step-body">
+          <label for="s-2-2">Do <b>not</b> expose a public port</label>
+          <p>The app connects over Coolify's private Docker network. Keeping MySQL off the public
+             interface is the security model — and it means <code>DATABASE_CA_PATH</code> can stay
+             unset (TLS matters only if the connection leaves the box).</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-2-3">
+        <div class="step-body">
+          <label for="s-2-3">Record the connection details and compose <code>DATABASE_URL</code></label>
+          <div class="codewrap"><pre>mysql://&lt;user&gt;:&lt;password&gt;@&lt;internal-host&gt;:3306/flext</pre></div>
+          <p>The internal host is the service name on the Docker network, shown in the Coolify
+             service view.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-2-4">
+        <div class="step-body">
+          <label for="s-2-4">Schedule backups to S3-compatible storage — today, not later</label>
+          <p>Coolify can schedule dumps to any S3-compatible target (Hetzner Storage Box, Backblaze
+             B2, …). The design doc's words: set this up <b>on day one, because nothing else
+             will</b>. Once the email suite lands, a lost <code>action</code> table means lost undo
+             history, not just vote counts.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ PHASE 3 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 3</span><h2>PlanetScale: the 24-hour window — export only</h2></div>
+    <p class="phase-where">where: local terminal · skip this phase if the window is gone</p>
+    <p>Treat the window as export-only. Do not use it to test the new server, tune the schema, or
+       debug anything — get a verified dump onto local disk, then close it and work at leisure.</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-3-1">
+        <div class="step-body">
+          <label for="s-3-1">The moment access opens: dump everything with the pscale CLI</label>
+          <div class="codewrap"><pre>pscale database dump &lt;DATABASE&gt; &lt;BRANCH&gt; --output ./pscale-dump</pre></div>
+          <p>Fallback, if you'd rather use <code>mysqldump</code> with the dashboard connection
+             string — these flags matter, PlanetScale rejects table locks and the default
+             GTID/tablespace statements:</p>
+          <div class="codewrap"><pre>mysqldump --host=&lt;HOST&gt; --user=&lt;USER&gt; --password=&lt;PASSWORD&gt; \
+  --ssl-mode=VERIFY_IDENTITY --ssl-ca=/etc/ssl/cert.pem \
+  --single-transaction --skip-lock-tables --no-tablespaces --set-gtid-purged=OFF \
+  &lt;DATABASE&gt; &gt; flext-full.sql</pre></div>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-3-2">
+        <div class="step-body">
+          <label for="s-3-2">Dump <b>every</b> table, not just the five the app still uses</label>
+          <p>The ten tables deleted from the schema on 2026-07-26 may still hold data. Discarding
+             data later is free; a second window may not be.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-3-3">
+        <div class="step-body">
+          <label for="s-3-3">Verify the dump <b>before</b> closing the window</label>
+          <div class="codewrap"><pre>ls -lh flext-full.sql                        # non-trivial size
+grep -c "INSERT INTO" flext-full.sql         # &gt; 0
+grep -oE "CREATE TABLE \`[A-Za-z]+\`" flext-full.sql | sort -u   # expected tables present
+grep -c "INSERT INTO \`Books\`" flext-full.sql                    # Books is the row that matters</pre></div>
+          <p><code>Books</code> is the only table with data worth keeping — roughly 95 rows
+             including the vote counts. The auth tables are empty; <code>/auth/*</code> never had
+             users. A dump you have not inspected is not a backup.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ PHASE 4 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 4</span><h2>Restore locally and prove the chain</h2></div>
+    <p class="phase-where">where: local terminal · no time pressure · skip if Phase 3 was skipped</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-4-1">
+        <div class="step-body">
+          <label for="s-4-1">Restore into a throwaway local MySQL and sanity-check the rows</label>
+          <div class="codewrap"><pre>docker run -d --name flext-mysql -e MYSQL_ROOT_PASSWORD=root \
+  -e MYSQL_DATABASE=flext -p 3306:3306 mysql:8
+mysql -h127.0.0.1 -uroot -proot flext &lt; flext-full.sql
+mysql -h127.0.0.1 -uroot -proot flext \
+  -e "SELECT COUNT(*) FROM Books; SELECT name, votes FROM Books ORDER BY votes DESC LIMIT 5;"</pre></div>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-4-2">
+        <div class="step-body">
+          <label for="s-4-2">Point the dev server at it and check <code>/books</code></label>
+          <p>Set local <code>DATABASE_URL</code> to
+             <code>mysql://root:root@localhost:3306/flext</code>, restart the dev server, and
+             confirm <code>/books</code> shows the <b>real list with non-zero votes</b> — not the
+             87-row static fallback it renders when the database is unreachable. That single check
+             proves the whole chain end to end.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ PHASE 5 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 5</span><h2>Coolify: create the app service and load the data</h2></div>
+    <p class="phase-where">where: coolify dashboard + local terminal</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-5-1">
+        <div class="step-body">
+          <label for="s-5-1">New application from the GitHub repo, built from the committed Dockerfile</label>
+          <p>The settings, verbatim from the Dockerfile header:</p>
+          <ul class="plain">
+            <li><b>Build Pack</b> → Dockerfile</li>
+            <li><b>Dockerfile location</b> → <code>/Dockerfile</code></li>
+            <li><b>Port</b> → <code>3000</code></li>
+          </ul>
+          <p>The image has its own <code>HEALTHCHECK</code> hitting <code>/api/health</code> every
+             30s (deliberately DB-free, so a database blip can't cause a restart loop). No
+             build-time env is needed — the build reads no environment at all.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-5-2">
+        <div class="step-body">
+          <label for="s-5-2">Set the five environment variables on the app service</label>
+          <div class="tablewrap">
+            <table>
+              <tr><th>Variable</th><th>Value</th></tr>
+              <tr><td><code>DATABASE_URL</code></td><td><code>mysql://user:pass@host:3306/flext</code> — the Coolify MySQL service from Phase 2</td></tr>
+              <tr><td><code>DATABASE_CA_PATH</code></td><td>Optional. Only if MySQL TLS terminates outside the Docker network — leave unset for the private-network setup above.</td></tr>
+              <tr><td><code>MAIL_ENCRYPTION_KEY</code></td><td>The 64-hex-char key from Phase 1 (already backed up separately).</td></tr>
+              <tr><td><code>ADMIN_EMAIL</code></td><td>The single account permitted to sign in.</td></tr>
+              <tr><td><code>JWT_SECRET</code></td><td>The ≥ 32-char secret from Phase 1. Used by <code>server/auth/jwt.ts</code>.</td></tr>
+            </table>
+          </div>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-5-3">
+        <div class="step-body">
+          <label for="s-5-3">Load the data into the Coolify MySQL</label>
+          <p><b>With a dump (Phases 3–4 ran):</b> restore <code>flext-full.sql</code> into the
+             Coolify MySQL — easiest via a shell on the MySQL container in Coolify, or a temporary
+             SSH tunnel to the box. Same <code>mysql &lt; flext-full.sql</code> as Phase 4.</p>
+          <p><b>Without a dump (window was gone):</b> generate the schema SQL locally with
+             <code>bun run db:generate</code> (drizzle-kit writes it to
+             <code>server/db/migrations/</code>), apply it manually against the Coolify MySQL, then
+             reseed <code>Books</code> from <code>content/books.tsx</code> — the seed snippet lives
+             in the database design doc under Option D. Votes start at zero.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-5-4">
+        <div class="step-body">
+          <label for="s-5-4">Deploy and verify on the Coolify-generated preview URL</label>
+          <ul class="plain">
+            <li>Container reports <b>healthy</b> (the built-in healthcheck passes)</li>
+            <li><code>/api/health</code> returns <code>{"ok":true}</code></li>
+            <li><code>/books</code> renders from the database (non-zero votes if the dump was restored)</li>
+            <li><code>/auth</code> sign-in works with <code>ADMIN_EMAIL</code></li>
+          </ul>
+          <div class="callout note"><span class="tag">Note</span>
+            <p>Signup is deliberately disabled, so sign-in needs a <code>User</code> row for
+               <code>ADMIN_EMAIL</code> to already exist. If the restored dump doesn't contain one
+               (the auth tables were empty on PlanetScale), creating it is a one-off manual insert —
+               surface the SQL when you get there rather than improvising it.</p>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ PHASE 6 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 6</span><h2>DNS cutover to flext.dev</h2></div>
+    <p class="phase-where">where: dns provider + coolify · keep the current host running until every check is green</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-6-1">
+        <div class="step-body">
+          <label for="s-6-1">Lower the TTL on the flext.dev records to 300s, then wait out the old TTL</label>
+          <p>Makes the cutover (and any rollback) take minutes instead of hours.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-6-2">
+        <div class="step-body">
+          <label for="s-6-2">Point the records at the Hetzner box</label>
+          <ul class="plain">
+            <li><code>A</code> record for <code>flext.dev</code> → the Hetzner IPv4 from Phase 1</li>
+            <li><code>AAAA</code> record → the IPv6, if the server has one</li>
+            <li><code>www</code> → same target (or a redirect, if the provider offers one)</li>
+            <li>Remove the old host's records (the <code>.env</code> still carries Vercel variables, suggesting that's where the site lives today)</li>
+          </ul>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-6-3">
+        <div class="step-body">
+          <label for="s-6-3">Set the domain in Coolify: <code>https://flext.dev</code></label>
+          <p>On the app service. Coolify's proxy will request the Let's Encrypt certificate
+             automatically — this needs the DNS records above to already resolve to the box, so do
+             it after the records are in.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-6-4">
+        <div class="step-body">
+          <label for="s-6-4">Verify over the real domain</label>
+          <div class="codewrap"><pre>curl -s https://flext.dev/api/health          # {"ok":true}
+curl -sI https://flext.dev | head -1           # HTTP/2 200</pre></div>
+          <ul class="plain">
+            <li>Certificate is valid Let's Encrypt (padlock, no warnings)</li>
+            <li><code>/books</code> and a couple of blog posts render correctly</li>
+            <li><code>/admin</code> sign-in works over the real domain</li>
+          </ul>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-6-5">
+        <div class="step-body">
+          <label for="s-6-5">Decommission the old host once everything is green</label>
+          <p>Pause or delete the old deployment project. Not before.</p>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ PHASE 7 ═══════════════ -->
+  <section class="phase">
+    <div class="phase-head"><span class="phase-num">PHASE 7</span><h2>Aftercare — and what this unblocks</h2></div>
+    <p class="phase-where">where: mixed · none of this is launch-blocking</p>
+
+    <ul class="steps">
+      <li class="step">
+        <input type="checkbox" id="s-7-1">
+        <div class="step-body">
+          <label for="s-7-1">Test-restore one backup</label>
+          <p>Pull one scheduled dump from S3 and restore it into a local container once. An
+             unverified backup pipeline is the same as no backup pipeline.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-7-2">
+        <div class="step-body">
+          <label for="s-7-2">Drop the ten dead tables from the restored dump, if the data isn't wanted</label>
+          <p>They were deleted from <code>server/db/schema.ts</code> on 2026-07-26 but a restored
+             dump still contains them.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-7-3">
+        <div class="step-body">
+          <label for="s-7-3">Code follow-up: fix the <code>/books</code> static fallback</label>
+          <p><code>src/routes/books.tsx:40</code> derives <code>id</code> from <code>isbn10</code>,
+             which breaks upvotes silently whenever the fallback runs. With the database live it
+             stops running, but it stays wrong for the next outage.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-7-4">
+        <div class="step-body">
+          <label for="s-7-4">Docs follow-up: CLAUDE.md still calls the database decision “open”</label>
+          <p>The spec marked it decided on 2026-07-27 (self-hosted MySQL on Coolify). Two stale
+             references in <code>CLAUDE.md</code> should be updated once the migration is real.</p>
+        </div>
+      </li>
+      <li class="step">
+        <input type="checkbox" id="s-7-5">
+        <div class="step-body">
+          <label for="s-7-5">Start email phase 1 — the reason this migration matters</label>
+          <p>With a live Coolify MySQL, the 18-task connect + sync plan
+             (<code>docs/plans/active/2026-07-28-email-phase-1-connect-sync.md</code>) is unblocked:
+             its schema task needs the reachable database, and its final task adds a
+             <code>SCRIPT_SECRET</code> env var plus two Coolify scheduled tasks:</p>
+          <div class="codewrap"><pre># every 15 minutes
+curl -fsS -X POST -H "Authorization: Bearer $SCRIPT_SECRET" \
+  "https://flext.dev/api/mail-sync?mode=incremental"
+# hourly
+curl -fsS -X POST -H "Authorization: Bearer $SCRIPT_SECRET" \
+  "https://flext.dev/api/mail-sync?mode=reconcile"</pre></div>
+          <div class="callout warn"><span class="tag">Open question for phase 1</span>
+            <p>App-password / IMAP availability on the Workspace domain you don't administer must be
+               confirmed before the sync runs against that mailbox. Nothing in the plan unblocks it;
+               the fallback is asking that admin to allowlist an OAuth client ID.</p>
+          </div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ═══════════════ SOURCES ═══════════════ -->
+  <section class="sources">
+    <h2>Sources — where each part of this runbook comes from</h2>
+    <div class="tablewrap">
+      <table>
+        <tr><th>Content</th><th>File</th></tr>
+        <tr><td>PlanetScale export runbook, Option E decision, backup + TLS guidance</td><td><code>docs/plans/specs/active/2026-07-24-database-replacement-design.md</code> (runbook from line 147)</td></tr>
+        <tr><td>Env-var table, key-backup warning, deploy-readiness status</td><td><code>docs/plans/completed/2026-07-28-email-phase-0-foundation.md</code> (lines 26–37, 754–757)</td></tr>
+        <tr><td>Build pack settings, healthcheck, no-build-env note</td><td><code>Dockerfile</code> (header comment)</td></tr>
+        <tr><td>Scheduled tasks + <code>SCRIPT_SECRET</code>, IMAP open question</td><td><code>docs/plans/active/2026-07-28-email-phase-1-connect-sync.md</code> (task 18, §risks)</td></tr>
+        <tr><td>Hosting decision (“own Hetzner server via Coolify”)</td><td><code>docs/plans/specs/active/2026-07-27-email-management-design.md</code> §1.8</td></tr>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  const STORAGE_KEY = "flext-coolify-runbook-2026-08-09";
+  const boxes = Array.from(document.querySelectorAll('.step input[type="checkbox"]'));
+  const saved = (() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch { return {}; }
+  })();
+
+  const render = () => {
+    let done = 0;
+    for (const box of boxes) {
+      box.closest(".step").classList.toggle("checked", box.checked);
+      if (box.checked) done += 1;
+    }
+    document.querySelector("#progress b").textContent = String(done);
+    document.querySelector("#total").textContent = String(boxes.length);
+  };
+
+  for (const box of boxes) {
+    box.checked = Boolean(saved[box.id]);
+    box.addEventListener("change", () => {
+      saved[box.id] = box.checked;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch {}
+      render();
+    });
+  }
+  render();
+
+  for (const pre of document.querySelectorAll(".codewrap")) {
+    const button = document.createElement("button");
+    button.className = "copy";
+    button.type = "button";
+    button.textContent = "copy";
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(pre.querySelector("pre").innerText);
+        button.textContent = "copied";
+        setTimeout(() => { button.textContent = "copy"; }, 1200);
+      } catch {
+        button.textContent = "select + ⌘C";
+      }
+    });
+    pre.appendChild(button);
+  }
+</script>
