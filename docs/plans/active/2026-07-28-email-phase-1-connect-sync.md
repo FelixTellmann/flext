@@ -340,7 +340,7 @@
   - `type MailboxConnection = { host, port, username, password, flavor, tls_policy, pinned_spki }`
   - `mailboxConnection(row: MailboxRow): MailboxConnection`
 
-- [ ] **Step 1: Write `server/mail/types.ts`**
+- [x] **Step 1: Write `server/mail/types.ts`**
   ```ts
   import { z } from "zod";
 
@@ -383,7 +383,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/mail/mailbox.ts`**
+- [x] **Step 2: Write `server/mail/mailbox.ts`**
   ```ts
   import type { mailbox } from "@server/db/schema";
   import { decryptCredential } from "@server/mail/crypto/credentials";
@@ -424,11 +424,11 @@
   }
   ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/types.ts server/mail/mailbox.ts`
   Expected: tsc passes; no `any`, all cross-module imports of types use `import type`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add server/mail/types.ts server/mail/mailbox.ts && git commit -m "feat: add mail domain types and mailbox credential decoding"
   ```
@@ -450,7 +450,7 @@
   - `buildTlsOptions(input: { host: string; tls_policy: TlsPolicy; pinned_spki: string[] }): ConnectionOptions`
   - `observeCertificate(input: { host: string; port: number }): Promise<ObservedCertificate>`
 
-- [ ] **Step 1: Write `server/mail/providers/tls.ts`**
+- [x] **Step 1: Write `server/mail/providers/tls.ts`**
   ```ts
   import { createHash, X509Certificate } from "node:crypto";
   import type { ConnectionOptions, PeerCertificate } from "node:tls";
@@ -557,7 +557,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/mail/providers/tls.test.ts`**
+- [x] **Step 2: Write `server/mail/providers/tls.test.ts`**
   ```ts
   import { createHash, generateKeyPairSync } from "node:crypto";
   import { expect, test } from "bun:test";
@@ -592,11 +592,11 @@
   });
   ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
   Run: `bun test server/mail/providers/tls.test.ts && bun run tsc && bunx biome check --fix server/mail/providers/tls.ts server/mail/providers/tls.test.ts`
   Expected: 4 tests pass; tsc clean. Also confirm the repo-wide invariant: `grep -rn "rejectUnauthorized" server src` returns only `rejectUnauthorized: true`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add server/mail/providers/tls.ts server/mail/providers/tls.test.ts && git commit -m "feat: add SPKI-pinned TLS policy and the re-pin certificate probe"
   ```
