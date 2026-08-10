@@ -1115,7 +1115,7 @@
   - `dkimAligned(authentication_results: string | null, from_domain: string | null): boolean | null`
   - `deriveThreadKey(input: { gm_thrid: string | null; references: string | null; in_reply_to: string | null; message_id: string | null }): string | null`
 
-- [ ] **Step 1: Write `server/mail/classify/identity.ts`**
+- [x] **Step 1: Write `server/mail/classify/identity.ts`**
   ```ts
   import type { MailboxFlavor } from "@server/mail/types";
 
@@ -1187,7 +1187,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/mail/classify/identity.test.ts`**
+- [x] **Step 2: Write `server/mail/classify/identity.test.ts`**
   ```ts
   import { expect, test } from "bun:test";
   import { createIdentityMatcher, isAddressedToMe, isCcMe, normalizeAddress } from "./identity";
@@ -1226,7 +1226,7 @@
   });
   ```
 
-- [ ] **Step 3: Write `server/mail/classify/authentication.ts`**
+- [x] **Step 3: Write `server/mail/classify/authentication.ts`**
   ```ts
   export function dkimAligned(authentication_results: string | null, from_domain: string | null): boolean | null {
     if (authentication_results === null || from_domain === null) {
@@ -1245,7 +1245,7 @@
   }
   ```
 
-- [ ] **Step 4: Write `server/mail/classify/authentication.test.ts`**
+- [x] **Step 4: Write `server/mail/classify/authentication.test.ts`**
   ```ts
   import { expect, test } from "bun:test";
   import { dkimAligned } from "./authentication";
@@ -1268,7 +1268,7 @@
   });
   ```
 
-- [ ] **Step 5: Write `server/mail/classify/thread.ts`**
+- [x] **Step 5: Write `server/mail/classify/thread.ts`**
   ```ts
   export function deriveThreadKey(input: {
     gm_thrid: string | null;
@@ -1284,11 +1284,11 @@
   }
   ```
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
   Run: `bun test server/mail/classify && bun run tsc && bunx biome check --fix server/mail/classify/identity.ts server/mail/classify/identity.test.ts server/mail/classify/authentication.ts server/mail/classify/authentication.test.ts server/mail/classify/thread.ts`
   Expected: 9 tests pass; tsc clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
   ```bash
   git add server/mail/classify && git commit -m "feat: add pure identity, dkim alignment and thread key helpers"
   ```
