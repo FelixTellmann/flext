@@ -612,7 +612,7 @@
 - Consumes: nothing (pure type module).
 - Produces: `MailboxCapabilities`, `FolderInfo`, `FolderStatus`, `HeaderMap`, `MessageAddress`, `FetchedEnvelope`, `FetchedMessage`, `MessageIdentity`, `FlagChange`, `FlagChangeResult`, `MailboxProvider` — the only surface sync code imports.
 
-- [ ] **Step 1: Write `server/mail/providers/types.ts`**
+- [x] **Step 1: Write `server/mail/providers/types.ts`**
   ```ts
   export type MailboxCapabilities = {
     condstore: boolean;
@@ -698,11 +698,11 @@
   };
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/providers/types.ts`
   Expected: tsc passes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/providers/types.ts && git commit -m "feat: define the MailboxProvider contract"
   ```
@@ -725,7 +725,7 @@
   - `headerValues(headers: HeaderMap, name: string): string[]`
   - `extractAddresses(value: string): string[]`
 
-- [ ] **Step 1: Write `server/mail/providers/headers.ts`**
+- [x] **Step 1: Write `server/mail/providers/headers.ts`**
   ```ts
   import type { HeaderMap } from "@server/mail/providers/types";
 
@@ -810,7 +810,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/mail/providers/headers.test.ts`**
+- [x] **Step 2: Write `server/mail/providers/headers.test.ts`**
   ```ts
   import { expect, test } from "bun:test";
   import { extractAddresses, HEADER_FETCH_SPEC, headerValue, headerValues, parseHeaderBlock } from "./headers";
@@ -843,11 +843,11 @@
   });
   ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
   Run: `bun test server/mail/providers/headers.test.ts && bun run tsc && bunx biome check --fix server/mail/providers/headers.ts server/mail/providers/headers.test.ts`
   Expected: 5 tests pass; tsc clean.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add server/mail/providers/headers.ts server/mail/providers/headers.test.ts && git commit -m "feat: add the BODY.PEEK header fetch spec and header parsing"
   ```
