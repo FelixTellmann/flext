@@ -263,3 +263,14 @@ been run. `bun run db:generate` output would be surfaced for you to apply.
 | `env.ts` | Zod validation for env vars |
 | `.env.local` | Actual env values (DATABASE_URL) |
 | `content/books.tsx` | Static book data (used as fallback + seed source) |
+
+---
+
+**Completed: 2026-08-12**
+- Chose **Option E** — self-hosted MySQL on the existing Hetzner/Coolify server. No schema port: `drizzle-orm/mysql2` and every table definition stayed as they were.
+- The 24-hour PlanetScale window was used on 2026-08-09 exactly as this runbook describes. All three branches dumped, all 16 tables, verified before the window closed. Archived at `~/Documents/flext-pscale-dump-2026-08-09.tar.gz`.
+- Restored into Coolify MySQL and verified row-for-row: Books 95 with vote counts intact, Telemetry 1270, Habits 15, Post 14, User 1, Account 3, Session 7.
+- `server/db/drizzle.ts` already carried the Option E changes (`mode: "default"`, explicit CA via `DATABASE_CA_PATH`, never `rejectUnauthorized: false`).
+- Cleanup on 2026-08-12: the ten dead tables plus `_prisma_migrations` were dropped, and migration history baselined so `db:generate` + `db:migrate` is now the workflow. Live schema matches `server/db/schema.ts` exactly — verified by comparing per-table column counts.
+- Deferred, tracked in `docs/plans/ideas.md`: public port 3306 is still exposed, `DATABASE_URL` still uses root, no scheduled backups yet, and no separate dev database.
+- Two gotchas worth remembering: mysql2 silently ignores `?ssl-mode=` in the URL (it is a CLI flag, not a driver option), and Coolify's MySQL ships with `require_secure_transport=ON`, which rejected the app until `SET PERSIST require_secure_transport=OFF` was run as root.

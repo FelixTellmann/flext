@@ -19,7 +19,13 @@ Never run `bun run dev` (or any watch/long-running server) — the user runs it 
 
 ## Critical: Database Writes
 
-Never run `bun run db:push`, `db:migrate`, or raw DML — wherever `DATABASE_URL` points (production once the PlanetScale replacement lands; see `docs/plans/specs/active/2026-07-24-database-replacement-design.md`, decision still open). Schema changes: edit `server/db/schema.ts`, run `bun run db:generate`, keep implementing against the new types, and surface the generated SQL (in `server/db/migrations/`) for the user to apply.
+Never run `bun run db:push`, `db:migrate`, or raw DML. `DATABASE_URL`, `DATABASE_URL_DEV` and `DATABASE_URL_PROD` all point at the **same production** MySQL on the Hetzner/Coolify box — there is no separate dev database, so a local schema command hits live data.
+
+Schema changes: edit `server/db/schema.ts`, run `bun run db:generate`, keep implementing against the new types, and surface the generated SQL (in `server/db/migrations/`) for the user to apply with `bun run db:migrate`.
+
+`db:push` stays off the table even once a dev database exists: it applies changes with no reviewable artifact and drops anything absent from the schema.
+
+Migration history was baselined on 2026-08-12 — `__drizzle_migrations` records `0000_graceful_zaran` as applied, so `db:migrate` runs only what comes after it. Regenerating the migrations folder invalidates that row.
 
 ## Critical: Git
 
@@ -89,4 +95,5 @@ Path aliases: `~/*` → `src/*`, `@server/*` → `server/*`, `content/*`, `utils
 ## Reference
 
 - `docs/plans/active/2026-03-14-nextjs-to-tanstack-start-migration.md` — the ongoing Next.js → TanStack Start migration plan (+ its design spec in `docs/plans/specs/active/`).
-- `docs/plans/specs/active/2026-07-24-database-replacement-design.md` — open decision: PlanetScale free-tier replacement.
+- `docs/plans/specs/completed/2026-07-24-database-replacement-design.md` — settled: self-hosted MySQL on the Hetzner/Coolify box, migrated off PlanetScale 2026-08-09/10.
+- `docs/runbooks/2026-08-09-coolify-deployment-runbook.html` — how the site got onto that box (Coolify services, env vars, DNS cutover).
