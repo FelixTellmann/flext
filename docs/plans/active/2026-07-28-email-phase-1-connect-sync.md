@@ -1742,7 +1742,7 @@
 - Consumes: `MailboxProvider.fetchIdentities` (Task 5/7), `MailboxRow` (Task 3).
 - Produces: `type RekeyResult = { rekeyed: number; disappeared: number }`, `rekeyFolder(input: { provider: MailboxProvider; mailbox_row: MailboxRow; folder: string; old_uid_validity: string; new_uid_validity: string }): Promise<RekeyResult>`.
 
-- [ ] **Step 1: Write `server/mail/sync/rekey.ts`**
+- [x] **Step 1: Write `server/mail/sync/rekey.ts`**
   ```ts
   import { db } from "@server/db/drizzle";
   import { message } from "@server/db/schema";
@@ -1820,11 +1820,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/sync/rekey.ts`
   Expected: tsc passes.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/sync/rekey.ts && git commit -m "feat: re-key messages by gm_msgid or message-id on uidvalidity change"
   ```
