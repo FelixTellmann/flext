@@ -1840,7 +1840,7 @@
 - Consumes: cursor helpers (Task 9), uid-range helpers (Task 9), `writeMessages` (Task 10), `rekeyFolder` (Task 11), `createIdentityMatcher` (Task 8).
 - Produces: `type FolderSyncResult = { folder: string; new_messages: number; flag_updates: number; vanished: number; resynced: boolean }`, `syncFolderIncrementally(input: { provider: MailboxProvider; mailbox_row: MailboxRow; folder: string }): Promise<FolderSyncResult>`, `markVanished(input: { mailbox_id: string; folder: string; uid_validity: string; uids: number[] }): Promise<number>`.
 
-- [ ] **Step 1: Write `server/mail/sync/incremental.ts`**
+- [x] **Step 1: Write `server/mail/sync/incremental.ts`**
   ```ts
   import { db } from "@server/db/drizzle";
   import { message } from "@server/db/schema";
@@ -2009,11 +2009,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/sync/incremental.ts`
   Expected: tsc passes; `grep -n "dropStaleUids" server/mail/sync/incremental.ts` shows the filter applied to every incremental fetch.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/sync/incremental.ts && git commit -m "feat: add incremental header sync with condstore flag updates"
   ```
