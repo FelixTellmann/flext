@@ -1473,7 +1473,7 @@
   - `writeMessages(input: { mailbox_row: MailboxRow; folder: string; uid_validity: string; messages: FetchedMessage[]; matcher: IdentityMatcher }): Promise<WriteResult>`
   - `incrementReplyCounts(input: { counts: Map<string, number> }): Promise<number>`
 
-- [ ] **Step 1: Write `server/mail/sync/writer.ts`**
+- [x] **Step 1: Write `server/mail/sync/writer.ts`**
   ```ts
   import { db } from "@server/db/drizzle";
   import { mailboxObservedAddress, message, sender } from "@server/db/schema";
@@ -1722,11 +1722,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/sync/writer.ts`
   Expected: tsc passes. `sql\`VALUES(\`uid\`)\`` is MySQL's on-duplicate value reference — confirm the generated statement shape by reading the drizzle query in `db.insert(...).onDuplicateKeyUpdate(...)` (no execution needed).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/sync/writer.ts && git commit -m "feat: add the metadata message writer with sender and alias aggregation"
   ```
