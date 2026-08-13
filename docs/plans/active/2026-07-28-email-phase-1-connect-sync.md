@@ -2869,11 +2869,17 @@
 **Files:**
 - Create: `src/routes/admin/mail.tsx`
 
+
+> **Adjusted on 2026-08-13.** The plan's `bg-accent text-accent-contrast` buttons would have
+> rendered invisible labels — those two CSS variables hold the same RGB (known gap, logged in
+> `docs/plans/ideas.md`). Uses the same workaround as `src/routes/auth/sign-in.tsx:80`:
+> `bg-accent text-white dark:bg-accent-dark dark:text-dark-bg`.
+
 **Interfaces:**
 - Consumes: `orpc.mail.*` (Task 16) via `~/integrations/orpc`.
 - Produces: the `/admin/mail` route (inside Phase 0's auth-gated `/admin` group).
 
-- [ ] **Step 1: Write `src/routes/admin/mail.tsx`**
+- [x] **Step 1: Write `src/routes/admin/mail.tsx`**
   ```tsx
   import { createFileRoute, useRouter } from "@tanstack/react-router";
   import { type FC, useState } from "react";
@@ -3149,11 +3155,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run build && bun run tsc && bunx biome check --fix src/routes/admin/mail.tsx`
   Expected: `bun run build` regenerates `src/routeTree.gen.ts` with the `/admin/mail` route so tsc resolves `createFileRoute("/admin/mail")`; tsc and biome pass. Do not start a dev server — the build is the only thing needed to regenerate the tree. Before adding any further class names, grep `tailwind.config.mjs` for an existing token.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add src/routes/admin/mail.tsx && git commit -m "feat: add the admin mail page with connection test and re-pin flow"
   ```
