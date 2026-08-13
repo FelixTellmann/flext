@@ -2288,7 +2288,7 @@
   - `runMailboxSync(input: { mailbox_row: MailboxRow; mode: SyncMode }): Promise<MailboxRunSummary>`
   - `runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id?: string }): Promise<MailboxRunSummary[]>`
 
-- [ ] **Step 1: Write `server/mail/errors.ts`**
+- [x] **Step 1: Write `server/mail/errors.ts`**
   ```ts
   export type MailboxFailureKind = "auth" | "tls_pin" | "network" | "unknown";
 
@@ -2330,7 +2330,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/mail/errors.test.ts`**
+- [x] **Step 2: Write `server/mail/errors.test.ts`**
   ```ts
   import { expect, test } from "bun:test";
   import { classifyMailboxError } from "./errors";
@@ -2361,7 +2361,7 @@
   });
   ```
 
-- [ ] **Step 3: Write `server/mail/sync/run.ts`**
+- [x] **Step 3: Write `server/mail/sync/run.ts`**
   ```ts
   import { db } from "@server/db/drizzle";
   import { mailbox, syncRun } from "@server/db/schema";
@@ -2538,11 +2538,11 @@
   }
   ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
   Run: `bun test server/mail/errors.test.ts && bun run tsc && bunx biome check --fix server/mail/errors.ts server/mail/errors.test.ts server/mail/sync/run.ts`
   Expected: 4 tests pass; tsc clean. If `$returningId()` is unavailable on this drizzle-mysql2 version, replace the insert with an explicit `crypto.randomUUID()` id in `values({ id: run_id, ... })` and drop the `$returningId` call.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
   ```bash
   git add server/mail/errors.ts server/mail/errors.test.ts server/mail/sync/run.ts && git commit -m "feat: orchestrate mailbox sync runs with per-mailbox failure isolation"
   ```
