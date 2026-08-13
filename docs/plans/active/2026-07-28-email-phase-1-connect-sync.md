@@ -2557,11 +2557,19 @@
 - Modify: `server/orpc/index.ts`
 - Modify: `src/routes/api/orpc/$.ts`
 
+
+> **Implemented differently on 2026-08-13.** Phase 0 already shipped `server/auth/session.ts`
+> (whose `readSession` also re-checks `ADMIN_EMAIL`) plus an ORPC context and an `authed`
+> procedure base, so Step 1 was skipped and every mail procedure uses `authed` instead. Step 4
+> was skipped too: `src/routes/api/orpc/$.ts` already passes `createContext()`, and the version
+> written here would have replaced it with `context: {}`, which breaks `authed` for the mail
+> procedures *and* for the existing books writes.
+
 **Interfaces:**
 - Consumes: `encryptCredential` (Phase 0), `observeCertificate` (Task 4), `createImapProvider` (Task 7), `runSyncForAllMailboxes` (Task 15), folder selection (Task 9), `HEADER_FETCH_SPEC` (Task 6).
 - Produces: `mailProcedures` with `listMailboxes`, `addMailbox`, `testConnection`, `inspectCertificate`, `repinMailbox`, `listObservedAddresses`, `setIdentityAddresses`, `triggerSync`, `listSyncRuns`; `SESSION_COOKIE_NAME` and `readSessionFromHeaders(headers: Headers)`.
 
-- [ ] **Step 1: Write `server/auth/session.ts`**
+- [x] **Step 1: Write `server/auth/session.ts`**
   ```ts
   import type { AuthJWT } from "@server/auth/jwt";
   import { verifyJWT } from "@server/auth/jwt";
@@ -2594,7 +2602,7 @@
   }
   ```
 
-- [ ] **Step 2: Write `server/orpc/mail.ts`**
+- [x] **Step 2: Write `server/orpc/mail.ts`**
   ```ts
   import { os } from "@orpc/server";
   import { db } from "@server/db/drizzle";
@@ -2788,7 +2796,7 @@
   };
   ```
 
-- [ ] **Step 3: Register the router**
+- [x] **Step 3: Register the router**
   In `server/orpc/index.ts`:
   ```ts
   import { os } from "@orpc/server";
@@ -2805,7 +2813,7 @@
   export type ORPCRouter = typeof orpcRouter;
   ```
 
-- [ ] **Step 4: Gate the mail procedures over HTTP**
+- [x] **Step 4: Gate the mail procedures over HTTP**
   Replace `src/routes/api/orpc/$.ts` with:
   ```ts
   import { RPCHandler } from "@orpc/server/fetch";
@@ -2845,11 +2853,11 @@
   });
   ```
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
   Run: `bun run tsc && bunx biome check --fix server/orpc/mail.ts server/orpc/index.ts server/auth/session.ts src/routes/api/orpc/$.ts`
   Expected: tsc passes. Confirm no procedure returns credential fields: `grep -n "credential" server/orpc/mail.ts` shows them only in `addMailbox`'s insert.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   ```bash
   git add server/orpc/mail.ts server/orpc/index.ts server/auth/session.ts src/routes/api/orpc/\$.ts && git commit -m "feat: add the mail orpc router behind a session gate"
   ```
