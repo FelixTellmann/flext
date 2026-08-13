@@ -2029,7 +2029,7 @@
 - Consumes: `markVanished` (Task 12), cursor helpers (Task 9), `MailboxProvider.listUids` / `fetchFlagChanges` (Task 5/7).
 - Produces: `type ReconcileResult = { folder: string; vanished: number; strategy: "qresync" | "search" }`, `reconcileFolder(input: { provider: MailboxProvider; mailbox_row: MailboxRow; folder: string }): Promise<ReconcileResult>`.
 
-- [ ] **Step 1: Write `server/mail/sync/reconcile.ts`**
+- [x] **Step 1: Write `server/mail/sync/reconcile.ts`**
   ```ts
   import { db } from "@server/db/drizzle";
   import { message } from "@server/db/schema";
@@ -2115,11 +2115,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/sync/reconcile.ts`
   Expected: tsc passes. Confirm rows are never deleted: `grep -n "db.delete" server/mail` returns nothing — vanished messages only get `disappeared_at` so the journal stays intact.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/sync/reconcile.ts && git commit -m "feat: reconcile vanished messages via qresync with a uid search fallback"
   ```
