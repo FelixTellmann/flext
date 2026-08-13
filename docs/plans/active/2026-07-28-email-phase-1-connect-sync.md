@@ -2138,7 +2138,7 @@
   - `backfillMailbox(input: { provider: MailboxProvider; mailbox_row: MailboxRow }): Promise<BackfillResult>`
   - `scanSentFolder(input: { provider: MailboxProvider; mailbox_row: MailboxRow; folder: string }): Promise<{ scanned: number; senders: number }>`
 
-- [ ] **Step 1: Write `server/mail/sync/backfill.ts`**
+- [x] **Step 1: Write `server/mail/sync/backfill.ts`**
   ```ts
   import { createIdentityMatcher } from "@server/mail/classify/identity";
   import type { MailboxRow } from "@server/mail/mailbox";
@@ -2262,11 +2262,11 @@
   }
   ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
   Run: `bun run tsc && bunx biome check --fix server/mail/sync/backfill.ts`
   Expected: tsc passes. Confirm the Gmail rule holds: `selectSyncFolders` is the only source of walked folders, so a Gmail mailbox backfills `[Gmail]/All Mail` only.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
   ```bash
   git add server/mail/sync/backfill.ts && git commit -m "feat: add batched backfill and the sent folder reply-count scan"
   ```
