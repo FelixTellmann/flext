@@ -6,6 +6,10 @@ const server_env_schema = z.object({
   JWT_SECRET: z.string().min(32),
   MAIL_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, "must be 64 hex characters (32 bytes)"),
   ADMIN_EMAIL: z.string().email(),
+  // Optional on purpose. Only the scheduled sync entrypoint reads it, and making it required would mean a
+  // deploy that forgot it takes down every other serverEnv() caller — sign-in included. The route answers
+  // 503 instead, which fails the cron loudly without touching anything else.
+  SCRIPT_SECRET: z.string().min(16).optional(),
 });
 
 export type ServerEnv = z.infer<typeof server_env_schema>;
