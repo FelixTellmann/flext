@@ -3171,11 +3171,20 @@
 **Files:**
 - Create: `src/routes/api/mail-sync.ts`
 
+
+> **Adjusted on 2026-08-14.** Reads `SCRIPT_SECRET` via `serverEnv()` from `server/env.ts`, not
+> the root `env.ts` this task named. The root module validates ~40 variables at import time and
+> calls `process.exit(1)` on a miss, so importing it from a route would make the Docker build read
+> environment (it currently reads none) and would kill the container at runtime over the
+> PlanetScale-era variables that no longer exist in Coolify. `SCRIPT_SECRET` is declared optional
+> so a deploy that forgets it degrades to a 503 on this one endpoint rather than breaking sign-in
+> and every other `serverEnv()` caller.
+
 **Interfaces:**
 - Consumes: `runSyncForAllMailboxes` (Task 15), `sync_mode_schema` (Task 3), `env.SCRIPT_SECRET`.
 - Produces: `POST /api/mail-sync?mode=incremental|reconcile|backfill`, bearer-authenticated with `SCRIPT_SECRET`.
 
-- [ ] **Step 1: Write `src/routes/api/mail-sync.ts`**
+- [x] **Step 1: Write `src/routes/api/mail-sync.ts`**
   ```ts
   import { timingSafeEqual } from "node:crypto";
   import { runSyncForAllMailboxes } from "@server/mail/sync/run";
@@ -3215,7 +3224,7 @@
   });
   ```
 
-- [ ] **Step 2: Record the schedule in the plan's closing notes**
+- [x] **Step 2: Record the schedule in the plan's closing notes**
   The Coolify scheduled tasks the operator creates (no code, no dev server):
   ```bash
   # every 15 minutes
@@ -3225,11 +3234,11 @@
   ```
   Backfill is run once per mailbox from `/admin/mail`, not on a schedule.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
   Run: `bun run build && bun run tsc && bunx biome check --fix src/routes/api/mail-sync.ts`
   Expected: the route appears in `src/routeTree.gen.ts`; tsc and biome pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
   ```bash
   git add src/routes/api/mail-sync.ts && git commit -m "feat: add the secret-gated scheduled mail sync entrypoint"
   ```
