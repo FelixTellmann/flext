@@ -15,7 +15,10 @@ export type BackfillResult = {
   reply_senders: number;
 };
 
-const BACKFILL_BATCH_SIZE = 500;
+// 500 killed the container twice in the same UID window without ever throwing, which points at memory
+// rather than a bad row — a JS exception would have been caught and recorded on the SyncRun. 100 cuts
+// peak memory per fetch and, because the cursor advances per batch, narrows any repeat to a 100-UID span.
+const BACKFILL_BATCH_SIZE = 100;
 
 export async function scanSentFolder(input: {
   provider: MailboxProvider;
