@@ -84,8 +84,13 @@ export async function backfillMailbox(input: { provider: MailboxProvider; mailbo
   const walked = selectSyncFolders({ flavor, folders });
   for (const folder of walked) {
     const status = await input.provider.openFolder(folder);
-    let highest_seen = 0;
-    for (const range of batchUidRanges({ uid_next: status.uid_next, batch_size: BACKFILL_BATCH_SIZE })) {
+    const cursor = await loadCursor({ mailbox_id: input.mailbox_row.id, folder, kind: "messages" });
+    // A backfill can run for hours, and anything that interrupts it — an OOM kill, a dropped IMAP
+    // connection, a redeploy — leaves no error to catch. Resuming from the checkpoint and writing one
+    // after every batch caps the loss at a single batch instead of the whole folder.
+    const resume_from = cursor !== null && cursor.uid_validity === status.uid_validity ? cursor.last_seen_uid : 0;
+
+    for (const range of batchUidRanges({ uid_next: status.uid_next, batch_size: BACKFILL_BATCH_SIZE, from_uid: resume_from + 1 })) {
       const fetched = await input.provider.fetchHeaders(folder, range);
       const written = await writeMessages({
         mailbox_row: input.mailbox_row,
@@ -95,17 +100,20 @@ export async function backfillMailbox(input: { provider: MailboxProvider; mailbo
         matcher,
       });
       messages += written.inserted;
-      highest_seen = highestUid(fetched, highest_seen);
+
+      // The checkpoint is the end of the range just walked, not the highest UID returned: folders are
+      // sparse (one mailbox held 1891 messages across UIDs 484-5700), so a batch that matches nothing
+      // would otherwise leave the cursor behind and refetch that span forever.
+      await saveCursor({
+        mailbox_id: input.mailbox_row.id,
+        folder,
+        kind: "messages",
+        uid_validity: status.uid_validity,
+        last_seen_uid: Number(range.split(":")[1]),
+        highest_modseq: status.highest_modseq,
+        last_sync_at: new Date(),
+      });
     }
-    await saveCursor({
-      mailbox_id: input.mailbox_row.id,
-      folder,
-      kind: "messages",
-      uid_validity: status.uid_validity,
-      last_seen_uid: highest_seen,
-      highest_modseq: status.highest_modseq,
-      last_sync_at: new Date(),
-    });
   }
 
   let sent_scanned = 0;

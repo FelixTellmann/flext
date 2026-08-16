@@ -13,10 +13,11 @@ export function highestUid(items: Array<{ uid: number }>, fallback: number): num
   return items.reduce((highest, item) => (item.uid > highest ? item.uid : highest), fallback);
 }
 
-export function batchUidRanges(input: { uid_next: number; batch_size: number }): string[] {
+// from_uid lets an interrupted backfill resume at its checkpoint instead of walking the folder again.
+export function batchUidRanges(input: { uid_next: number; batch_size: number; from_uid?: number }): string[] {
   const ranges: string[] = [];
   const highest = input.uid_next - 1;
-  for (let start = 1; start <= highest; start += input.batch_size) {
+  for (let start = Math.max(1, input.from_uid ?? 1); start <= highest; start += input.batch_size) {
     const end = Math.min(start + input.batch_size - 1, highest);
     ranges.push(`${start}:${end}`);
   }

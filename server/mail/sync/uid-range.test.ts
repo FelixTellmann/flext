@@ -22,3 +22,9 @@ test("backfill ranges cover 1..uid_next-1 in batches", () => {
   expect(batchUidRanges({ uid_next: 1201, batch_size: 500 })).toEqual(["1:500", "501:1000", "1001:1200"]);
   expect(batchUidRanges({ uid_next: 1, batch_size: 500 })).toEqual([]);
 });
+
+test("a resumed backfill skips everything below its checkpoint", () => {
+  expect(batchUidRanges({ uid_next: 1201, batch_size: 500, from_uid: 501 })).toEqual(["501:1000", "1001:1200"]);
+  expect(batchUidRanges({ uid_next: 1201, batch_size: 500, from_uid: 1300 })).toEqual([]);
+  expect(batchUidRanges({ uid_next: 1201, batch_size: 500, from_uid: 0 })).toEqual(["1:500", "501:1000", "1001:1200"]);
+});

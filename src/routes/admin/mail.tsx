@@ -1,4 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import clsx from "clsx";
 import { type FC, type ReactNode, useState } from "react";
 import { orpc } from "~/integrations/orpc";
 
@@ -31,11 +32,35 @@ const Panel: FC<{ title: string; children: ReactNode }> = ({ title, children }) 
 const accent_button = "rounded bg-accent px-3 py-2 font-medium text-sm text-white dark:bg-accent-dark dark:text-dark-bg";
 const field = "rounded border border-gray-300 p-2 text-sm dark:border-dark-border dark:bg-dark-bg";
 const secondary_button = "rounded border border-gray-300 px-3 py-1 text-sm dark:border-dark-border";
+const busy_state = "inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
+
+const Spinner: FC = () => (
+  <svg aria-hidden="true" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
+  </svg>
+);
+
+// A backfill can hold the request open for minutes, so a button that still looks clickable is the whole
+// problem: every action disables the entire set, and the one that is working says so.
+const ActionButton: FC<{
+  busy: boolean;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+  variant: string;
+}> = ({ busy, disabled, label, onClick, variant }) => (
+  <button className={clsx(variant, busy_state)} disabled={disabled} onClick={onClick} type="button">
+    {busy && <Spinner />}
+    {busy ? `${label}…` : label}
+  </button>
+);
 
 function AdminMailPage() {
   const { mailboxes, runs } = Route.useLoaderData();
   const router = useRouter();
   const [status, setStatus] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [certificate, setCertificate] = useState<ObservedCertificate | null>(null);
   const [certificate_target, setCertificateTarget] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -48,7 +73,8 @@ function AdminMailPage() {
     identity_addresses: "",
   });
 
-  const runAction = async (label: string, action: () => Promise<unknown>) => {
+  const runAction = async (key: string, label: string, action: () => Promise<unknown>) => {
+    setPending(key);
     setStatus(`${label}…`);
     try {
       const result = await action();
@@ -56,6 +82,8 @@ function AdminMailPage() {
       await router.invalidate();
     } catch (error) {
       setStatus(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setPending(null);
     }
   };
 
@@ -70,7 +98,7 @@ function AdminMailPage() {
           className="grid grid-cols-2 gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            void runAction("Add mailbox", () =>
+            void runAction("add", "Add mailbox", () =>
               orpc.mail.addMailbox({
                 label: form.label,
                 host: form.host,
@@ -136,8 +164,9 @@ function AdminMailPage() {
             placeholder="Identity addresses, comma separated (felix@flext.dev, *@flext.dev)"
             value={form.identity_addresses}
           />
-          <button className={`col-span-2 ${accent_button}`} type="submit">
-            Add mailbox
+          <button className={clsx("col-span-2", accent_button, busy_state)} disabled={pending !== null} type="submit">
+            {pending === "add" && <Spinner />}
+            {pending === "add" ? "Adding mailbox…" : "Add mailbox"}
           </button>
         </form>
       </Panel>
@@ -164,53 +193,57 @@ function AdminMailPage() {
           {entry.last_error !== null && <p className="mb-3 rounded bg-danger/10 p-2 text-danger text-sm">{entry.last_error}</p>}
 
           <div className="flex flex-wrap gap-2">
-            <button
-              className={secondary_button}
-              onClick={() => void runAction("Test connection", () => orpc.mail.testConnection({ id: entry.id }))}
-              type="button"
-            >
-              Test connection
-            </button>
-            <button
-              className={secondary_button}
-              onClick={() => void runAction("Backfill", () => orpc.mail.triggerSync({ mode: "backfill", mailbox_id: entry.id }))}
-              type="button"
-            >
-              Backfill
-            </button>
-            <button
-              className={secondary_button}
-              onClick={() => void runAction("Sync", () => orpc.mail.triggerSync({ mode: "incremental", mailbox_id: entry.id }))}
-              type="button"
-            >
-              Sync now
-            </button>
-            <button
-              className={secondary_button}
+            <ActionButton
+              busy={pending === `${entry.id}:test`}
+              disabled={pending !== null}
+              label="Test connection"
+              onClick={() => void runAction(`${entry.id}:test`, "Test connection", () => orpc.mail.testConnection({ id: entry.id }))}
+              variant={secondary_button}
+            />
+            <ActionButton
+              busy={pending === `${entry.id}:backfill`}
+              disabled={pending !== null}
+              label="Backfill"
               onClick={() =>
-                void runAction("Observed addresses", async () => {
+                void runAction(`${entry.id}:backfill`, "Backfill", () => orpc.mail.triggerSync({ mode: "backfill", mailbox_id: entry.id }))
+              }
+              variant={secondary_button}
+            />
+            <ActionButton
+              busy={pending === `${entry.id}:sync`}
+              disabled={pending !== null}
+              label="Sync now"
+              onClick={() =>
+                void runAction(`${entry.id}:sync`, "Sync", () => orpc.mail.triggerSync({ mode: "incremental", mailbox_id: entry.id }))
+              }
+              variant={secondary_button}
+            />
+            <ActionButton
+              busy={pending === `${entry.id}:observed`}
+              disabled={pending !== null}
+              label="Show observed Delivered-To"
+              onClick={() =>
+                void runAction(`${entry.id}:observed`, "Observed addresses", async () => {
                   const observed = await orpc.mail.listObservedAddresses({ id: entry.id });
                   return observed.map((row) => `${row.address} (${row.source_header} ×${row.occurrences})`);
                 })
               }
-              type="button"
-            >
-              Show observed Delivered-To
-            </button>
-            <button
-              className="rounded border border-warning px-3 py-1 text-sm text-warning"
+              variant={secondary_button}
+            />
+            <ActionButton
+              busy={pending === `${entry.id}:cert`}
+              disabled={pending !== null}
+              label="Inspect certificate"
               onClick={() =>
-                void runAction("Inspect certificate", async () => {
+                void runAction(`${entry.id}:cert`, "Inspect certificate", async () => {
                   const observed = await orpc.mail.inspectCertificate({ host: entry.host, port: entry.port });
                   setCertificate(observed);
                   setCertificateTarget(entry.id);
                   return observed.spki_sha256;
                 })
               }
-              type="button"
-            >
-              Inspect certificate
-            </button>
+              variant="rounded border border-warning px-3 py-1 text-sm text-warning"
+            />
           </div>
 
           {certificate !== null && certificate_target === entry.id && (
@@ -235,28 +268,28 @@ function AdminMailPage() {
                 <dd>{certificate.subject_alt_names.join(", ") || "—"}</dd>
               </dl>
               <div className="mt-3 flex gap-2">
-                <button
-                  className={accent_button}
+                <ActionButton
+                  busy={pending === `${entry.id}:pin-add`}
+                  disabled={pending !== null}
+                  label="Add to pinned set"
                   onClick={() =>
-                    void runAction("Stage pin", () =>
+                    void runAction(`${entry.id}:pin-add`, "Stage pin", () =>
                       orpc.mail.repinMailbox({ id: entry.id, spki_sha256: certificate.spki_sha256, replace: false }),
                     )
                   }
-                  type="button"
-                >
-                  Add to pinned set
-                </button>
-                <button
-                  className="rounded border border-danger px-3 py-1 text-danger text-sm"
+                  variant={accent_button}
+                />
+                <ActionButton
+                  busy={pending === `${entry.id}:pin-replace`}
+                  disabled={pending !== null}
+                  label="Replace pinned set"
                   onClick={() =>
-                    void runAction("Replace pin", () =>
+                    void runAction(`${entry.id}:pin-replace`, "Replace pin", () =>
                       orpc.mail.repinMailbox({ id: entry.id, spki_sha256: certificate.spki_sha256, replace: true }),
                     )
                   }
-                  type="button"
-                >
-                  Replace pinned set
-                </button>
+                  variant="rounded border border-danger px-3 py-1 text-danger text-sm"
+                />
               </div>
             </div>
           )}
