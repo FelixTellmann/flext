@@ -29,6 +29,16 @@ function addressDomain(address: string): string {
   return address.slice(address.lastIndexOf("@") + 1);
 }
 
+// Header values have no practical upper bound — a 191-char messageId column killed a whole 100-message
+// batch with ER_DATA_TOO_LONG. The columns are wider now; this keeps one absurd header from failing the
+// batch again rather than just losing its own tail.
+function clamp(value: string | null, max: number): string | null {
+  if (value === null || value.length <= max) {
+    return value;
+  }
+  return value.slice(0, max);
+}
+
 function headerAddresses(headers: FetchedMessage["headers"], name: string): string[] {
   return headerValues(headers, name).flatMap((value) => extractAddresses(value));
 }
@@ -57,9 +67,9 @@ async function upsertSenders(aggregates: SenderAggregate[]): Promise<void> {
     await db
       .insert(sender)
       .values({
-        address: aggregate.address,
-        domain: aggregate.domain,
-        display_name: aggregate.display_name,
+        address: clamp(aggregate.address, 320) ?? "",
+        domain: clamp(aggregate.domain, 253) ?? "",
+        display_name: clamp(aggregate.display_name, 320),
         message_count: aggregate.count,
         first_seen_at: aggregate.last_seen_at,
         last_seen_at: aggregate.last_seen_at,
@@ -85,7 +95,7 @@ async function upsertObservedAddresses(input: {
       .insert(mailboxObservedAddress)
       .values({
         mailbox_id: input.mailbox_id,
-        address,
+        address: clamp(address, 320) ?? "",
         source_header: entry.source_header,
         occurrences: entry.count,
         first_seen_at: now,
@@ -164,16 +174,19 @@ export async function writeMessages(input: {
       uid_validity: input.uid_validity,
       gm_msgid: entry.gm_msgid,
       gm_thrid: entry.gm_thrid,
-      message_id: entry.envelope.message_id,
-      thread_key: deriveThreadKey({
-        gm_thrid: entry.gm_thrid,
-        references: headerValue(entry.headers, "References"),
-        in_reply_to: entry.envelope.in_reply_to,
-        message_id: entry.envelope.message_id,
-      }),
-      from_address,
-      from_domain,
-      from_name: from?.name ?? null,
+      message_id: clamp(entry.envelope.message_id, 512),
+      thread_key: clamp(
+        deriveThreadKey({
+          gm_thrid: entry.gm_thrid,
+          references: headerValue(entry.headers, "References"),
+          in_reply_to: entry.envelope.in_reply_to,
+          message_id: entry.envelope.message_id,
+        }),
+        512,
+      ),
+      from_address: clamp(from_address, 320),
+      from_domain: clamp(from_domain, 253),
+      from_name: clamp(from?.name ?? null, 320),
       to_me: isAddressedToMe({ to: entry.envelope.to.map((address) => address.address), delivered_to, x_original_to }, input.matcher),
       cc_me: isCcMe(
         entry.envelope.cc.map((address) => address.address),
@@ -184,10 +197,10 @@ export async function writeMessages(input: {
       internal_date: entry.internal_date,
       size: entry.size,
       has_attachment: (content_type ?? "").toLowerCase().startsWith("multipart/mixed"),
-      list_id: headerValue(entry.headers, "List-Id"),
+      list_id: clamp(headerValue(entry.headers, "List-Id"), 320),
       list_unsubscribe: headerValue(entry.headers, "List-Unsubscribe"),
-      precedence: headerValue(entry.headers, "Precedence"),
-      auto_submitted: headerValue(entry.headers, "Auto-Submitted"),
+      precedence: clamp(headerValue(entry.headers, "Precedence"), 191),
+      auto_submitted: clamp(headerValue(entry.headers, "Auto-Submitted"), 191),
       dkim_aligned: dkimAligned(headerValue(entry.headers, "Authentication-Results"), from_domain),
       is_seen: entry.flags.includes("\\Seen"),
       is_flagged: entry.flags.includes("\\Flagged"),
@@ -227,8 +240,8 @@ export async function incrementReplyCounts(input: { counts: Map<string, number> 
     await db
       .insert(sender)
       .values({
-        address,
-        domain: addressDomain(address),
+        address: clamp(address, 320) ?? "",
+        domain: clamp(addressDomain(address), 253) ?? "",
         my_reply_count: count,
         first_seen_at: now,
         last_seen_at: now,
