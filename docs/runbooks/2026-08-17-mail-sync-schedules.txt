@@ -1,0 +1,84 @@
+flext — MAIL SYNC SCHEDULED TASKS (Coolify)
+Written 2026-08-17. Copy the two blocks below into Coolify.
+
+Where: Coolify -> project flext.dev -> application flext.dev -> Configuration -> Scheduled Tasks -> + Add.
+Each task needs three fields: Name, Command, Frequency.
+
+
+=============================================================================
+IMPORTANT: DO NOT USE curl
+=============================================================================
+
+Coolify runs scheduled tasks INSIDE the application container, and this image has no curl. The Dockerfile deliberately omits it (see its HEALTHCHECK comment: adding curl would reintroduce the apt layer the Dockerfile exists to remove). A curl command here fails with "curl: not found" and the task looks broken for no reason.
+
+The container does have bun, so the commands below use bun's fetch — the same approach the container healthcheck uses. They call 127.0.0.1:3000 directly, which skips DNS, TLS and the reverse proxy entirely. SCRIPT_SECRET is read from the container environment, so the secret never appears in the task definition.
+
+
+=============================================================================
+TASK 1 — INCREMENTAL SYNC (new mail)
+=============================================================================
+
+Name:
+mail-sync incremental
+
+Frequency:
+*/15 * * * *
+
+Command:
+bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=incremental", { method: "POST", headers: { authorization: `Bearer ${process.env.SCRIPT_SECRET}` } }); console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1)'
+
+
+=============================================================================
+TASK 2 — RECONCILE (deletions and read-state)
+=============================================================================
+
+Name:
+mail-sync reconcile
+
+Frequency:
+0 * * * *
+
+Command:
+bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=reconcile", { method: "POST", headers: { authorization: `Bearer ${process.env.SCRIPT_SECRET}` } }); console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1)'
+
+
+=============================================================================
+CRON EXPRESSIONS, FOR REFERENCE
+=============================================================================
+
+*/15 * * * *     every 15 minutes          <- incremental
+0 * * * *        top of every hour         <- reconcile
+30 3 * * *       03:30 daily               <- if 15 minutes ever proves too chatty
+*/5 * * * *      every 5 minutes           <- only if you want near-real-time
+
+Field order is: minute hour day-of-month month day-of-week.
+
+Do NOT schedule mode=backfill. It walks entire folders (10027 messages and 597 seconds for felix@tellmann.co.za) and is a one-off per mailbox, not a recurring job.
+
+
+=============================================================================
+RUNNING A BACKFILL BY HAND
+=============================================================================
+
+Run backfill from a terminal, not the browser: the /admin/mail button holds one HTTP request open for the whole walk, and a ten-minute request shows "Failed to fetch" in the browser even though the server completes it normally (this happened on 2026-08-17 — the run succeeded with 10027 messages while the UI reported failure).
+
+From your laptop, one mailbox at a time. Get the id from /admin/mail or from the Mailbox table:
+
+curl -fsS --max-time 3600 -X POST -H "Authorization: Bearer $SCRIPT_SECRET" "https://flext.dev/api/mail-sync?mode=backfill"
+
+Note this endpoint backfills EVERY enabled mailbox in sequence; per-mailbox backfill is only exposed through /admin/mail. --max-time 3600 matters, as curl's default timeout will cut a long walk.
+
+
+=============================================================================
+CHECKING THAT IT IS WORKING
+=============================================================================
+
+In Coolify the task's own log shows the HTTP status and the JSON summary per run.
+
+In the database, the authoritative record is SyncRun:
+
+SELECT kind, status, startedAt, messagesNew, messagesVanished, LEFT(IFNULL(errorMessage,'-'),80) FROM SyncRun ORDER BY startedAt DESC LIMIT 10;
+
+Healthy incremental runs show status=ok with small messagesNew. A mailbox that goes wrong also records Mailbox.lastError, and an auth failure or a pinned-SPKI mismatch sets Mailbox.enabled=0 deliberately, so it stops retrying until you look at it:
+
+SELECT label, enabled, LEFT(IFNULL(lastError,'-'),60), lastErrorAt FROM Mailbox;
