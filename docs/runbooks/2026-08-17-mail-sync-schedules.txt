@@ -2,7 +2,11 @@ flext — MAIL SYNC SCHEDULED TASKS (Coolify)
 Written 2026-08-17. Copy the two blocks below into Coolify.
 
 Where: Coolify -> project flext.dev -> application flext.dev -> Configuration -> Scheduled Tasks -> + Add.
-Each task needs three fields: Name, Command, Frequency.
+Each task needs four fields: Name, Command, Frequency, Container name.
+
+LEAVE "Container name" EMPTY. The running container's name carries a per-deployment suffix that changes every time you redeploy (…-145534209802 one day, …-090433712376 the next), so anything hardcoded there breaks silently at the next deploy. Coolify resolves the container itself for a single-container application.
+
+The commands use only double quotes inside single quotes — no backticks and no ${...} — so they survive whatever quoting Coolify wraps around them.
 
 
 =============================================================================
@@ -10,6 +14,15 @@ IMPORTANT: DO NOT USE curl
 =============================================================================
 
 Coolify runs scheduled tasks INSIDE the application container, and this image has no curl. The Dockerfile deliberately omits it (see its HEALTHCHECK comment: adding curl would reintroduce the apt layer the Dockerfile exists to remove). A curl command here fails with "curl: not found" and the task looks broken for no reason.
+
+VERIFIED IN THE CONTAINER on 2026-08-17 via Coolify -> Terminal, rather than assumed from the Dockerfile:
+
+    # which curl bun
+    /usr/local/bin/bun
+    curl_exit=127            <- 127 is "command not found"
+
+    secret_len=48            <- SCRIPT_SECRET is present in the container
+    http 401 Unauthorized    <- the bun command below works; 401 because the token was wrong on purpose
 
 The container does have bun, so the commands below use bun's fetch — the same approach the container healthcheck uses. They call 127.0.0.1:3000 directly, which skips DNS, TLS and the reverse proxy entirely. SCRIPT_SECRET is read from the container environment, so the secret never appears in the task definition.
 
@@ -25,7 +38,7 @@ Frequency:
 */15 * * * *
 
 Command:
-bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=incremental", { method: "POST", headers: { authorization: `Bearer ${process.env.SCRIPT_SECRET}` } }); console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1)'
+bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=incremental", {method:"POST",headers:{authorization:"Bearer "+process.env.SCRIPT_SECRET}}); console.log(r.status, await r.text()); process.exit(r.ok?0:1)'
 
 
 =============================================================================
@@ -39,7 +52,7 @@ Frequency:
 0 * * * *
 
 Command:
-bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=reconcile", { method: "POST", headers: { authorization: `Bearer ${process.env.SCRIPT_SECRET}` } }); console.log(r.status, await r.text()); process.exit(r.ok ? 0 : 1)'
+bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=reconcile", {method:"POST",headers:{authorization:"Bearer "+process.env.SCRIPT_SECRET}}); console.log(r.status, await r.text()); process.exit(r.ok?0:1)'
 
 
 =============================================================================
