@@ -25,3 +25,26 @@ test("a network blip keeps the mailbox enabled", () => {
 test("a non-Error rejection still classifies", () => {
   expect(classifyMailboxError("boom")).toEqual({ kind: "unknown", message: "boom", disable_mailbox: false });
 });
+
+test("a driver error wrapped by drizzle reports the cause, not the query dump", () => {
+  const driver = Object.assign(new Error("ignored in favour of sqlMessage"), {
+    code: "ER_DATA_TOO_LONG",
+    sqlMessage: "Data too long for column 'fromName' at row 7",
+  });
+  const wrapper = new Error(`Failed query: insert into \`Message\` ... params: ${"x".repeat(50_000)}`, { cause: driver });
+
+  expect(classifyMailboxError(wrapper).message).toBe("Data too long for column 'fromName' at row 7");
+});
+
+test("an unwrapped driver message is capped so one batch cannot write 53KB of params", () => {
+  const failure = classifyMailboxError(new Error("y".repeat(2_000)));
+
+  expect(failure.message.length).toBe(501);
+  expect(failure.message.endsWith("…")).toBe(true);
+});
+
+test("classification still sees a network code through the wrapper", () => {
+  const driver = Object.assign(new Error("connect ETIMEDOUT"), { code: "ETIMEDOUT" });
+
+  expect(classifyMailboxError(new Error("Failed query: ...", { cause: driver })).kind).toBe("network");
+});
