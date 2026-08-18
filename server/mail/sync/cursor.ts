@@ -2,7 +2,7 @@ import { db } from "@server/db/drizzle";
 import { mailboxCursor } from "@server/db/schema";
 import { and, eq } from "drizzle-orm";
 
-export type CursorKind = "messages" | "sent-scan";
+export type CursorKind = "messages" | "sent-scan" | "reclassify";
 export type CursorRecord = typeof mailboxCursor.$inferSelect;
 
 export async function loadCursor(input: { mailbox_id: string; folder: string; kind: CursorKind }): Promise<CursorRecord | null> {

@@ -8,6 +8,7 @@ import type { MailboxProvider } from "@server/mail/providers/types";
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
+import { reclassifyMailbox } from "@server/mail/sync/reclassify";
 import { reconcileFolder } from "@server/mail/sync/reconcile";
 import { repairSenderLinks } from "@server/mail/sync/repair";
 import type { SyncMode } from "@server/mail/types";
@@ -33,6 +34,9 @@ type RunTotals = {
   vanished: number;
 };
 
+// Matches BACKFILL_BATCH_SIZE: the reclassify walks the same UID space with the same per-batch fetch.
+const RECLASSIFY_BATCH_SIZE = 100;
+
 async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxRow; mode: SyncMode }): Promise<RunTotals> {
   if (input.mode === "backfill") {
     const result = await backfillMailbox({ provider: input.provider, mailbox_row: input.mailbox_row });
@@ -41,13 +45,22 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
   if (input.mode === "repair") {
     throw new Error("repair is database-wide and must not run per mailbox; call repairSenderLinks directly");
   }
-  if (input.mode === "reclassify") {
-    throw new Error("reclassify is not implemented yet (task 7b)");
-  }
 
   const folders = await input.provider.listFolders();
   const walked = selectSyncFolders({ flavor: parseMailboxFlavor(input.mailbox_row.flavor), folders });
   const totals: RunTotals = { folders: walked.length, new_messages: 0, flag_updates: 0, vanished: 0 };
+
+  if (input.mode === "reclassify") {
+    const result = await reclassifyMailbox({
+      provider: input.provider,
+      mailbox_row: input.mailbox_row,
+      batch_size: RECLASSIFY_BATCH_SIZE,
+    });
+    // SyncRun has no column for the examined count, and `changed` is the number the operator judges the
+    // pass by: how many derived columns the corrected identity list and the fixed DKIM parser moved.
+    totals.flag_updates = result.changed;
+    return totals;
+  }
 
   if (input.mode === "reconcile") {
     for (const folder of walked) {
