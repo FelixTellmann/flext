@@ -225,7 +225,7 @@ export const mailProcedures = {
     .input(
       z.object({
         mailbox_id: z.string().nullable().default(null),
-        max_age_days: z.number().int().positive().nullable().default(365),
+        max_age_days: z.number().int().positive().nullable().default(30),
         limit: z.number().int().positive().max(200).default(50),
         offset: z.number().int().min(0).default(0),
       }),
