@@ -9,6 +9,7 @@ import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
 import { reconcileFolder } from "@server/mail/sync/reconcile";
+import { repairSenderLinks } from "@server/mail/sync/repair";
 import type { SyncMode } from "@server/mail/types";
 import { parseMailboxFlavor } from "@server/mail/types";
 import { and, eq } from "drizzle-orm";
@@ -36,6 +37,12 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
   if (input.mode === "backfill") {
     const result = await backfillMailbox({ provider: input.provider, mailbox_row: input.mailbox_row });
     return { folders: result.folders, new_messages: result.messages, flag_updates: 0, vanished: 0 };
+  }
+  if (input.mode === "repair") {
+    throw new Error("repair is database-wide and must not run per mailbox; call repairSenderLinks directly");
+  }
+  if (input.mode === "reclassify") {
+    throw new Error("reclassify is not implemented yet (task 7b)");
   }
 
   const folders = await input.provider.listFolders();
@@ -157,11 +164,78 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
   }
 }
 
+const REPAIR_BATCH_SIZE = 500;
+
+// repair touches Message/Sender only and never opens a mailbox, so it must not run once per row in
+// `rows` below (that would repeat the same database-wide UPDATE loop N times for N mailboxes). It is
+// lifted above the per-mailbox loop and logged against the first matching mailbox purely as an anchor
+// for SyncRun.mailbox_id, which is notNull — that row does not scope the repair.
+async function runRepairOnce(input: { anchor_mailbox: MailboxRow }): Promise<MailboxRunSummary> {
+  const started_at = new Date();
+  const run_id = crypto.randomUUID();
+  await db.insert(syncRun).values({
+    id: run_id,
+    mailbox_id: input.anchor_mailbox.id,
+    kind: "repair",
+    status: "running",
+    started_at,
+    updatedAt: started_at,
+  });
+
+  try {
+    const result = await repairSenderLinks({ batch_size: REPAIR_BATCH_SIZE });
+    const finished_at = new Date();
+    await db
+      .update(syncRun)
+      .set({ status: "ok", finished_at, messages_updated: result.updated, updatedAt: finished_at })
+      .where(eq(syncRun.id, run_id));
+
+    return {
+      mailbox_id: input.anchor_mailbox.id,
+      label: "repair",
+      kind: "repair",
+      status: "ok",
+      folders: 0,
+      new_messages: 0,
+      flag_updates: result.updated,
+      vanished: 0,
+      error: result.remaining > 0 ? `${result.remaining} message row(s) still have no matching Sender` : null,
+    };
+  } catch (error) {
+    const failure = classifyMailboxError(error);
+    const finished_at = new Date();
+    await db
+      .update(syncRun)
+      .set({ status: "failed", finished_at, error_message: `${failure.kind}: ${failure.message}`, updatedAt: finished_at })
+      .where(eq(syncRun.id, run_id));
+
+    return {
+      mailbox_id: input.anchor_mailbox.id,
+      label: "repair",
+      kind: "repair",
+      status: "failed",
+      folders: 0,
+      new_messages: 0,
+      flag_updates: 0,
+      vanished: 0,
+      error: `${failure.kind}: ${failure.message}`,
+    };
+  }
+}
+
 export async function runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id?: string }): Promise<MailboxRunSummary[]> {
   const rows = await db
     .select()
     .from(mailbox)
     .where(input.mailbox_id ? and(eq(mailbox.enabled, true), eq(mailbox.id, input.mailbox_id)) : eq(mailbox.enabled, true));
+
+  if (input.mode === "repair") {
+    const anchor_mailbox = rows[0];
+    if (anchor_mailbox === undefined) {
+      return [];
+    }
+    return [await runRepairOnce({ anchor_mailbox })];
+  }
 
   const summaries: MailboxRunSummary[] = [];
   for (const row of rows) {

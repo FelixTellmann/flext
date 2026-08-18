@@ -32,7 +32,7 @@ async function handle({ request }: { request: Request }) {
 
   const mode = sync_mode_schema.safeParse(new URL(request.url).searchParams.get("mode") ?? "incremental");
   if (!mode.success) {
-    return Response.json({ error: "mode must be incremental, reconcile or backfill" }, { status: 400 });
+    return Response.json({ error: "mode must be incremental, reconcile, backfill, repair or reclassify" }, { status: 400 });
   }
 
   const summaries = await runSyncForAllMailboxes({ mode: mode.data });
