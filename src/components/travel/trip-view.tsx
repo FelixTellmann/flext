@@ -1,4 +1,4 @@
-import { ClientOnly } from "@tanstack/react-router";
+import { ClientOnly, Link } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { TravelStop, TravelTrip } from "content/travel";
 import { type FC, useMemo, useState } from "react";
@@ -55,34 +55,36 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
   };
 
   return (
-    <>
-      <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <div>
-          <div className="overflow-hidden rounded-md border border-gray-200 d:border-dark-border">
-            <ClientOnly fallback={<div className="h-[420px] w-full bg-card d:bg-card-dark md:h-[560px]" />}>
-              <TripMap stops={trip.stops} activeId={active.id} onSelect={setSelectedId} />
-            </ClientOnly>
+    // The map owns the viewport below the fixed site header and the panel is a fixed-width
+    // scrolling column beside it. On small screens they stack, map on top.
+    <div className="fixed inset-x-0 top-header bottom-0 flex flex-col md:flex-row">
+      <aside className="order-2 flex min-h-0 w-full flex-1 flex-col border-gray-200 d:border-dark-border border-t md:order-1 md:w-[400px] md:flex-none md:border-t-0 md:border-r">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="border-gray-200 d:border-dark-border border-b p-5">
+            <Link to="/travel" className="font-mono text-accent text-xs hfa:underline">
+              ← All trips
+            </Link>
+            <div className="heading-pre mt-3">{trip.pre}</div>
+            <h1 className="heading-lg">{trip.title}</h1>
           </div>
 
-          <div className="mt-4 rounded-md border border-gray-200 d:border-dark-border bg-card d:bg-card-dark p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="font-mono d:text-white text-gray-900">{formatDate(trip_start + hours * HOUR)}</div>
-                <div className="text-accent text-sm">
-                  {inTransit ? `In transit to ${scrubbed.name}` : scrubbed.name}
-                  {!inTransit && scrubbed.lodging ? ` — ${scrubbed.lodging.name}` : ""}
-                </div>
-              </div>
+          <div className="border-gray-200 d:border-dark-border border-b p-5">
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="font-mono d:text-white text-gray-900 text-sm">{formatDate(trip_start + hours * HOUR)}</div>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedId(null);
                   setHours(0);
                 }}
-                className="rounded-md bg-gray-900/5 d:bg-white/10 hfa:bg-gray-900/10 px-3 py-1.5 font-medium d:text-gray-200 text-gray-700 text-sm"
+                className="font-mono d:text-gray-400 hfa:text-accent text-gray-500 text-xs"
               >
                 Reset
               </button>
+            </div>
+            <div className="mt-0.5 text-accent text-sm">
+              {inTransit ? `In transit to ${scrubbed.name}` : scrubbed.name}
+              {!inTransit && scrubbed.lodging ? ` — ${scrubbed.lodging.name}` : ""}
             </div>
             <input
               type="range"
@@ -95,71 +97,79 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
                 setSelectedId(null);
                 setHours(Number(event.target.value));
               }}
-              className="mt-4 w-full accent-sky-500"
+              className="mt-3 w-full accent-sky-500"
             />
-            <div className="mt-2 flex justify-between font-mono d:text-gray-500 text-[11px] text-gray-500">
+            <div className="mt-1 flex justify-between font-mono d:text-gray-500 text-[11px] text-gray-500">
               <span>{formatDay(trip_start)}</span>
               <span>{formatDay(asTime(trip.endsAt))}</span>
             </div>
           </div>
-        </div>
 
-        <aside className="rounded-md border border-gray-200 d:border-dark-border bg-card d:bg-card-dark p-5 lg:sticky lg:top-24 lg:self-start">
-          <div className="heading-pre">{active.kind === "park" ? "National park" : "Stop"}</div>
-          <h2 className="heading-sm">{active.name}</h2>
-          <p className="d:text-gray-400 text-gray-600 text-sm">{active.region}</p>
-          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-gray-200 d:border-dark-border border-t pt-4 text-sm">
-            <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Arrive</dt>
-            <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(active.arriveAt))}</dd>
-            <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Leave</dt>
-            <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(active.departAt))}</dd>
-            {active.lodging ? (
+          <div className="border-gray-200 d:border-dark-border border-b p-5">
+            <div className="heading-pre">{active.kind === "park" ? "National park" : "Stop"}</div>
+            <h2 className="heading-sm">{active.name}</h2>
+            <p className="d:text-gray-400 text-gray-600 text-sm">{active.region}</p>
+            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+              <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Arrive</dt>
+              <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(active.arriveAt))}</dd>
+              <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Leave</dt>
+              <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(active.departAt))}</dd>
+              {active.lodging ? (
+                <>
+                  <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Lodging</dt>
+                  <dd className="d:text-gray-200 text-gray-800">{active.lodging.name}</dd>
+                </>
+              ) : null}
+            </dl>
+            {active.note ? <p className="mt-3 d:text-gray-400 text-gray-600 text-sm">{active.note}</p> : null}
+          </div>
+
+          <div className="p-5">
+            <div className="heading-pre mb-3">Day by day</div>
+            <div className="flex flex-col gap-1.5">
+              {trip.stops.map((stop) => (
+                <button
+                  key={stop.id}
+                  type="button"
+                  onClick={() => focus(stop)}
+                  className={clsx(
+                    "grid w-full grid-cols-[3.5rem_1fr] items-baseline gap-2 rounded-md border p-2.5 text-left",
+                    "border-gray-200 d:border-dark-border hfa:border-accent",
+                    stop.id === active.id ? "border-accent bg-sky-50 d:bg-white/5" : "bg-card d:bg-card-dark",
+                  )}
+                >
+                  <span className="font-mono text-accent text-xs">{formatDay(asTime(stop.arriveAt))}</span>
+                  <span className="text-sm">
+                    <span className={clsx("mr-1.5 inline-block h-2 w-2 rounded-full", KIND_DOT[stop.kind])} />
+                    <span className="font-semibold d:text-gray-100 text-gray-900">{stop.name}</span>
+                    <span className="d:text-gray-400 text-gray-600"> — {stop.region}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {trip.openQuestions.length ? (
               <>
-                <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Lodging</dt>
-                <dd className="d:text-gray-200 text-gray-800">{active.lodging.name}</dd>
+                <div className="heading-pre mt-6 mb-3">Still to confirm</div>
+                <div className="flex flex-col gap-1.5">
+                  {trip.openQuestions.map((item) => (
+                    <div key={item.question} className="rounded-md border border-warning/40 bg-warning/5 p-3">
+                      <p className="font-semibold d:text-gray-100 text-gray-900 text-sm">{item.question}</p>
+                      <p className="mt-1 d:text-gray-400 text-gray-600 text-xs">{item.detail}</p>
+                    </div>
+                  ))}
+                </div>
               </>
             ) : null}
-          </dl>
-          {active.note ? <p className="mt-4 d:text-gray-400 text-gray-600 text-sm">{active.note}</p> : null}
-        </aside>
-      </div>
-
-      <h2 className="heading-sm mt-16 mb-4">Day by day</h2>
-      <div className="flex flex-col gap-2">
-        {trip.stops.map((stop) => (
-          <button
-            key={stop.id}
-            type="button"
-            onClick={() => focus(stop)}
-            className={clsx(
-              "grid w-full grid-cols-1 gap-1 rounded-md border p-4 text-left sm:grid-cols-[7rem_1fr] sm:gap-4",
-              "border-gray-200 d:border-dark-border hfa:border-accent bg-card d:bg-card-dark",
-              stop.id === active.id && "border-accent",
-            )}
-          >
-            <span className="font-mono text-accent text-sm">{formatDay(asTime(stop.arriveAt))}</span>
-            <span>
-              <span className={clsx("mr-2 inline-block h-2 w-2 rounded-full align-middle", KIND_DOT[stop.kind])} />
-              <span className="font-semibold d:text-gray-100 text-gray-900">{stop.name}</span>
-              <span className="d:text-gray-400 text-gray-600 text-sm"> — {stop.region}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {trip.openQuestions.length ? (
-        <>
-          <h2 className="heading-sm mt-16 mb-4">Still to confirm</h2>
-          <div className="flex flex-col gap-2">
-            {trip.openQuestions.map((item) => (
-              <div key={item.question} className="rounded-md border border-warning/40 bg-warning/5 p-4">
-                <p className="font-semibold d:text-gray-100 text-gray-900">{item.question}</p>
-                <p className="mt-1 d:text-gray-400 text-gray-600 text-sm">{item.detail}</p>
-              </div>
-            ))}
           </div>
-        </>
-      ) : null}
-    </>
+        </div>
+      </aside>
+
+      <div className="order-1 h-[45vh] min-h-0 md:order-2 md:h-auto md:flex-1">
+        <ClientOnly fallback={<div className="h-full w-full bg-card d:bg-card-dark" />}>
+          <TripMap stops={trip.stops} activeId={active.id} onSelect={setSelectedId} />
+        </ClientOnly>
+      </div>
+    </div>
   );
 };

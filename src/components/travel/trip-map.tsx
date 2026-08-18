@@ -1,8 +1,7 @@
 import "leaflet/dist/leaflet.css";
-import clsx from "clsx";
 import type { TravelStop } from "content/travel";
 import type { CircleMarker, Map as LeafletMap, Polyline, TileLayer } from "leaflet";
-import { type FC, useEffect, useMemo, useRef, useState } from "react";
+import { type FC, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "~/components/theme-provider";
 
 // CARTO raster basemaps: OSM data, open with attribution, no key or token.
@@ -19,6 +18,29 @@ const KIND_COLOR: Record<TravelStop["kind"], string> = {
   friends: "#ec4899",
 };
 
+// A leg is drawn as a sampled quadratic arc rather than a straight line: the control point sits
+// perpendicular to the midpoint, bowing flights hard and drives gently. Lat/lng is treated as a
+// plane, which is inaccurate but reads well at these distances.
+const arcPoints = (from: TravelStop, to: TravelStop, bow: number): [number, number][] => {
+  const mid_latitude = (from.latitude + to.latitude) / 2;
+  const mid_longitude = (from.longitude + to.longitude) / 2;
+  const delta_latitude = to.latitude - from.latitude;
+  const delta_longitude = to.longitude - from.longitude;
+  const control_latitude = mid_latitude + delta_longitude * bow;
+  const control_longitude = mid_longitude - delta_latitude * bow;
+  const points: [number, number][] = [];
+  const samples = 48;
+  for (let step = 0; step <= samples; step++) {
+    const t = step / samples;
+    const inverse = 1 - t;
+    points.push([
+      inverse * inverse * from.latitude + 2 * inverse * t * control_latitude + t * t * to.latitude,
+      inverse * inverse * from.longitude + 2 * inverse * t * control_longitude + t * t * to.longitude,
+    ]);
+  }
+  return points;
+};
+
 type TripMapProps = {
   stops: TravelStop[];
   activeId: string | null;
@@ -27,8 +49,6 @@ type TripMapProps = {
 
 export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
   const container_ref = useRef<HTMLDivElement | null>(null);
-  const wrapper_ref = useRef<HTMLDivElement | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const map_ref = useRef<LeafletMap | null>(null);
   const markers_ref = useRef<Map<string, CircleMarker>>(new Map());
   const legs_ref = useRef<Polyline[]>([]);
@@ -39,7 +59,7 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
 
   const { resolvedTheme } = useTheme();
   // Stable across renders, so the build effect below never tears the map down and rebuilds it.
-  const mapped = useMemo(() => stops.filter((stop) => !stop.offMap), [stops]);
+  const mapped = useMemo(() => [...stops], [stops]);
 
   useEffect(() => {
     let disposed = false;
@@ -56,18 +76,13 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
       for (let index = 0; index < mapped.length - 1; index++) {
         const from = mapped[index];
         const to = mapped[index + 1];
-        const line = L.polyline(
-          [
-            [from.latitude, from.longitude],
-            [to.latitude, to.longitude],
-          ],
-          {
-            color: to.arriveBy === "flight" ? "#ec4899" : "#38bdf8",
-            weight: 2,
-            opacity: 0.55,
-            dashArray: to.arriveBy === "flight" ? "6 6" : undefined,
-          },
-        ).addTo(map);
+        const is_flight = to.arriveBy === "flight";
+        const line = L.polyline(arcPoints(from, to, is_flight ? 0.22 : 0.08), {
+          color: is_flight ? "#ec4899" : "#38bdf8",
+          weight: 2,
+          opacity: 0.55,
+          dashArray: is_flight ? "6 6" : undefined,
+        }).addTo(map);
         legs_ref.current.push(line);
       }
 
@@ -121,36 +136,14 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
     }
   }, [activeId, mapped]);
 
-  // Escape and the browser's own exit both fire fullscreenchange, so the button label tracks that
-  // event rather than the click that started it.
+  // The panel layout resizes the map's box (breakpoint changes, panel collapse), and Leaflet
+  // caches container dimensions, so every observed resize must invalidate them.
   useEffect(() => {
-    const sync = () => {
-      setIsFullscreen(document.fullscreenElement === wrapper_ref.current);
-      requestAnimationFrame(() => map_ref.current?.invalidateSize());
-    };
-    document.addEventListener("fullscreenchange", sync);
-    return () => document.removeEventListener("fullscreenchange", sync);
+    if (!container_ref.current) return;
+    const observer = new ResizeObserver(() => map_ref.current?.invalidateSize());
+    observer.observe(container_ref.current);
+    return () => observer.disconnect();
   }, []);
 
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen();
-      return;
-    }
-    void wrapper_ref.current?.requestFullscreen();
-  };
-
-  return (
-    <div ref={wrapper_ref} className={clsx("relative bg-card d:bg-card-dark", isFullscreen && "h-screen w-screen")}>
-      <div ref={container_ref} className={clsx("w-full", isFullscreen ? "h-full" : "h-[65vh] min-h-[420px]")} />
-      <button
-        type="button"
-        onClick={toggleFullscreen}
-        // Leaflet's own controls sit at z-index 1000, so this has to clear them.
-        className="absolute top-3 right-3 z-[1100] rounded-md border border-gray-300 d:border-dark-border hfa:border-accent bg-white/90 d:bg-card-dark/90 px-3 py-1.5 font-medium d:text-gray-200 text-gray-700 text-xs shadow-sm"
-      >
-        {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-      </button>
-    </div>
-  );
+  return <div ref={container_ref} className="h-full w-full" />;
 };

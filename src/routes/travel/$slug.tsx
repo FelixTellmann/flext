@@ -19,15 +19,6 @@ export const Route = createFileRoute("/travel/$slug")({
 function TripPage() {
   const { trip } = Route.useLoaderData();
 
-  return (
-    <section className="relative mx-auto max-w-6xl px-4 py-16 md:px-8">
-      <header className="pb-12">
-        <div className="heading-pre">{trip.pre}</div>
-        <h1 className="heading-2xl -ml-1">{trip.title}</h1>
-        <p className="mt-6 max-w-2xl d:text-gray-400 text-gray-600">{trip.intro}</p>
-      </header>
-
-      <TripView trip={trip} />
-    </section>
-  );
+  // TripView is a fixed full-bleed layout below the site header; no page container wraps it.
+  return <TripView trip={trip} />;
 }

@@ -13,8 +13,6 @@ export type TravelStop = {
   departAt: string;
   kind: TravelStopKind;
   arriveBy: TravelArrival;
-  /** Cape Town bookends the trip but sits outside the map's continental view. */
-  offMap?: boolean;
   /** Public detail only. Confirmation numbers and tickets stay behind admin auth, never in this module. */
   lodging?: { name: string; bookedOn?: string };
   note?: string;
@@ -45,7 +43,6 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-14T19:50",
     kind: "city",
     arriveBy: "road",
-    offMap: true,
     note: "Flight UA2222 to Newark, departing 19:50.",
   },
   {
@@ -217,7 +214,6 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-18T00:00",
     kind: "city",
     arriveBy: "flight",
-    offMap: true,
   },
 ];
 
