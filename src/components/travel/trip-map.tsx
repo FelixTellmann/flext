@@ -1,7 +1,8 @@
 import "leaflet/dist/leaflet.css";
-import type { ItineraryStop } from "content/itinerary";
+import clsx from "clsx";
+import type { TravelStop } from "content/travel";
 import type { CircleMarker, Map as LeafletMap, Polyline, TileLayer } from "leaflet";
-import { type FC, useEffect, useMemo, useRef } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "~/components/theme-provider";
 
 // CARTO raster basemaps: OSM data, open with attribution, no key or token.
@@ -12,20 +13,22 @@ const TILES = {
 const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-const KIND_COLOR: Record<ItineraryStop["kind"], string> = {
+const KIND_COLOR: Record<TravelStop["kind"], string> = {
   city: "#38bdf8",
   park: "#22c55e",
   friends: "#ec4899",
 };
 
 type TripMapProps = {
-  stops: ItineraryStop[];
+  stops: TravelStop[];
   activeId: string | null;
   onSelect: (id: string) => void;
 };
 
 export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
   const container_ref = useRef<HTMLDivElement | null>(null);
+  const wrapper_ref = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const map_ref = useRef<LeafletMap | null>(null);
   const markers_ref = useRef<Map<string, CircleMarker>>(new Map());
   const legs_ref = useRef<Polyline[]>([]);
@@ -118,5 +121,36 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
     }
   }, [activeId, mapped]);
 
-  return <div ref={container_ref} className="h-[420px] w-full rounded-md md:h-[560px]" />;
+  // Escape and the browser's own exit both fire fullscreenchange, so the button label tracks that
+  // event rather than the click that started it.
+  useEffect(() => {
+    const sync = () => {
+      setIsFullscreen(document.fullscreenElement === wrapper_ref.current);
+      requestAnimationFrame(() => map_ref.current?.invalidateSize());
+    };
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void wrapper_ref.current?.requestFullscreen();
+  };
+
+  return (
+    <div ref={wrapper_ref} className={clsx("relative bg-card d:bg-card-dark", isFullscreen && "h-screen w-screen")}>
+      <div ref={container_ref} className={clsx("w-full", isFullscreen ? "h-full" : "h-[65vh] min-h-[420px]")} />
+      <button
+        type="button"
+        onClick={toggleFullscreen}
+        // Leaflet's own controls sit at z-index 1000, so this has to clear them.
+        className="absolute top-3 right-3 z-[1100] rounded-md border border-gray-300 d:border-dark-border hfa:border-accent bg-white/90 d:bg-card-dark/90 px-3 py-1.5 font-medium d:text-gray-200 text-gray-700 text-xs shadow-sm"
+      >
+        {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+      </button>
+    </div>
+  );
 };
