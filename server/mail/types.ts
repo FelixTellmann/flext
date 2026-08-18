@@ -4,6 +4,13 @@ export type MailboxFlavor = "gmail" | "generic";
 export type TlsPolicy = "strict" | "pinned";
 export type SyncMode = "incremental" | "reconcile" | "backfill" | "repair" | "reclassify";
 
+// SyncRun.mailboxId is notNull with no FK (server/db/schema.ts has no .references() on it), but a
+// `repair` run touches Message/Sender directly and belongs to no single mailbox. This sentinel keeps the
+// notNull contract satisfied without misattributing the row to an arbitrary real mailbox. Exported so
+// both the writer (server/mail/sync/run.ts) and any future reader (e.g. a dashboard filtering these rows
+// out) share one definition instead of retyping the literal.
+export const DATABASE_WIDE_RUN_MAILBOX_ID = "__database_wide__";
+
 // Gmail is a label store: a message with labels INBOX and Work is visible in three folders with three
 // different UIDs, so only [Gmail]/All Mail is ever walked (§4.1).
 export const GMAIL_CANONICAL_FOLDER = "[Gmail]/All Mail";

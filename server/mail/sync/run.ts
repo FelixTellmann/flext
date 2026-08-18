@@ -11,7 +11,7 @@ import { syncFolderIncrementally } from "@server/mail/sync/incremental";
 import { reconcileFolder } from "@server/mail/sync/reconcile";
 import { repairSenderLinks } from "@server/mail/sync/repair";
 import type { SyncMode } from "@server/mail/types";
-import { parseMailboxFlavor } from "@server/mail/types";
+import { DATABASE_WIDE_RUN_MAILBOX_ID, parseMailboxFlavor } from "@server/mail/types";
 import { and, eq } from "drizzle-orm";
 
 export type MailboxRunSummary = {
@@ -168,14 +168,15 @@ const REPAIR_BATCH_SIZE = 500;
 
 // repair touches Message/Sender only and never opens a mailbox, so it must not run once per row in
 // `rows` below (that would repeat the same database-wide UPDATE loop N times for N mailboxes). It is
-// lifted above the per-mailbox loop and logged against the first matching mailbox purely as an anchor
-// for SyncRun.mailbox_id, which is notNull — that row does not scope the repair.
-async function runRepairOnce(input: { anchor_mailbox: MailboxRow }): Promise<MailboxRunSummary> {
+// lifted above the per-mailbox loop entirely and logged under DATABASE_WIDE_RUN_MAILBOX_ID rather than
+// a real mailbox id: SyncRun.mailboxId is notNull but has no FK, and attaching the row to an arbitrary
+// real mailbox would misattribute a database-wide run into that mailbox's history.
+async function runRepairOnce(): Promise<MailboxRunSummary> {
   const started_at = new Date();
   const run_id = crypto.randomUUID();
   await db.insert(syncRun).values({
     id: run_id,
-    mailbox_id: input.anchor_mailbox.id,
+    mailbox_id: DATABASE_WIDE_RUN_MAILBOX_ID,
     kind: "repair",
     status: "running",
     started_at,
@@ -191,7 +192,7 @@ async function runRepairOnce(input: { anchor_mailbox: MailboxRow }): Promise<Mai
       .where(eq(syncRun.id, run_id));
 
     return {
-      mailbox_id: input.anchor_mailbox.id,
+      mailbox_id: DATABASE_WIDE_RUN_MAILBOX_ID,
       label: "repair",
       kind: "repair",
       status: "ok",
@@ -210,7 +211,7 @@ async function runRepairOnce(input: { anchor_mailbox: MailboxRow }): Promise<Mai
       .where(eq(syncRun.id, run_id));
 
     return {
-      mailbox_id: input.anchor_mailbox.id,
+      mailbox_id: DATABASE_WIDE_RUN_MAILBOX_ID,
       label: "repair",
       kind: "repair",
       status: "failed",
@@ -224,18 +225,14 @@ async function runRepairOnce(input: { anchor_mailbox: MailboxRow }): Promise<Mai
 }
 
 export async function runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id?: string }): Promise<MailboxRunSummary[]> {
+  if (input.mode === "repair") {
+    return [await runRepairOnce()];
+  }
+
   const rows = await db
     .select()
     .from(mailbox)
     .where(input.mailbox_id ? and(eq(mailbox.enabled, true), eq(mailbox.id, input.mailbox_id)) : eq(mailbox.enabled, true));
-
-  if (input.mode === "repair") {
-    const anchor_mailbox = rows[0];
-    if (anchor_mailbox === undefined) {
-      return [];
-    }
-    return [await runRepairOnce({ anchor_mailbox })];
-  }
 
   const summaries: MailboxRunSummary[] = [];
   for (const row of rows) {
