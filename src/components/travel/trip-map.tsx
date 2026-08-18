@@ -1,5 +1,6 @@
 import "leaflet/dist/leaflet.css";
 import type { TravelStop } from "content/travel";
+import { DRIVING_ROUTES } from "content/travel-routes";
 import type { CircleMarker, Map as LeafletMap, Polyline, TileLayer } from "leaflet";
 import { type FC, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "~/components/theme-provider";
@@ -77,10 +78,12 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
         const from = mapped[index];
         const to = mapped[index + 1];
         const is_flight = to.arriveBy === "flight";
-        const line = L.polyline(arcPoints(from, to, is_flight ? 0.22 : 0.08), {
+        // Road legs follow their real driving geometry; flights and rail fall back to drawn arcs.
+        const road = DRIVING_ROUTES[`${from.id}->${to.id}`];
+        const line = L.polyline(road ?? arcPoints(from, to, is_flight ? 0.22 : 0.08), {
           color: is_flight ? "#ec4899" : "#38bdf8",
-          weight: 2,
-          opacity: 0.55,
+          weight: road ? 2.5 : 2,
+          opacity: road ? 0.75 : 0.55,
           dashArray: is_flight ? "6 6" : undefined,
         }).addTo(map);
         legs_ref.current.push(line);
