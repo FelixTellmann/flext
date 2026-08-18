@@ -152,54 +152,72 @@ export async function listNeedsAction(input: {
   const sent_folder_exclusion = await sentFolderExclusion(input.mailbox_id);
   const where = buildWhere(input.mailbox_id, sent_folder_exclusion);
   const now = new Date();
+  const group_key = threadGroupKey();
 
   // MySQL's only_full_group_by forbids grouping by threadKey (not a primary key) while selecting
-  // other raw columns alongside it. Self-joining the newest row per thread back onto Message keeps
-  // subject/sender/etc. all coming from that one real row, instead of independent per-column MAX()es.
-  const thread_stats = db.$with("thread_stats").as(
+  // other raw columns alongside it, so every displayed column must come from one real row.
+  // internalDate is IMAP INTERNALDATE, which is whole-second precision even though the column
+  // stores fsp:3 — two messages landing in the same second is the normal case here, not a rare
+  // edge case, so a (groupKey, MAX(internalDate)) self-join can and does return more than one row
+  // per thread (verified against production: 33 colliding groups, several with 3 rows). ROW_NUMBER()
+  // ordered by internalDate DESC then id DESC gives a single, deterministic newest row per thread.
+  const ranked = db.$with("ranked").as(
     db
       .select({
-        group_key: threadGroupKey().as("group_key"),
-        newest_date: sql<Date>`MAX(${message.internal_date})`.as("newest_date"),
-        message_count: sql<number>`COUNT(*)`.as("message_count"),
+        id: message.id,
+        thread_key: message.thread_key,
+        subject: message.subject,
+        from_address: message.from_address,
+        from_name: message.from_name,
+        mailbox_id: message.mailbox_id,
+        internal_date: message.internal_date,
+        is_seen: message.is_seen,
+        cc_me: message.cc_me,
+        dkim_aligned: message.dkim_aligned,
+        gm_thrid: message.gm_thrid,
+        folder: message.folder,
+        message_id: message.message_id,
+        row_number:
+          sql<number>`ROW_NUMBER() OVER (PARTITION BY ${group_key} ORDER BY ${message.internal_date} DESC, ${message.id} DESC)`.as(
+            "row_number",
+          ),
+        message_count: sql<number>`COUNT(*) OVER (PARTITION BY ${group_key})`.as("message_count"),
       })
       .from(message)
-      .where(where)
-      .groupBy(threadGroupKey()),
+      .where(where),
   );
 
   const rows_promise = db
-    .with(thread_stats)
+    .with(ranked)
     .select({
-      thread_key: message.thread_key,
-      subject: message.subject,
-      from_address: message.from_address,
-      from_name: message.from_name,
-      mailbox_id: message.mailbox_id,
+      thread_key: ranked.thread_key,
+      subject: ranked.subject,
+      from_address: ranked.from_address,
+      from_name: ranked.from_name,
+      mailbox_id: ranked.mailbox_id,
       mailbox_label: mailbox.label,
-      internal_date: message.internal_date,
-      is_seen: message.is_seen,
-      cc_me: message.cc_me,
-      dkim_aligned: message.dkim_aligned,
-      message_count: thread_stats.message_count,
+      internal_date: ranked.internal_date,
+      is_seen: ranked.is_seen,
+      cc_me: ranked.cc_me,
+      dkim_aligned: ranked.dkim_aligned,
+      message_count: ranked.message_count,
       sender_message_count: sender.message_count,
       my_reply_count: sender.my_reply_count,
       flavor: mailbox.flavor,
       account_index: mailbox.account_index,
-      gm_thrid: message.gm_thrid,
-      folder: message.folder,
-      message_id: message.message_id,
+      gm_thrid: ranked.gm_thrid,
+      folder: ranked.folder,
+      message_id: ranked.message_id,
     })
-    .from(message)
-    .innerJoin(thread_stats, and(eq(threadGroupKey(), thread_stats.group_key), eq(message.internal_date, thread_stats.newest_date)))
-    .innerJoin(mailbox, eq(mailbox.id, message.mailbox_id))
-    .leftJoin(sender, eq(sender.address, message.from_address))
-    .where(where)
-    .orderBy(asc(message.internal_date), asc(message.id))
+    .from(ranked)
+    .innerJoin(mailbox, eq(mailbox.id, ranked.mailbox_id))
+    .leftJoin(sender, eq(sender.address, ranked.from_address))
+    .where(eq(ranked.row_number, 1))
+    .orderBy(asc(ranked.internal_date), asc(ranked.id))
     .limit(input.limit)
     .offset(input.offset);
 
-  const total_promise = db.with(thread_stats).select({ total: sql<number>`COUNT(*)` }).from(thread_stats);
+  const total_promise = db.with(ranked).select({ total: sql<number>`COUNT(*)` }).from(ranked).where(eq(ranked.row_number, 1));
 
   const [rows, total_rows] = await Promise.all([rows_promise, total_promise]);
 
