@@ -40,6 +40,7 @@ function AdminMailPage() {
   const [certificate_target, setCertificateTarget] = useState<string | null>(null);
   const [observed_addresses, setObservedAddresses] = useState<Record<string, ObservedAddress[]>>({});
   const [selected_addresses, setSelectedAddresses] = useState<Record<string, Set<string>>>({});
+  const [identity_freetext, setIdentityFreetext] = useState<Record<string, string>>({});
   const [picker_open, setPickerOpen] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState({
     label: "",
@@ -208,11 +209,13 @@ function AdminMailPage() {
                 void runAction(`${entry.id}:observed`, "Load observed addresses", async () => {
                   const rows = await orpc.mail.listObservedAddresses({ id: entry.id });
                   const rows_by_address = new Set(rows.map((row) => row.address));
+                  const kept_addresses = entry.identity_addresses.filter((address) => !rows_by_address.has(address));
                   setObservedAddresses((previous) => ({ ...previous, [entry.id]: rows }));
                   setSelectedAddresses((previous) => ({
                     ...previous,
                     [entry.id]: new Set(entry.identity_addresses.filter((address) => rows_by_address.has(address))),
                   }));
+                  setIdentityFreetext((previous) => ({ ...previous, [entry.id]: kept_addresses.join(", ") }));
                   setPickerOpen((previous) => ({ ...previous, [entry.id]: true }));
                   return `${rows.length} addresses`;
                 });
@@ -277,15 +280,37 @@ function AdminMailPage() {
                   })}
                 </ul>
               )}
+              <label className="mb-1 block text-gray-600 text-sm dark:text-dark-text" htmlFor={`${entry.id}-identity-freetext`}>
+                Other addresses or patterns
+              </label>
+              <input
+                className={clsx("mb-3 w-full", field, "focus-visible:ring-2 focus-visible:ring-info")}
+                id={`${entry.id}-identity-freetext`}
+                onChange={(event) => setIdentityFreetext((previous) => ({ ...previous, [entry.id]: event.target.value }))}
+                placeholder="Comma separated, patterns allowed (felix@flext.dev, *@flext.dev)"
+                value={identity_freetext[entry.id] ?? ""}
+              />
               <ActionButton
                 busy={pending === `${entry.id}:save-identity`}
                 disabled={pending !== null}
                 label="Save identity addresses"
                 onClick={() =>
                   void runAction(`${entry.id}:save-identity`, "Save identity addresses", async () => {
-                    const rows_by_address = new Set((observed_addresses[entry.id] ?? []).map((row) => row.address));
-                    const kept_addresses = entry.identity_addresses.filter((address) => !rows_by_address.has(address));
-                    const addresses = [...kept_addresses, ...Array.from(selected_addresses[entry.id] ?? [])];
+                    const freetext_addresses = (identity_freetext[entry.id] ?? "")
+                      .split(",")
+                      .map((address) => address.trim())
+                      .filter((address) => address.length > 0);
+                    const ticked_addresses = Array.from(selected_addresses[entry.id] ?? []);
+                    const seen = new Set<string>();
+                    const addresses: string[] = [];
+                    for (const address of [...freetext_addresses, ...ticked_addresses]) {
+                      const key = address.toLowerCase();
+                      if (seen.has(key)) {
+                        continue;
+                      }
+                      seen.add(key);
+                      addresses.push(address);
+                    }
                     await orpc.mail.setIdentityAddresses({ id: entry.id, addresses });
                     return "Saved. New mail uses this list immediately — run reclassify to correct existing messages' to_me value.";
                   })
