@@ -889,4 +889,31 @@ Also fixed: `disappeared_at` now filtered consistently across `senders.ts`; `run
 
 Verified after the fix wave: `bun run tsc` 0 errors, `bun test` 51 pass / 0 fail (up from 49), `bun run build` succeeded, biome clean, and all five read-only-contract greps clean — every `getMailboxLock` passes `readOnly: true`, no flag/COPY/MOVE/EXPUNGE/APPEND write exists in `server/mail`, the single fetch spec is `BODY.PEEK`, every `rejectUnauthorized` assignment is `true`, and there is no `db.delete` in `server/mail`.
 
-Still open, unchanged: no browser has rendered any of the three new surfaces; `repair` and `reclassify` have never been executed; `0002_absurd_cyclops.sql` has not been applied.
+Still open at that point: no browser had rendered any of the three new surfaces; `repair` and `reclassify` had never been executed; `0002_absurd_cyclops.sql` had not been applied. All three were resolved the same day — see the operator-sequence section below.
+
+**Operator sequence executed: 2026-08-18**
+
+The runbook sequence was run for real against production, jointly with the operator. It works, and the acceptance test passed.
+
+- **Migration.** `0002_absurd_cyclops.sql` applied; `__drizzle_migrations` went 2 rows to 3, and both `Message_fromAddress_idx` and `Message_internalDate_idx` are live.
+- **Identity addresses.** Set on all four mailboxes. `felix@tellmann.co.za` uses the pattern `*@tellmann.co.za`, which replaces 60+ observed `tellmvdhst-*` aliases and covers future ones. This required a follow-up change (`63e1f13`): the Task 11 picker could only tick observed addresses, so a pattern — which §1.10 explicitly permits and which the matcher supports — could not be entered for an existing mailbox at all. A free-text field was added, seeded with the non-observed entries the save was already silently preserving, making that guard visible and editable.
+- **`repair`.** 14,601 rows linked in 5 seconds. Logged against the `__database_wide__` sentinel, and zero repair rows join a real mailbox, confirming the Task 7a fix behaves as designed on real data.
+- **`reclassify`.** All four mailboxes in ~13 minutes (82s + 97s + 188s + 406s), 5,222 messages updated.
+
+Measured against the baseline captured before any of it (`tmp/2026-08-18-phase2-baseline.txt`):
+
+| Mailbox | `to_me` before → after | `dkimAligned` null before → after |
+|---|---|---|
+| felix@listifyregistry.com | **9.1% → 72.5%** | 1,424 → 110 |
+| felix@platter.com | 70.2% → 98.5% | 2,275 → 35 |
+| felix@tellmann.co.za | 86.6% → 90.9% | 9,941 → 9,443 |
+| felixtellmann@gmail.com | 84.7% → 84.7% | 758 → 115 |
+
+Needs Action, 30-day window: 481 → 611 threads; unfiltered 6,749 → 7,694. `felix@listifyregistry.com` now contributes 564 threads where it previously contributed roughly 108 — mail that was genuinely addressed to the operator and invisible to the system until the aliases were registered.
+
+**Two findings from the run, both recorded in the runbook:**
+
+- **A long run times out on the client while the server keeps working.** The first reclassify attempt returned a client timeout and looked like a hard failure; `SyncRun` showed `status='running'` and the cursors were still advancing. Re-running would have started a second concurrent pass. The runbook now carries a TIMEOUT TRAP section with the queries that distinguish "still working" from "dead", and the instruction to always pass an explicit long timeout.
+- **`dkimAligned` stays largely null on the generic mailbox and that is not a defect.** The three Gmail-backed mailboxes went from 4,457 nulls to 260 between them; `felix@tellmann.co.za` moved only 9,941 → 9,443, because its xneelo/Dovecot server does not stamp `Authentication-Results` on most mail. There is nothing to parse. Phase 5's filing DKIM gate (§6) must therefore treat generic-IMAP mail differently, or it will route almost all of that mailbox to `filing_queue`.
+
+**Still open:** production runs `main` until this branch is deployed, so the scheduled sync keeps writing rows with a null `senderId` — 19 had accumulated within minutes of the repair. Deploying stops that; `repair` is safely re-runnable afterwards.

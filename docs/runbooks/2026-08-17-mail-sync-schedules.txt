@@ -125,6 +125,32 @@ THE ORDER MATTERS. Do these in this exact sequence:
   e. Re-check the numbers (see below for what "correct" looks like).
 
 -----------------------------------------------------------------------------
+TIMEOUT TRAP: YOUR CLIENT GIVES UP LONG BEFORE THE RUN FINISHES
+-----------------------------------------------------------------------------
+
+Hit on 2026-08-18 during the first real reclassify. The client gave up with a
+timeout while the server carried on working to completion. The run looked like
+a hard failure and there was nothing in the output to say otherwise.
+
+Do NOT re-run when this happens. A second reclassify against the same mailboxes
+would run concurrently with the first. Instead, check whether it is still going:
+
+    SELECT mailboxId, status, startedAt, finishedAt, messagesUpdated
+    FROM SyncRun WHERE kind = 'reclassify' ORDER BY startedAt DESC;
+
+A row with status='running' and no finishedAt means it is still working. The
+reclassify cursors also advance as it goes, so re-reading MailboxCursor a minute
+apart shows movement:
+
+    SELECT mailboxId, folder, lastSeenUid, lastSyncAt
+    FROM MailboxCursor WHERE kind = 'reclassify';
+
+Always pass an explicit long timeout. With curl that is --max-time 3600, as in
+the backfill section above. Anything driving this with fetch needs the same:
+bun's default timeout is minutes, and reclassify took 13 minutes across four
+mailboxes on 2026-08-18 (82s + 97s + 188s + 406s).
+
+-----------------------------------------------------------------------------
 THE TRAP: A REPEAT RECLASSIFY RUN CAN BE A SILENT NO-OP THAT REPORTS SUCCESS
 -----------------------------------------------------------------------------
 
