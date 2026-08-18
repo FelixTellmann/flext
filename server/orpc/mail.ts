@@ -5,6 +5,8 @@ import { mailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FETCH_SPEC } from "@server/mail/providers/headers";
 import { createImapProvider } from "@server/mail/providers/imap";
 import { observeCertificate } from "@server/mail/providers/tls";
+import { listNeedsAction } from "@server/mail/query/needs-action";
+import { getDashboardSummary, getSenderProfile, listSenders } from "@server/mail/query/senders";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { runSyncForAllMailboxes } from "@server/mail/sync/run";
 import { parseMailboxFlavor, parseStringList, serializeStringList, sync_mode_schema } from "@server/mail/types";
@@ -186,4 +188,56 @@ export const mailProcedures = {
       error_message: row.error_message,
     }));
   }),
+
+  listSenders: authed
+    .input(
+      z.object({
+        search: z.string().nullable().default(null),
+        replied: z.enum(["all", "never", "replied"]).default("all"),
+        bulk: z.enum(["all", "bulk", "direct"]).default("all"),
+        mailbox_id: z.string().nullable().default(null),
+        min_messages: z.number().int().min(0).max(10_000).default(0),
+        sort: z.enum(["messages", "replies", "last_seen", "address"]).default("messages"),
+        direction: z.enum(["asc", "desc"]).default("desc"),
+        limit: z.number().int().positive().max(200).default(50),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .handler(async ({ input }) =>
+      listSenders({
+        filter: {
+          search: input.search,
+          replied: input.replied,
+          bulk: input.bulk,
+          mailbox_id: input.mailbox_id,
+          min_messages: input.min_messages,
+        },
+        sort: input.sort,
+        direction: input.direction,
+        limit: input.limit,
+        offset: input.offset,
+      }),
+    ),
+
+  getSenderProfile: authed.input(z.object({ address: z.string().min(1) })).handler(async ({ input }) => getSenderProfile(input.address)),
+
+  listNeedsAction: authed
+    .input(
+      z.object({
+        mailbox_id: z.string().nullable().default(null),
+        max_age_days: z.number().int().positive().nullable().default(365),
+        limit: z.number().int().positive().max(200).default(50),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .handler(async ({ input }) =>
+      listNeedsAction({
+        mailbox_id: input.mailbox_id,
+        max_age_days: input.max_age_days,
+        limit: input.limit,
+        offset: input.offset,
+      }),
+    ),
+
+  getDashboardSummary: authed.handler(async () => getDashboardSummary()),
 };

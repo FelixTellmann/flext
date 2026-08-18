@@ -6,7 +6,7 @@ import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
 import { parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, inArray, isNull, not, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, not, sql } from "drizzle-orm";
 
 export type NeedsActionRow = {
   thread_key: string | null;
@@ -148,6 +148,7 @@ export async function listNeedsAction(input: {
   mailbox_id: string | null;
   limit: number;
   offset: number;
+  max_age_days: number | null;
 }): Promise<{ rows: NeedsActionRow[]; total: number }> {
   const sent_folder_exclusion = await sentFolderExclusion(input.mailbox_id);
   const where = buildWhere(input.mailbox_id, sent_folder_exclusion);
@@ -187,6 +188,15 @@ export async function listNeedsAction(input: {
       .where(where),
   );
 
+  // Filtering on ranked.internal_date (the newest message per thread) rather than on the base where
+  // clause keeps message_count whole-thread and applies the cutoff to the thread as a whole, not to
+  // individual older messages inside a thread that's otherwise still current.
+  const newest_row = eq(ranked.row_number, 1);
+  const where_ranked =
+    input.max_age_days === null
+      ? newest_row
+      : (and(newest_row, gte(ranked.internal_date, new Date(now.getTime() - input.max_age_days * 86_400_000))) as SQL);
+
   const rows_promise = db
     .with(ranked)
     .select({
@@ -212,12 +222,12 @@ export async function listNeedsAction(input: {
     .from(ranked)
     .innerJoin(mailbox, eq(mailbox.id, ranked.mailbox_id))
     .leftJoin(sender, eq(sender.address, ranked.from_address))
-    .where(eq(ranked.row_number, 1))
+    .where(where_ranked)
     .orderBy(asc(ranked.internal_date), asc(ranked.id))
     .limit(input.limit)
     .offset(input.offset);
 
-  const total_promise = db.with(ranked).select({ total: sql<number>`COUNT(*)` }).from(ranked).where(eq(ranked.row_number, 1));
+  const total_promise = db.with(ranked).select({ total: sql<number>`COUNT(*)` }).from(ranked).where(where_ranked);
 
   const [rows, total_rows] = await Promise.all([rows_promise, total_promise]);
 
