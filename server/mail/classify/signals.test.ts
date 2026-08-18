@@ -41,6 +41,15 @@ describe("deriveSignals", () => {
     expect(deriveSignals({ ...base, precedence: "Bulk" }).is_bulk).toBe(true);
   });
 
+  test("Precedence: list is bulk", () => {
+    expect(deriveSignals({ ...base, precedence: " List " }).is_bulk).toBe(true);
+  });
+
+  test("Precedence: first-class is not bulk", () => {
+    expect(deriveSignals({ ...base, precedence: "first-class" }).is_bulk).toBe(false);
+    expect(deriveSignals({ ...base, precedence: "first-class" }).is_automated).toBe(false);
+  });
+
   test("a no-reply sender is automated without Auto-Submitted", () => {
     expect(deriveSignals({ ...base, from_address: "No-Reply@example.com" }).is_automated).toBe(true);
   });

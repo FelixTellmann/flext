@@ -4,8 +4,9 @@ import type { VolumeBucket } from "@server/mail/classify/signals";
 import { volumeBucket } from "@server/mail/classify/signals";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
+import { isBulkPrecedenceSql } from "@server/mail/query/signal-sql";
 import type { SQL } from "drizzle-orm";
-import { and, asc, desc, eq, gte, like, ne, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, like, ne, or, sql } from "drizzle-orm";
 
 export type SenderSort = "messages" | "replies" | "last_seen" | "address";
 
@@ -78,8 +79,8 @@ function splitLabels(raw: string | null): string[] {
 
 function senderAggregates() {
   return {
-    bulk_count: sql<number>`SUM(${message.list_id} IS NOT NULL OR ${message.list_unsubscribe} IS NOT NULL)`,
-    automated_count: sql<number>`SUM(${message.auto_submitted} IS NOT NULL OR ${message.precedence} IS NOT NULL)`,
+    bulk_count: sql<number>`SUM(${message.list_id} IS NOT NULL OR ${message.list_unsubscribe} IS NOT NULL OR ${isBulkPrecedenceSql()})`,
+    automated_count: sql<number>`SUM(${message.auto_submitted} IS NOT NULL)`,
     unread_count: sql<number>`SUM(${message.is_seen} = 0)`,
     attachment_count: sql<number>`SUM(${message.has_attachment} = 1)`,
     // Gmail keeps INBOX as a label on the canonical All Mail folder; generic IMAP uses a real folder.
@@ -108,7 +109,10 @@ function toSenderRow(row: SenderAggregateSelection): SenderRow {
 }
 
 function buildWhere(filter: SenderFilter): SQL | undefined {
-  const conditions: SQL[] = [];
+  // Every per-sender aggregate below counts Message rows, so a message that reconcile marked as gone
+  // server-side must not keep inflating them. Sender.messageCount / myReplyCount / lastSeenAt are stored
+  // lifetime totals with no such filter available — they still include vanished mail.
+  const conditions: SQL[] = [isNull(message.disappeared_at)];
 
   if (filter.search !== null && filter.search.length > 0) {
     const pattern = `%${filter.search}%`;
@@ -220,7 +224,7 @@ export async function getSenderProfile(address: string): Promise<SenderProfile |
     .from(sender)
     .innerJoin(message, eq(message.from_address, sender.address))
     .innerJoin(mailbox, eq(mailbox.id, message.mailbox_id))
-    .where(eq(sender.address, address))
+    .where(and(eq(sender.address, address), isNull(message.disappeared_at)))
     .groupBy(sender.id);
 
   if (row === undefined) {
@@ -232,7 +236,7 @@ export async function getSenderProfile(address: string): Promise<SenderProfile |
       .select({ label: mailbox.label, count: sql<number>`COUNT(*)` })
       .from(message)
       .innerJoin(mailbox, eq(mailbox.id, message.mailbox_id))
-      .where(eq(message.from_address, address))
+      .where(and(eq(message.from_address, address), isNull(message.disappeared_at)))
       .groupBy(mailbox.id),
     db
       .select({
@@ -246,7 +250,7 @@ export async function getSenderProfile(address: string): Promise<SenderProfile |
       })
       .from(message)
       .innerJoin(mailbox, eq(mailbox.id, message.mailbox_id))
-      .where(eq(message.from_address, address))
+      .where(and(eq(message.from_address, address), isNull(message.disappeared_at)))
       .orderBy(desc(message.internal_date))
       .limit(20),
   ]);
@@ -273,7 +277,7 @@ export async function getSenderProfile(address: string): Promise<SenderProfile |
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   const [mailbox_rows, message_totals, message_stats, sync_stats, sender_totals] = await Promise.all([
     db.select().from(mailbox).orderBy(mailbox.label),
-    db.select({ total: sql<number>`COUNT(*)` }).from(message),
+    db.select({ total: sql<number>`COUNT(*)` }).from(message).where(isNull(message.disappeared_at)),
     db
       .select({
         mailbox_id: message.mailbox_id,
@@ -281,6 +285,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
         unread: sql<number>`SUM(${message.is_seen} = 0)`,
       })
       .from(message)
+      .where(isNull(message.disappeared_at))
       .groupBy(message.mailbox_id),
     db
       .select({ mailbox_id: syncRun.mailbox_id, last_sync_at: sql<string | null>`MAX(${syncRun.started_at})` })

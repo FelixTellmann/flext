@@ -28,8 +28,19 @@ export type MessageSignals = {
 
 // §5.1 lists these three headers as the bulk markers. Precedence carries several values in the wild and
 // only "bulk" and "list" mean automated distribution — "urgent" and "first-class" are ordinary mail.
-const BULK_PRECEDENCE = new Set(["bulk", "list"]);
+// Exported so the SQL spelling of this rule in server/mail/query/ compares the same values rather than
+// restating the literals; §5.1 never makes Precedence an is_automated marker.
+export const BULK_PRECEDENCE_VALUES = ["bulk", "list"] as const;
 const AUTOMATED_LOCAL_PARTS = [/^no-?reply@/i, /^mailer-daemon@/i, /^postmaster@/i, /^do-?not-?reply@/i];
+
+export function normalizePrecedence(raw: string | null): string {
+  return (raw ?? "").trim().toLowerCase();
+}
+
+export function isBulkPrecedence(raw: string | null): boolean {
+  const normalized = normalizePrecedence(raw);
+  return BULK_PRECEDENCE_VALUES.some((value) => value === normalized);
+}
 
 export function volumeBucket(message_count: number): VolumeBucket {
   if (message_count >= 1000) {
@@ -45,8 +56,7 @@ export function volumeBucket(message_count: number): VolumeBucket {
 }
 
 export function deriveSignals(input: SignalInput): MessageSignals {
-  const precedence = (input.precedence ?? "").trim().toLowerCase();
-  const is_bulk = input.list_id !== null || input.list_unsubscribe !== null || BULK_PRECEDENCE.has(precedence);
+  const is_bulk = input.list_id !== null || input.list_unsubscribe !== null || isBulkPrecedence(input.precedence);
   const from_address = input.from_address ?? "";
   const is_automated = input.auto_submitted !== null || AUTOMATED_LOCAL_PARTS.some((pattern) => pattern.test(from_address));
   const elapsed_ms = input.now.getTime() - input.internal_date.getTime();

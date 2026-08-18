@@ -4,6 +4,7 @@ import type { MessageSignals } from "@server/mail/classify/signals";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
+import { isBulkPrecedenceSql } from "@server/mail/query/signal-sql";
 import { parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
 import { and, asc, eq, gte, inArray, isNull, not, sql } from "drizzle-orm";
@@ -69,15 +70,17 @@ function buildWhere(mailbox_id: string | null, sent_folder_exclusion: SQL | unde
     isNull(message.list_id),
     isNull(message.list_unsubscribe),
     isNull(message.auto_submitted),
-    isNull(message.precedence),
+    not(isBulkPrecedenceSql()),
     eq(message.to_me, true),
     isNull(message.disappeared_at),
   ];
   if (mailbox_id !== null) {
     conditions.push(eq(message.mailbox_id, mailbox_id));
   }
-  // last_in_thread_is_mine has no thread-state table until Phase 3; excluding rows that live in a
-  // Sent folder approximates it, since a message can only be "the last one" here if it isn't mine.
+  // Keeps the operator's own messages out of the candidate pool, so a thread is always headed by an
+  // inbound message. It is NOT §1.9's last_in_thread_is_mine: that term needs to know who sent the
+  // newest message in the thread, and a thread the operator has already answered still surfaces here
+  // under its newest inbound message. It waits for Phase 3's thread_state.
   if (sent_folder_exclusion !== undefined) {
     conditions.push(sent_folder_exclusion);
   }
@@ -91,7 +94,9 @@ function buildReasons(signals: MessageSignals, params: { is_seen: boolean; sende
   if (signals.addressed_to_me) {
     reasons.push("addressed directly to you");
   }
-  reasons.push("no reply sent");
+  if (!signals.sender_known) {
+    reasons.push("you have never replied to this sender");
+  }
   if (!params.is_seen) {
     reasons.push(signals.age_days === 0 ? "unread today" : `unread for ${signals.age_days} days`);
   }
@@ -105,8 +110,9 @@ function buildReasons(signals: MessageSignals, params: { is_seen: boolean; sende
 function toNeedsActionRow(row: NeedsActionQueryRow, now: Date): NeedsActionRow {
   const sender_message_count = Number(row.sender_message_count ?? 0);
   // list_id/list_unsubscribe/precedence/auto_submitted/to_me aren't re-selected: buildWhere already
-  // constrains every candidate row to list_id IS NULL, list_unsubscribe IS NULL, precedence IS NULL,
-  // auto_submitted IS NULL and to_me = 1, so their signal inputs are fixed.
+  // constrains every candidate row to list_id IS NULL, list_unsubscribe IS NULL, auto_submitted IS NULL,
+  // to_me = 1 and a Precedence that is not bulk|list — so no bulk or automated input can be set, and a
+  // null precedence derives the same is_bulk as the "urgent"/"first-class" value the row may carry.
   const signals = deriveSignals({
     list_id: null,
     list_unsubscribe: null,
