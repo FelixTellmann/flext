@@ -195,6 +195,8 @@ export const message = mysqlTable(
     mailboxGmMsgidUnique: uniqueIndex("Message_mailboxId_gmMsgid_key").on(table.mailbox_id, table.gm_msgid),
     mailboxMessageIdIndex: index("Message_mailboxId_messageId_idx").on(table.mailbox_id, table.message_id),
     senderIndex: index("Message_senderId_idx").on(table.sender_id),
+    fromAddressIndex: index("Message_fromAddress_idx").on(table.from_address),
+    internalDateIndex: index("Message_internalDate_idx").on(table.internal_date),
   }),
 );
 
