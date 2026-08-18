@@ -1,7 +1,8 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import clsx from "clsx";
-import { type FC, type ReactNode, useState } from "react";
+import { useState } from "react";
 import { orpc } from "~/integrations/orpc";
+import { ActionButton, accent_button, busy_state, field, Panel, Spinner, secondary_button } from "./-ui";
 
 type ObservedCertificate = {
   spki_sha256: string;
@@ -12,6 +13,13 @@ type ObservedCertificate = {
   subject_alt_names: string[];
 };
 
+type ObservedAddress = {
+  address: string;
+  source_header: string;
+  occurrences: number;
+  last_seen_at: string | null;
+};
+
 export const Route = createFileRoute("/admin/mail")({
   loader: async () => {
     const [mailboxes, runs] = await Promise.all([orpc.mail.listMailboxes(), orpc.mail.listSyncRuns({ limit: 20 })]);
@@ -20,41 +28,8 @@ export const Route = createFileRoute("/admin/mail")({
   component: AdminMailPage,
 });
 
-const Panel: FC<{ title: string; children: ReactNode }> = ({ title, children }) => (
-  <section className="rounded-lg border border-gray-200 bg-card p-4 dark:border-dark-border dark:bg-dark-card">
-    <h2 className="mb-3 font-semibold text-gray-900 text-sm dark:text-dark-headings">{title}</h2>
-    {children}
-  </section>
-);
-
-// --color-accent and --color-accent-contrast hold the same RGB, so the token pair renders invisible text.
-// Same workaround as the sign-in button until the design-system gap is closed.
-const accent_button = "rounded bg-accent px-3 py-2 font-medium text-sm text-white dark:bg-accent-dark dark:text-dark-bg";
-const field = "rounded border border-gray-300 p-2 text-sm dark:border-dark-border dark:bg-dark-bg";
-const secondary_button = "rounded border border-gray-300 px-3 py-1 text-sm dark:border-dark-border";
-const busy_state = "inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50";
-
-const Spinner: FC = () => (
-  <svg aria-hidden="true" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" d="M4 12a8 8 0 0 1 8-8" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
-  </svg>
-);
-
-// A backfill can hold the request open for minutes, so a button that still looks clickable is the whole
-// problem: every action disables the entire set, and the one that is working says so.
-const ActionButton: FC<{
-  busy: boolean;
-  disabled: boolean;
-  label: string;
-  onClick: () => void;
-  variant: string;
-}> = ({ busy, disabled, label, onClick, variant }) => (
-  <button className={clsx(variant, busy_state)} disabled={disabled} onClick={onClick} type="button">
-    {busy && <Spinner />}
-    {busy ? `${label}…` : label}
-  </button>
-);
+const checkbox =
+  "h-4 w-4 rounded border-gray-300 text-accent focus-visible:ring-2 focus-visible:ring-info dark:border-dark-border dark:bg-dark-bg";
 
 function AdminMailPage() {
   const { mailboxes, runs } = Route.useLoaderData();
@@ -63,6 +38,9 @@ function AdminMailPage() {
   const [pending, setPending] = useState<string | null>(null);
   const [certificate, setCertificate] = useState<ObservedCertificate | null>(null);
   const [certificate_target, setCertificateTarget] = useState<string | null>(null);
+  const [observed_addresses, setObservedAddresses] = useState<Record<string, ObservedAddress[]>>({});
+  const [selected_addresses, setSelectedAddresses] = useState<Record<string, Set<string>>>({});
+  const [picker_open, setPickerOpen] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState({
     label: "",
     host: "",
@@ -221,13 +199,24 @@ function AdminMailPage() {
             <ActionButton
               busy={pending === `${entry.id}:observed`}
               disabled={pending !== null}
-              label="Show observed Delivered-To"
-              onClick={() =>
-                void runAction(`${entry.id}:observed`, "Observed addresses", async () => {
-                  const observed = await orpc.mail.listObservedAddresses({ id: entry.id });
-                  return observed.map((row) => `${row.address} (${row.source_header} ×${row.occurrences})`);
-                })
-              }
+              label={picker_open[entry.id] === true ? "Hide observed addresses" : "Review observed addresses"}
+              onClick={() => {
+                if (picker_open[entry.id] === true) {
+                  setPickerOpen({ ...picker_open, [entry.id]: false });
+                  return;
+                }
+                void runAction(`${entry.id}:observed`, "Load observed addresses", async () => {
+                  const rows = await orpc.mail.listObservedAddresses({ id: entry.id });
+                  const rows_by_address = new Set(rows.map((row) => row.address));
+                  setObservedAddresses((previous) => ({ ...previous, [entry.id]: rows }));
+                  setSelectedAddresses((previous) => ({
+                    ...previous,
+                    [entry.id]: new Set(entry.identity_addresses.filter((address) => rows_by_address.has(address))),
+                  }));
+                  setPickerOpen((previous) => ({ ...previous, [entry.id]: true }));
+                  return `${rows.length} addresses`;
+                });
+              }}
               variant={secondary_button}
             />
             <ActionButton
@@ -245,6 +234,66 @@ function AdminMailPage() {
               variant="rounded border border-warning px-3 py-1 text-sm text-warning"
             />
           </div>
+
+          {picker_open[entry.id] === true && observed_addresses[entry.id] !== undefined && (
+            <div className="mt-3 rounded border border-gray-200 p-3 dark:border-dark-border">
+              <p className="mb-2 text-gray-600 text-sm dark:text-dark-text">
+                Tick every address that genuinely belongs to this operator. Saving only changes how new mail is classified — messages
+                already synced keep their current to_me value until a reclassify sync run recomputes them.
+              </p>
+              {observed_addresses[entry.id]?.length === 0 ? (
+                <p className="text-gray-500 text-sm dark:text-dark-text">No observed addresses yet.</p>
+              ) : (
+                <ul className="mb-3 flex max-h-64 flex-col gap-1 overflow-y-auto">
+                  {observed_addresses[entry.id]?.map((row) => {
+                    const input_id = `${entry.id}-observed-${row.address}`;
+                    return (
+                      <li className="flex items-center gap-2 text-sm" key={row.address}>
+                        <input
+                          checked={selected_addresses[entry.id]?.has(row.address) ?? false}
+                          className={checkbox}
+                          id={input_id}
+                          onChange={(event) => {
+                            setSelectedAddresses((previous) => {
+                              const next = new Set(previous[entry.id] ?? []);
+                              if (event.target.checked) {
+                                next.add(row.address);
+                              } else {
+                                next.delete(row.address);
+                              }
+                              return { ...previous, [entry.id]: next };
+                            });
+                          }}
+                          type="checkbox"
+                        />
+                        <label className="flex-1 cursor-pointer" htmlFor={input_id}>
+                          {row.address}{" "}
+                          <span className="text-gray-500 dark:text-dark-text">
+                            ({row.source_header} ×{row.occurrences})
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <ActionButton
+                busy={pending === `${entry.id}:save-identity`}
+                disabled={pending !== null}
+                label="Save identity addresses"
+                onClick={() =>
+                  void runAction(`${entry.id}:save-identity`, "Save identity addresses", async () => {
+                    const rows_by_address = new Set((observed_addresses[entry.id] ?? []).map((row) => row.address));
+                    const kept_addresses = entry.identity_addresses.filter((address) => !rows_by_address.has(address));
+                    const addresses = [...kept_addresses, ...Array.from(selected_addresses[entry.id] ?? [])];
+                    await orpc.mail.setIdentityAddresses({ id: entry.id, addresses });
+                    return "Saved. New mail uses this list immediately — run reclassify to correct existing messages' to_me value.";
+                  })
+                }
+                variant={accent_button}
+              />
+            </div>
+          )}
 
           {certificate !== null && certificate_target === entry.id && (
             <div className="mt-3 rounded border border-warning/50 bg-warning/10 p-3 text-sm">
