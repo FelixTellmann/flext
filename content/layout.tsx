@@ -38,6 +38,12 @@ export const HEADER = {
       desktop: true,
     },*/,
     {
+      href: "/travel",
+      title: "Travel",
+      alt: "Where I'm going next.",
+      desktop: true,
+    },
+    {
       href: "/resume",
       title: "Resume",
       alt: "My professional resume",

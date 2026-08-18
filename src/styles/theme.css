@@ -66,3 +66,17 @@ button {
     outline: none;
   }
 }
+
+/* Leaflet ships its own .leaflet-tooltip rules at the same specificity, so these only land as !important. */
+.trip-tip {
+  @apply !rounded-md !border-0 !bg-gray-900 !px-2 !py-1 !font-medium !text-white !text-xs !shadow-lg;
+}
+
+.trip-tip:before {
+  display: none;
+}
+
+.leaflet-container {
+  @apply font-sans;
+  @apply bg-gray-200 dark:bg-dark-card;
+}
