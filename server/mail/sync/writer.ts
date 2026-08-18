@@ -61,7 +61,7 @@ async function existingUids(input: { mailbox_id: string; folder: string; uid_val
   return new Set(rows.map((row) => row.uid));
 }
 
-async function upsertSenders(aggregates: SenderAggregate[]): Promise<void> {
+async function upsertSenders(aggregates: SenderAggregate[]): Promise<Map<string, string>> {
   const now = new Date();
   for (const aggregate of aggregates) {
     await db
@@ -83,6 +83,17 @@ async function upsertSenders(aggregates: SenderAggregate[]): Promise<void> {
         },
       });
   }
+
+  const addresses = aggregates.map((aggregate) => clamp(aggregate.address, 320) ?? "");
+  if (addresses.length === 0) {
+    return new Map();
+  }
+  // MySQL's ON DUPLICATE KEY UPDATE never returns ids for the rows it updated, and Drizzle's
+  // $returningId yields nothing when the primary key is a SQL default (Sender.id is
+  // `.default(sql\`(UUID())\`)`) — that gap left every sync run stuck at status "running" in
+  // Phase 1. Resolving ids with one SELECT per batch avoids both.
+  const rows = await db.select({ id: sender.id, address: sender.address }).from(sender).where(inArray(sender.address, addresses));
+  return new Map(rows.map((row) => [row.address.toLowerCase(), row.id]));
 }
 
 async function upsertObservedAddresses(input: {
@@ -209,8 +220,14 @@ export async function writeMessages(input: {
     };
   });
 
-  for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK_SIZE) {
-    const chunk = rows.slice(offset, offset + INSERT_CHUNK_SIZE);
+  const sender_ids = await upsertSenders([...sender_aggregates.values()]);
+  const rows_with_sender = rows.map((row) => ({
+    ...row,
+    sender_id: row.from_address === null ? null : (sender_ids.get(row.from_address.toLowerCase()) ?? null),
+  }));
+
+  for (let offset = 0; offset < rows_with_sender.length; offset += INSERT_CHUNK_SIZE) {
+    const chunk = rows_with_sender.slice(offset, offset + INSERT_CHUNK_SIZE);
     await db
       .insert(message)
       .values(chunk)
@@ -227,10 +244,9 @@ export async function writeMessages(input: {
       });
   }
 
-  await upsertSenders([...sender_aggregates.values()]);
   await upsertObservedAddresses({ mailbox_id: input.mailbox_row.id, observed });
 
-  const inserted = rows.length - known_uids.size;
+  const inserted = rows_with_sender.length - known_uids.size;
   return { inserted, updated: known_uids.size };
 }
 
