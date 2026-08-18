@@ -83,6 +83,128 @@ Note this endpoint backfills EVERY enabled mailbox in sequence; per-mailbox back
 
 
 =============================================================================
+REPAIR AND RECLASSIFY — ONE-OFF MODES, NEVER SCHEDULE THESE
+=============================================================================
+
+Same rule as backfill above, and just as absolute: mode=repair and mode=reclassify
+are one-off operator actions. Do NOT add either one to Coolify's scheduled tasks.
+repair fixes up existing rows once; reclassify re-derives classification once after
+you widen identity_addresses. Neither belongs on a cron line, ever.
+
+These two exist because of the Phase 2 data-quality findings written up 2026-08-18:
+senderId linkage was incomplete and to_me/dkimAligned were wrong for mailboxes whose
+identity_addresses didn't cover every address that mailbox actually receives at.
+
+THE ORDER MATTERS. Do these in this exact sequence:
+
+  a. Apply the pending database migration first.
+     Task 1 of the Phase 2 dashboard work generated
+     server/db/migrations/0002_absurd_cyclops.sql (two CREATE INDEX statements,
+     on Message.fromAddress and Message.internalDate) and it has NOT been applied
+     yet. Run:
+
+         bun run db:migrate
+
+     The dashboard works without this — it's just slower on the Senders and Needs
+     Action pages until the indexes exist.
+
+  b. Set identity_addresses on EVERY mailbox at /admin/mail, using the new
+     observed-address picker. Do this for all four mailboxes, not just the one
+     you think is wrong — repair and reclassify below run once for whatever
+     identity_addresses holds at the time, so an incomplete pass here means
+     redoing the whole sequence.
+
+  c. Run repair once. Database-only, touches no mailbox, fast.
+
+  d. Run reclassify. Re-fetches headers from every mailbox over IMAP, slow —
+     see the duration note below. Run it from a terminal, not the browser,
+     for the same "Failed to fetch" reason as the backfill note above: a long
+     request against /admin/mail's button dies in the browser tab while the
+     server keeps running it to completion.
+
+  e. Re-check the numbers (see below for what "correct" looks like).
+
+-----------------------------------------------------------------------------
+THE TRAP: A REPEAT RECLASSIFY RUN CAN BE A SILENT NO-OP THAT REPORTS SUCCESS
+-----------------------------------------------------------------------------
+
+READ THIS BEFORE RUNNING RECLASSIFY A SECOND TIME.
+
+reclassify checkpoints its progress per folder in MailboxCursor, kind='reclassify'.
+A folder that finishes leaves its cursor parked at uid_next — the folder's highest
+UID. If you then widen identity_addresses again and run reclassify again WITHOUT
+clearing that cursor, reclassify resumes from uid_next, finds nothing past it to
+examine, and exits having examined zero messages. It still logs a SyncRun row with
+status=ok. There is no error, no warning, nothing in the output that looks wrong.
+It looks exactly like a healthy run that had nothing left to do — because from the
+cursor's point of view, that's true.
+
+Before ANY repeat reclassify run — i.e. every time after the first — clear the
+cursor first:
+
+    DELETE FROM MailboxCursor WHERE kind = 'reclassify';
+
+If you skip this and rerun reclassify after changing identity_addresses, the
+numbers will not move and you will have no way to tell, from the run's own output,
+that it did nothing.
+
+-----------------------------------------------------------------------------
+EXPECTED RESULTS — so a correct run isn't mistaken for a broken one
+-----------------------------------------------------------------------------
+
+repair, measured 2026-08-18: links about 14,553 rows and leaves 5 remaining
+unlinked. Five is CORRECT, not a failure. Those five messages have no matching
+Sender row at all to link to. (Diagnosis, for the curious: all five are on
+felix@platter.com and share one backfill insert chunk; their Sender rows were
+never written.) If repair reports a number close to 5 remaining, it worked.
+
+reclassify before-numbers, measured 2026-08-18, for comparison after you run it:
+
+    14,558 messages total
+    14,379 with dkimAligned IS NULL (98.77%)
+    to_me rates by mailbox: 86.6% / 70.2% / 9.1% (felix@listifyregistry.com) / 84.7%
+
+The acceptance test: after reclassify, felix@listifyregistry.com's to_me rate
+should rise sharply from that 9.1%, and the Needs Action count for that mailbox
+should rise with it. If neither number moves, either identity_addresses was not
+actually widened for that mailbox, or the reclassify cursor was not cleared before
+the run (see THE TRAP above) — check both before assuming something else is wrong.
+
+-----------------------------------------------------------------------------
+DURATION
+-----------------------------------------------------------------------------
+
+reclassify re-fetches headers for every stored message across every enabled
+mailbox — there's no shortcut, it's a full re-walk. Judge the time from the
+recorded backfill figure, since reclassify walks the same UID space at a
+comparable per-batch cost: 10,027 messages took 597 seconds for
+felix@tellmann.co.za. With ~14,500 messages across four mailboxes, budget on that
+order for the full run — run it from a terminal and let it finish, don't judge it
+by whether the browser tab is still spinning.
+
+mode=reclassify has NO per-mailbox filter — the route never parses a mailbox_id,
+so it processes every enabled mailbox in sequence, same as backfill. If you want a
+scoped, single-mailbox run, temporarily disable the other mailboxes at /admin/mail
+first, run reclassify, then re-enable them.
+
+Command, same bun -e fetch form as everywhere else in this file — the container
+has no curl (see the warning at the top):
+
+    bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=repair", {method:"POST",headers:{authorization:"Bearer "+process.env.SCRIPT_SECRET}}); console.log(r.status, await r.text()); process.exit(r.ok?0:1)'
+
+    bun -e 'const r = await fetch("http://127.0.0.1:3000/api/mail-sync?mode=reclassify", {method:"POST",headers:{authorization:"Bearer "+process.env.SCRIPT_SECRET}}); console.log(r.status, await r.text()); process.exit(r.ok?0:1)'
+
+-----------------------------------------------------------------------------
+WHERE TO CHECK RESULTS
+-----------------------------------------------------------------------------
+
+Same SyncRun table as the section below. One wrinkle: a repair run logs with
+mailboxId = "__database_wide__", a sentinel value, because that run belongs to
+no single mailbox — it's a database-wide pass. It will NOT show up if you filter
+SyncRun by a specific mailboxId; that's by design, not a bug in the query.
+
+
+=============================================================================
 CHECKING THAT IT IS WORKING
 =============================================================================
 
