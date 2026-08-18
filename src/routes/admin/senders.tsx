@@ -159,9 +159,11 @@ function AdminSendersPage() {
   const [profile_status, setProfileStatus] = useState<"loading" | "loaded" | "error">("loading");
   const requested_address_ref = useRef<string | null>(null);
 
+  // reset_offset is for filter/sort changes, which must land back on page one. The pagination buttons
+  // pass false AND their own offset, so that key has to survive the spread rather than be pinned to prev.
   const patchSearch = (patch: Partial<SendersSearch>, reset_offset = true) => {
     void navigate({
-      search: (prev) => ({ ...prev, ...patch, offset: reset_offset ? 0 : prev.offset }),
+      search: (prev) => ({ ...prev, ...patch, offset: reset_offset ? 0 : (patch.offset ?? prev.offset) }),
     });
   };
 
@@ -359,8 +361,12 @@ function AdminSendersPage() {
                       }}
                       type="button"
                     >
-                      <p className="truncate font-medium text-gray-900 dark:text-dark-headings">{row.display_name ?? row.address}</p>
-                      {row.display_name !== null && <p className="truncate text-gray-500 text-xs dark:text-dark-text">{row.address}</p>}
+                      <span className="block truncate font-medium text-gray-900 dark:text-dark-headings">
+                        {row.display_name ?? row.address}
+                      </span>
+                      {row.display_name !== null && (
+                        <span className="block truncate text-gray-500 text-xs dark:text-dark-text">{row.address}</span>
+                      )}
                     </button>
                   </td>
                   <td className="max-w-40 truncate py-2 pr-3 text-gray-600 dark:text-dark-text">{row.mailbox_labels.join(", ")}</td>

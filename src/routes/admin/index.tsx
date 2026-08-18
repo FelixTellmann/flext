@@ -10,7 +10,7 @@ const admin_links = [
 const AdminHome: FC = () => {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-zinc-600 dark:text-dark-text">Mailbox management arrives in phase 1.</p>
+      <p className="text-zinc-600 dark:text-dark-text">Read-only mail dashboards. Snoozing, filing and suppression arrive with phase 3.</p>
       <ul className="flex flex-col gap-2">
         {admin_links.map((link) => (
           <li key={link.to}>

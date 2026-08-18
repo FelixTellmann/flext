@@ -104,8 +104,10 @@ function AdminNeedsActionPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
 
+  // reset_offset is for filter changes, which must land back on page one. The pagination buttons pass
+  // false AND their own offset, so that key has to survive the spread rather than be pinned to prev.
   const patchSearch = (patch: Partial<NeedsActionSearch>, reset_offset = true) => {
-    void navigate({ search: (prev) => ({ ...prev, ...patch, offset: reset_offset ? 0 : prev.offset }) });
+    void navigate({ search: (prev) => ({ ...prev, ...patch, offset: reset_offset ? 0 : (patch.offset ?? prev.offset) }) });
   };
 
   const page_start = search.offset + 1;
@@ -117,8 +119,9 @@ function AdminNeedsActionPage() {
       <h1 className="font-bold text-gray-900 text-xl dark:text-dark-headings">Needs Action</h1>
 
       <p className="text-gray-600 text-sm dark:text-dark-text">
-        Threads addressed to you with no reply sent, across every synced mailbox. Snooze, mark done, and "shouldn't be here" need the
-        thread-state and sender-suppression tables that arrive in Phase 3 — this view is read-only until then.
+        Threads addressed to you that aren't bulk or automated, oldest first, across every synced mailbox. Whether you already replied isn't
+        known yet — that needs the thread-state table from Phase 3, which also brings snooze, mark done and "shouldn't be here". This view
+        is read-only until then.
       </p>
 
       <Panel title="Window">
