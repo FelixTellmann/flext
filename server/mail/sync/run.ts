@@ -25,6 +25,9 @@ export type MailboxRunSummary = {
   flag_updates: number;
   vanished: number;
   error: string | null;
+  // Non-failure detail a successful run wants to report. `error` stays reserved for status: "failed", so
+  // a consumer can keep treating a non-null error as a failed run.
+  note: string | null;
 };
 
 type RunTotals = {
@@ -137,6 +140,7 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
       flag_updates: totals.flag_updates,
       vanished: totals.vanished,
       error: null,
+      note: null,
     };
   } catch (error) {
     // Per-mailbox isolation: a dead connection, an expired app password or an SPKI change fails this
@@ -169,6 +173,7 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
       flag_updates: 0,
       vanished: 0,
       error: `${failure.kind}: ${failure.message}`,
+      note: null,
     };
   } finally {
     if (provider !== null) {
@@ -213,7 +218,8 @@ async function runRepairOnce(): Promise<MailboxRunSummary> {
       new_messages: 0,
       flag_updates: result.updated,
       vanished: 0,
-      error: result.remaining > 0 ? `${result.remaining} message row(s) still have no matching Sender` : null,
+      error: null,
+      note: result.remaining > 0 ? `${result.remaining} message row(s) still have no matching Sender` : null,
     };
   } catch (error) {
     const failure = classifyMailboxError(error);
@@ -233,6 +239,7 @@ async function runRepairOnce(): Promise<MailboxRunSummary> {
       flag_updates: 0,
       vanished: 0,
       error: `${failure.kind}: ${failure.message}`,
+      note: null,
     };
   }
 }

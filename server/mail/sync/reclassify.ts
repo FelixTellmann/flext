@@ -102,7 +102,7 @@ async function reclassifyFolder(input: {
   const status = await input.provider.openFolder(input.folder);
   // A dedicated cursor kind keeps this pass from disturbing the message cursor or the Sent scan, so an
   // incremental sync running on the same folder mid-reclassify still resumes from its own checkpoint. A
-  // finished folder leaves the cursor at uid_next, so correcting the identity list again later means
+  // finished folder leaves the cursor at uid_next - 1, so correcting the identity list again later means
   // deleting the kind = 'reclassify' rows before the next run does anything.
   const cursor = await loadCursor({ mailbox_id: input.mailbox_row.id, folder: input.folder, kind: "reclassify" });
   const resume_from = cursor !== null && cursor.uid_validity === status.uid_validity ? cursor.last_seen_uid : 0;

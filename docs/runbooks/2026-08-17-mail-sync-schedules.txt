@@ -131,11 +131,11 @@ THE TRAP: A REPEAT RECLASSIFY RUN CAN BE A SILENT NO-OP THAT REPORTS SUCCESS
 READ THIS BEFORE RUNNING RECLASSIFY A SECOND TIME.
 
 reclassify checkpoints its progress per folder in MailboxCursor, kind='reclassify'.
-A folder that finishes leaves its cursor parked at uid_next — the folder's highest
-UID. If you then widen identity_addresses again and run reclassify again WITHOUT
-clearing that cursor, reclassify resumes from uid_next, finds nothing past it to
-examine, and exits having examined zero messages. It still logs a SyncRun row with
-status=ok. There is no error, no warning, nothing in the output that looks wrong.
+A folder that finishes leaves its cursor parked at uid_next - 1 — the folder's
+highest UID. If you then widen identity_addresses again and run reclassify again
+WITHOUT clearing that cursor, reclassify resumes just past that UID, finds nothing
+left to examine, and exits having examined zero messages. It still logs a SyncRun
+row with status=ok. There is no error, no warning, nothing that looks wrong.
 It looks exactly like a healthy run that had nothing left to do — because from the
 cursor's point of view, that's true.
 
@@ -147,6 +147,15 @@ cursor first:
 If you skip this and rerun reclassify after changing identity_addresses, the
 numbers will not move and you will have no way to tell, from the run's own output,
 that it did nothing.
+
+A UIDVALIDITY change has the same shape, from the opposite direction. When the
+server hands back a new uid_validity, reclassify.ts drops the resume point to 0
+and re-fetches the whole folder, but the stored-classification lookup it joins
+against filters on the NEW uid_validity — and every Message row still carries the
+old one. Nothing matches, so the pass examines the folder end to end and writes
+zero rows. Same symptom: SyncRun status=ok, numbers unmoved, no warning. If a
+reclassify walks a large folder and reports no changes, check whether that
+folder's uid_validity moved before assuming the identity list was already right.
 
 -----------------------------------------------------------------------------
 EXPECTED RESULTS — so a correct run isn't mistaken for a broken one
