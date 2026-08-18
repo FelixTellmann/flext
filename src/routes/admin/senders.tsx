@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import clsx from "clsx";
-import { type FC, useState } from "react";
+import { type FC, useRef, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
 import { field, Panel, secondary_button } from "./-ui";
@@ -157,6 +157,7 @@ function AdminSendersPage() {
   const [selected_address, setSelectedAddress] = useState<string | null>(null);
   const [profile, setProfile] = useState<SenderProfile | null>(null);
   const [profile_status, setProfileStatus] = useState<"loading" | "loaded" | "error">("loading");
+  const requested_address_ref = useRef<string | null>(null);
 
   const patchSearch = (patch: Partial<SendersSearch>, reset_offset = true) => {
     void navigate({
@@ -165,16 +166,27 @@ function AdminSendersPage() {
   };
 
   const openProfile = (address: string) => {
+    requested_address_ref.current = address;
     setSelectedAddress(address);
     setProfile(null);
     setProfileStatus("loading");
     orpc.mail
       .getSenderProfile({ address })
       .then((result) => {
+        // A faster second click can resolve after an earlier one; only the most recently
+        // requested address may still update the panel.
+        if (requested_address_ref.current !== address) {
+          return;
+        }
         setProfile(result);
         setProfileStatus("loaded");
       })
-      .catch(() => setProfileStatus("error"));
+      .catch(() => {
+        if (requested_address_ref.current !== address) {
+          return;
+        }
+        setProfileStatus("error");
+      });
   };
 
   const page_start = search.offset + 1;
@@ -339,8 +351,17 @@ function AdminSendersPage() {
                   onClick={() => openProfile(row.address)}
                 >
                   <td className="max-w-64 truncate py-2 pr-3">
-                    <p className="truncate font-medium text-gray-900 dark:text-dark-headings">{row.display_name ?? row.address}</p>
-                    {row.display_name !== null && <p className="truncate text-gray-500 text-xs dark:text-dark-text">{row.address}</p>}
+                    <button
+                      className="block w-full truncate rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info focus-visible:ring-inset"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openProfile(row.address);
+                      }}
+                      type="button"
+                    >
+                      <p className="truncate font-medium text-gray-900 dark:text-dark-headings">{row.display_name ?? row.address}</p>
+                      {row.display_name !== null && <p className="truncate text-gray-500 text-xs dark:text-dark-text">{row.address}</p>}
+                    </button>
                   </td>
                   <td className="max-w-40 truncate py-2 pr-3 text-gray-600 dark:text-dark-text">{row.mailbox_labels.join(", ")}</td>
                   <td className="py-2 pr-3 text-right">{row.message_count.toLocaleString()}</td>
