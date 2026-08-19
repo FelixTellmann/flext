@@ -227,8 +227,8 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
         <ClientOnly fallback={<div className="h-full w-full bg-card d:bg-card-dark" />}>
           <TripMap stops={trip.stops} activeId={active.id} focusId={selectedId} onSelect={setSelectedId} />
         </ClientOnly>
-        {/* Above Leaflet's panes (z-index ~1000) and clear of the zoom control in the corner. */}
-        <div className="absolute top-3 left-14 z-[1050] hidden md:block">
+        {/* Above Leaflet's panes (z-index ~1000), top-right so the zoom control keeps its corner. */}
+        <div className="absolute top-3 right-3 z-[1050] hidden md:block">
           <StopCard stop={active} framed />
         </div>
       </div>
