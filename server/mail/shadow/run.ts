@@ -10,7 +10,10 @@ import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 
-export type RunShadowPassInput = { mailbox_id: string; batch_size: number };
+// run_id is an input rather than always minted here because a sweep across several mailboxes is ONE
+// shadow run: getShadowReport and getShadowSummary both scope to a single latest run id, so four
+// mailboxes minting four ids leaves the report describing whichever mailbox finished last.
+export type RunShadowPassInput = { mailbox_id: string; batch_size: number; run_id: string | null };
 
 export type RunShadowPassResult = { examined: number; journaled: number; by_decision: Record<string, number> };
 
@@ -221,7 +224,7 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
 }
 
 export async function runShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
-  const run_id = crypto.randomUUID();
+  const run_id = input.run_id ?? crypto.randomUUID();
   const now = new Date();
 
   // Both loaded once, before the batch loop, not per message: ~1,749 senders' worth of policy rows and a

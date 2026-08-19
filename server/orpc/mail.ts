@@ -336,6 +336,7 @@ export const mailProcedures = {
       z.object({
         mailbox_id: z.string().min(1),
         batch_size: z.number().int().positive().max(1000).default(500),
+        run_id: z.string().min(1).nullable().default(null),
       }),
     )
     .handler(async ({ input }) => runShadowPass(input)),
