@@ -443,6 +443,32 @@ around them.
 
 
 -----------------------------------------------------------------------------
+THE BLAST RADIUS OF ONE CLICK — TWO BOUNDS, NOT ONE
+-----------------------------------------------------------------------------
+
+Apply and undo are NOT bounded the same way, and reading the apply bound as
+the phase's maximum understates undo by a factor of the mailbox count.
+
+APPLY — 200 messages, in ONE mailbox. applyPending takes a single mailbox_id
+string and there is no all-mailboxes option anywhere in its input. The batch
+size defaults to 25 and is capped at MAX_ACTION_BATCH_SIZE = 200, clamped
+client-side and again by the ORPC input schema.
+
+UNDO BY POLICY — 200 messages PER MAILBOX, across every enabled mailbox.
+undoByPolicy takes mailbox_id: string | null, and null is what the journal
+screen offers by default ("Every enabled mailbox"). The handler loops the
+mailboxes and hands the SAME batch size to each, so the batch size bounds
+each mailbox separately rather than the sweep: 200 x the number of enabled
+mailboxes, which is 800 with the four here. Each row costs up to two
+mutations — the move back, then the set_labels restoring what from_state
+recorded — so up to 1,600 writes reach real servers from that one click.
+
+Neither figure is one to go near on a first run. Step 5 of the ceremony says
+batch size 1 for this reason, and the undo panel lets you name a single
+mailbox instead of taking the default.
+
+
+-----------------------------------------------------------------------------
 WHY THE SHADOW PASS MUST BE RE-RUN — PHASE 3'S ROWS CANNOT BE APPROVED
 -----------------------------------------------------------------------------
 
