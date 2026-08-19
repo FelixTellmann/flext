@@ -31,6 +31,8 @@ const base_input: DecisionInput = {
   policies: [],
 };
 
+const suspended_on = new Date("2026-08-01T00:00:00Z");
+
 const address_archive: SenderPolicyInput = {
   id: "policy-address-archive",
   scope: "address",
@@ -83,14 +85,40 @@ function bulkInput(age_days: number, overrides: Partial<DecisionInput> = {}): De
 }
 
 describe("step 1 — absolute guards override everything", () => {
-  test("a flagged message beats an explicit address-level auto_trash policy", () => {
+  test("a flagged message beats an explicit address-level auto_trash policy and still names it", () => {
     const decision = decide({ ...base_input, is_flagged: true, policies: [address_trash] });
     expect(decision).toEqual({
       action: "keep_inbox",
       source: "guard",
-      policy_id: null,
+      policy_id: "policy-address-trash",
       suppressed_by: "flagged",
       reasons: ["absolute guard flagged blocks every action on this message"],
+    });
+  });
+
+  test("the overridden policy is the one that would have won, address before domain", () => {
+    const decision = decide({ ...base_input, is_flagged: true, policies: [domain_trash, address_archive] });
+    expect(decision.policy_id).toBe("policy-address-archive");
+    const domain_only = decide({ ...base_input, is_flagged: true, policies: [domain_trash] });
+    expect(domain_only.policy_id).toBe("policy-domain-trash");
+  });
+
+  test("policy_id stays null when no policy matched the message", () => {
+    expect(decide({ ...base_input, is_flagged: true }).policy_id).toBeNull();
+  });
+
+  test("an absolute guard over a suspended policy reports both facts", () => {
+    const decision = decide({
+      ...base_input,
+      is_flagged: true,
+      policies: [{ ...address_trash, suspended_at: suspended_on }],
+    });
+    expect(decision).toEqual({
+      action: "keep_inbox",
+      source: "guard",
+      policy_id: "policy-address-trash",
+      suppressed_by: "flagged",
+      reasons: ["absolute guard flagged blocks every action on this message", "the policy it overrode is also suspended"],
     });
   });
 
@@ -98,14 +126,19 @@ describe("step 1 — absolute guards override everything", () => {
     expect(outcome(decide({ ...base_input, is_starred: true, policies: [address_trash] }))).toEqual({
       action: "keep_inbox",
       source: "guard",
-      policy_id: null,
+      policy_id: "policy-address-trash",
       suppressed_by: "flagged",
     });
   });
 
   test("a message under 24 hours old beats an explicit address-level policy", () => {
     const decision = decide({ ...base_input, signals: { ...base_signals, age_days: 0 }, policies: [address_trash] });
-    expect(outcome(decision)).toEqual({ action: "keep_inbox", source: "guard", policy_id: null, suppressed_by: "too_recent" });
+    expect(outcome(decision)).toEqual({
+      action: "keep_inbox",
+      source: "guard",
+      policy_id: "policy-address-trash",
+      suppressed_by: "too_recent",
+    });
   });
 
   test("a never_touch rule beats an explicit address-level policy", () => {
@@ -114,7 +147,12 @@ describe("step 1 — absolute guards override everything", () => {
       never_touch_rules: [{ kind: "address", value: "person@example.com" }],
       policies: [address_trash],
     });
-    expect(outcome(decision)).toEqual({ action: "keep_inbox", source: "guard", policy_id: null, suppressed_by: "never_touch" });
+    expect(outcome(decision)).toEqual({
+      action: "keep_inbox",
+      source: "guard",
+      policy_id: "policy-address-trash",
+      suppressed_by: "never_touch",
+    });
   });
 });
 
@@ -201,16 +239,20 @@ describe("step 3 — address-level policy", () => {
     expect(decision.source).not.toBe("address_policy");
   });
 
-  test("a suspended address policy is treated as absent and the domain policy applies", () => {
+  test("a suspended address policy resolves to keep_inbox and does not defer to the domain policy", () => {
     const decision = decide({
       ...base_input,
-      policies: [{ ...address_archive, suspended_at: new Date("2026-08-01T00:00:00Z") }, domain_archive],
+      policies: [{ ...address_archive, suspended_at: suspended_on }, domain_archive],
     });
-    expect(outcome(decision)).toEqual({
-      action: "archive",
-      source: "domain_policy",
-      policy_id: "policy-domain-archive",
+    expect(decision).toEqual({
+      action: "keep_inbox",
+      source: "suspended_policy",
+      policy_id: "policy-address-archive",
       suppressed_by: null,
+      reasons: [
+        "address policy for person@example.com says archive",
+        "that policy is suspended, so nothing is done and no broader rule applies",
+      ],
     });
   });
 });
@@ -276,13 +318,33 @@ describe("step 4 — domain-level policy", () => {
     expect(decision.source).not.toBe("domain_policy");
   });
 
-  test("a suspended domain policy is treated as absent", () => {
+  test("a suspended domain policy resolves to keep_inbox and does not defer to the derived default", () => {
+    const would_derive_archive = bulkInput(45, { from_domain: "example.com" });
+    expect(decide(would_derive_archive).action).toBe("archive");
+
+    const decision = decide({
+      ...would_derive_archive,
+      policies: [{ ...domain_trash, suspended_at: suspended_on }],
+    });
+    expect(decision).toEqual({
+      action: "keep_inbox",
+      source: "suspended_policy",
+      policy_id: "policy-domain-trash",
+      suppressed_by: null,
+      reasons: [
+        "domain policy for example.com says auto_trash",
+        "that policy is suspended, so nothing is done and no broader rule applies",
+      ],
+    });
+  });
+
+  test("a suspended domain policy is still overridden by thread state, which is resolved first", () => {
     const decision = decide({
       ...base_input,
-      signals: { ...base_signals, addressed_to_me: false },
-      policies: [{ ...domain_trash, suspended_at: new Date("2026-08-01T00:00:00Z") }],
+      thread_state: "done",
+      policies: [{ ...domain_trash, suspended_at: suspended_on }],
     });
-    expect(outcome(decision)).toEqual({ action: "keep_inbox", source: "fallback", policy_id: null, suppressed_by: null });
+    expect(decision.source).toBe("thread_state");
   });
 });
 
@@ -471,6 +533,19 @@ describe("invariants over every input combination", () => {
       expect(decision.policy_id).toBe("policy-address-trash");
     }
     expect(policy_trash_count).toBeGreaterThan(0);
+  });
+
+  test("the no-reply reason only ever appears where sender_known is false", () => {
+    let reply_claim_count = 0;
+    for (const input of everyInputCombination([])) {
+      const decision = decide(input);
+      if (!decision.reasons.includes("no reply has ever been sent to this sender")) {
+        continue;
+      }
+      reply_claim_count += 1;
+      expect(input.signals.sender_known).toBe(false);
+    }
+    expect(reply_claim_count).toBeGreaterThan(0);
   });
 
   test("every decision that names a guard also declines to act", () => {

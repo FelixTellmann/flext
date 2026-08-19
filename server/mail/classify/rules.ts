@@ -28,7 +28,7 @@ export type DecisionInput = GuardInput & {
   policies: readonly SenderPolicyInput[];
 };
 
-export type DecisionSource = "guard" | "thread_state" | "address_policy" | "domain_policy" | "derived" | "fallback";
+export type DecisionSource = "guard" | "thread_state" | "address_policy" | "domain_policy" | "suspended_policy" | "derived" | "fallback";
 
 export type Decision = {
   action: ActionClass | "needs_action";
@@ -48,6 +48,8 @@ export type DerivedAction = (typeof DERIVED_ACTIONS)[number];
 export const DERIVED_ARCHIVE_AGE_DAYS = 30;
 
 type DerivedOutcome = { action: DerivedAction; reasons: string[] };
+
+type PolicyMatch = { policy: SenderPolicyInput; scope: PolicyScope };
 
 export function matchesNeedsActionSignals(input: DecisionInput): boolean {
   return (
@@ -71,24 +73,47 @@ function absoluteGuardName(verdicts: GuardVerdict[]): GuardName | null {
 function findPolicy(input: DecisionInput, scope: PolicyScope): SenderPolicyInput | null {
   const target = scope === "address" ? input.from_address : input.from_domain;
   const normalized_target = target.toLowerCase();
-  const match = input.policies.find(
-    (policy) => policy.scope === scope && policy.suspended_at === null && policy.value.toLowerCase() === normalized_target,
-  );
+  const match = input.policies.find((policy) => policy.scope === scope && policy.value.toLowerCase() === normalized_target);
   return match ?? null;
+}
+
+// The single spelling of §5.2's address-outranks-domain precedence, so step 1 can name the policy an
+// absolute guard overrode and steps 3-4 cannot disagree with it about which policy matched.
+function matchPolicy(input: DecisionInput): PolicyMatch | null {
+  const address_match = findPolicy(input, "address");
+  if (address_match !== null) {
+    return { policy: address_match, scope: "address" };
+  }
+  const domain_match = findPolicy(input, "domain");
+  if (domain_match !== null) {
+    return { policy: domain_match, scope: "domain" };
+  }
+  return null;
 }
 
 function describeSender(input: DecisionInput, scope: PolicyScope): string {
   return scope === "address" ? input.from_address : input.from_domain;
 }
 
-function policyDecision(input: DecisionInput, verdicts: GuardVerdict[], scope: PolicyScope): Decision | null {
-  const policy = findPolicy(input, scope);
-  if (policy === null) {
-    return null;
-  }
-
+function policyDecision(input: DecisionInput, verdicts: GuardVerdict[], match: PolicyMatch): Decision {
+  const { policy, scope } = match;
   const source: DecisionSource = scope === "address" ? "address_policy" : "domain_policy";
   const target = describeSender(input, scope);
+
+  // §8 suspends a policy because acting on this target already went wrong once, so resolution stops here
+  // rather than falling through to a broader rule and re-acting on the same sender by another route.
+  if (policy.suspended_at !== null) {
+    return {
+      action: "keep_inbox",
+      source: "suspended_policy",
+      policy_id: policy.id,
+      suppressed_by: null,
+      reasons: [
+        `${scope} policy for ${target} says ${policy.action}`,
+        "that policy is suspended, so nothing is done and no broader rule applies",
+      ],
+    };
+  }
 
   if (!isApplicablePolicyAction(policy.action)) {
     return {
@@ -129,7 +154,11 @@ function describeUnsolicitedSender(input: DecisionInput): string[] {
   if (input.signals.is_automated) {
     reasons.push("sender is automated");
   }
-  reasons.push("no reply has ever been sent to this sender");
+  // Inside the gate, not after it: the claim is only true while the caller has checked sender_known, and
+  // Phase 2 already shipped a queue that asserted "no reply sent" on rows where nothing established it.
+  if (!input.signals.sender_known) {
+    reasons.push("no reply has ever been sent to this sender");
+  }
   return reasons;
 }
 
@@ -179,14 +208,20 @@ function derivedOutcome(input: DecisionInput): DerivedOutcome | null {
 export function decide(input: DecisionInput): Decision {
   const verdicts = evaluateGuards(input);
 
+  const policy_match = matchPolicy(input);
+
   const absolute_guard = absoluteGuardName(verdicts);
   if (absolute_guard !== null) {
+    const reasons = [`absolute guard ${absolute_guard} blocks every action on this message`];
+    if (policy_match !== null && policy_match.policy.suspended_at !== null) {
+      reasons.push("the policy it overrode is also suspended");
+    }
     return {
       action: "keep_inbox",
       source: "guard",
-      policy_id: null,
+      policy_id: policy_match?.policy.id ?? null,
       suppressed_by: absolute_guard,
-      reasons: [`absolute guard ${absolute_guard} blocks every action on this message`],
+      reasons,
     };
   }
 
@@ -200,9 +235,8 @@ export function decide(input: DecisionInput): Decision {
     };
   }
 
-  const policy_decision = policyDecision(input, verdicts, "address") ?? policyDecision(input, verdicts, "domain");
-  if (policy_decision !== null) {
-    return policy_decision;
+  if (policy_match !== null) {
+    return policyDecision(input, verdicts, policy_match);
   }
 
   const derived = derivedOutcome(input);
