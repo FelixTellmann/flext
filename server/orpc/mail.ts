@@ -1,11 +1,20 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, mailboxObservedAddress, syncRun } from "@server/db/schema";
+import { executeActions } from "@server/mail/actions/executor";
+import { createDatabaseJournal } from "@server/mail/actions/journal";
+import { promoteAction, promotePolicyActions } from "@server/mail/actions/promote";
+import type { UndoResult } from "@server/mail/actions/undo";
+import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import { encryptCredential } from "@server/mail/crypto/credentials";
+import { classifyMailboxError } from "@server/mail/errors";
+import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FETCH_SPEC } from "@server/mail/providers/headers";
 import { createImapProvider } from "@server/mail/providers/imap";
 import { observeCertificate } from "@server/mail/providers/tls";
+import type { MailboxProvider } from "@server/mail/providers/types";
+import { ACTION_JOURNAL_STATUS_FILTERS, listActionJournal } from "@server/mail/query/actions";
 import { listNeedsAction } from "@server/mail/query/needs-action";
 import {
   deleteNeverTouchRule,
@@ -21,6 +30,7 @@ import { dismissThread, markThreadDone, snoozeThread } from "@server/mail/query/
 import { runShadowPass } from "@server/mail/shadow/run";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { runSyncForAllMailboxes } from "@server/mail/sync/run";
+import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList, serializeStringList, sync_mode_schema } from "@server/mail/types";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -42,6 +52,58 @@ const policy_autonomy_schema = z
   .refine((value): value is "shadow" => value === "shadow", {
     message: 'policy autonomy must be "shadow" in this phase — auto has no executor yet (§8)',
   });
+
+// Phase 4's mutating procedures are bounded on both axes: an explicit mailbox, and a batch size that can
+// never exceed this. Four mailboxes hold ~14,700 messages and the shadow pass journals a decision for
+// almost every one of them, so an unbounded call would be a mailbox-wide sweep started by one click.
+const MAX_ACTION_BATCH_SIZE = 200;
+
+// A mutation must not run against a mailbox whose connection is not trusted: `enabled` is cleared by
+// classifyMailboxError's disable_mailbox path after an auth failure or an SPKI change, and the sync
+// runner skips those mailboxes for the same reason (§11).
+async function requireEnabledMailbox(mailbox_id: string): Promise<MailboxRow> {
+  const rows = await db.select().from(mailbox).where(eq(mailbox.id, mailbox_id)).limit(1);
+  const row = rows[0];
+  if (row === undefined) {
+    throw new Error(`unknown mailbox ${mailbox_id}`);
+  }
+  if (!row.enabled) {
+    throw new Error(
+      `mailbox ${row.label} is disabled after a connection failure; re-test its connection before applying or undoing anything.`,
+    );
+  }
+  return row;
+}
+
+async function withMailboxProvider<T>(
+  row: MailboxRow,
+  run: (input: { provider: MailboxProvider; flavor: MailboxFlavor }) => Promise<T>,
+): Promise<T> {
+  const provider = await createImapProvider(mailboxConnection(row));
+  try {
+    return await run({ provider, flavor: parseMailboxFlavor(row.flavor) });
+  } finally {
+    await provider.disconnect();
+  }
+}
+
+// `skipped` is carried per mailbox and in the totals because it has no other record anywhere: a row a
+// newer action on the same message blocked is left completely untouched — still `applied`, no `error` —
+// so the journal shows nothing at all, and this counter is the only way the operator learns that part of
+// the reversal did not happen.
+type UndoByPolicyMailboxSummary = UndoResult & { mailbox_id: string; label: string; error: string | null };
+
+function sumUndoResults(summaries: UndoByPolicyMailboxSummary[]): UndoResult {
+  return summaries.reduce<UndoResult>(
+    (totals, summary) => ({
+      examined: totals.examined + summary.examined,
+      undone: totals.undone + summary.undone,
+      failed: totals.failed + summary.failed,
+      skipped: totals.skipped + summary.skipped,
+    }),
+    { examined: 0, undone: 0, failed: 0, skipped: 0 },
+  );
+}
 
 // Every procedure here is `authed`: they read mailbox configuration and start IMAP work, so none of them
 // may answer an anonymous caller. The middleware in ./base also covers server-side callers, which a
@@ -340,4 +402,149 @@ export const mailProcedures = {
       }),
     )
     .handler(async ({ input }) => runShadowPass(input)),
+
+  // Ruling 3: there is no "approve everything". A caller must name either one action or one policy, and a
+  // mailbox in both cases — the scope is part of the input's shape, not a convention a caller can drop.
+  // Nothing here opens a connection: promotion only moves an Action row from "shadow" to "pending", and
+  // the mailbox it will execute against comes from applyPending, deliberately, as a second decision.
+  approveDecision: authed
+    .input(
+      z.discriminatedUnion("scope", [
+        z.object({ scope: z.literal("action"), mailbox_id: z.string().min(1), action_id: z.string().min(1) }),
+        z.object({
+          scope: z.literal("policy"),
+          mailbox_id: z.string().min(1),
+          sender_policy_id: z.string().min(1),
+          batch_size: z.number().int().positive().max(MAX_ACTION_BATCH_SIZE).default(50),
+        }),
+      ]),
+    )
+    .handler(async ({ input }) => {
+      const journal = createDatabaseJournal();
+
+      if (input.scope === "action") {
+        // The discriminated result reaches the caller intact: "no such action", "another mailbox's
+        // action" and "not a shadow row" each carry an operator-facing `detail`, and collapsing them into
+        // a boolean would leave the review screen unable to say why the click did nothing.
+        const result = await promoteAction({ action_id: input.action_id, mailbox_id: input.mailbox_id, journal });
+        return { scope: "action" as const, ...result };
+      }
+
+      const result = await promotePolicyActions({
+        sender_policy_id: input.sender_policy_id,
+        mailbox_id: input.mailbox_id,
+        batch_size: input.batch_size,
+        journal,
+      });
+      return { scope: "policy" as const, ...result };
+    }),
+
+  // The first procedure in this codebase that changes a real mailbox. One mailbox, one bounded batch,
+  // named explicitly — a stray call cannot reach the other three.
+  applyPending: authed
+    .input(
+      z.object({
+        mailbox_id: z.string().min(1),
+        batch_size: z.number().int().positive().max(MAX_ACTION_BATCH_SIZE).default(25),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const row = await requireEnabledMailbox(input.mailbox_id);
+      const result = await withMailboxProvider(row, ({ provider, flavor }) =>
+        executeActions({
+          mailbox_id: row.id,
+          flavor,
+          provider,
+          journal: createDatabaseJournal(),
+          batch_size: input.batch_size,
+        }),
+      );
+      return { mailbox_id: row.id, label: row.label, ...result };
+    }),
+
+  undoAction: authed.input(z.object({ action_id: z.string().min(1), mailbox_id: z.string().min(1) })).handler(async ({ input }) => {
+    const row = await requireEnabledMailbox(input.mailbox_id);
+    return withMailboxProvider(row, ({ provider, flavor }) =>
+      undoAction({ action_id: input.action_id, mailbox_id: row.id, flavor, provider, journal: createDatabaseJournal() }),
+    );
+  }),
+
+  undoByPolicy: authed
+    .input(
+      z.object({
+        sender_policy_id: z.string().min(1),
+        // Null reverses the policy across every enabled mailbox, one connection at a time. A policy is
+        // not mailbox-scoped but undoPolicyActions is, so the loop below is the only correct shape:
+        // handing one mailbox's provider the rows of another would address those UIDs on the wrong
+        // server. The batch size bounds each mailbox separately, which is what keeps the sweep bounded.
+        mailbox_id: z.string().nullable().default(null),
+        batch_size: z.number().int().positive().max(MAX_ACTION_BATCH_SIZE).default(50),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const rows =
+        input.mailbox_id === null
+          ? await db.select().from(mailbox).where(eq(mailbox.enabled, true)).orderBy(mailbox.label)
+          : [await requireEnabledMailbox(input.mailbox_id)];
+
+      const journal = createDatabaseJournal();
+      const mailboxes: UndoByPolicyMailboxSummary[] = [];
+
+      for (const row of rows) {
+        try {
+          const result = await withMailboxProvider(row, ({ provider, flavor }) =>
+            undoPolicyActions({
+              sender_policy_id: input.sender_policy_id,
+              mailbox_id: row.id,
+              flavor,
+              provider,
+              journal,
+              batch_size: input.batch_size,
+            }),
+          );
+          mailboxes.push({ mailbox_id: row.id, label: row.label, ...result, error: null });
+        } catch (error) {
+          // Per-mailbox isolation, matching runMailboxSync: a dead connection or an expired app password
+          // fails this mailbox's reversal and leaves the others reversible (§11).
+          const failure = classifyMailboxError(error);
+          mailboxes.push({
+            mailbox_id: row.id,
+            label: row.label,
+            examined: 0,
+            undone: 0,
+            failed: 0,
+            skipped: 0,
+            error: `${failure.kind}: ${failure.message}`,
+          });
+        }
+      }
+
+      return { mailboxes, totals: sumUndoResults(mailboxes) };
+    }),
+
+  listActionJournal: authed
+    .input(
+      z.object({
+        mailbox_id: z.string().nullable().default(null),
+        sender_policy_id: z.string().nullable().default(null),
+        sender_address: z.string().nullable().default(null),
+        status: z.enum(ACTION_JOURNAL_STATUS_FILTERS).default("all"),
+        since: z.date().nullable().default(null),
+        until: z.date().nullable().default(null),
+        limit: z.number().int().positive().max(200).default(50),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .handler(async ({ input }) =>
+      listActionJournal({
+        mailbox_id: input.mailbox_id,
+        sender_policy_id: input.sender_policy_id,
+        sender_address: input.sender_address,
+        status: input.status,
+        since: input.since,
+        until: input.until,
+        limit: input.limit,
+        offset: input.offset,
+      }),
+    ),
 };
