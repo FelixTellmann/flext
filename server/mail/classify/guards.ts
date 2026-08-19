@@ -4,7 +4,7 @@ export type ActionClass = "keep_inbox" | "archive" | "file" | "auto_trash" | "pu
 
 export type GuardName = "flagged" | "too_recent" | "never_touch" | "replied_in_thread" | "derived_allowlist" | "human_attachment";
 
-export type GuardVerdict = { name: GuardName; blocks: ActionClass[]; absolute: boolean };
+export type GuardVerdict = { name: GuardName; blocks: readonly ActionClass[]; absolute: boolean };
 
 export type NeverTouchRuleKind = "address" | "domain" | "subject_pattern";
 
@@ -22,14 +22,16 @@ export type GuardInput = {
   never_touch_rules: NeverTouchRuleInput[];
 };
 
-const ALL_ACTION_CLASSES: ActionClass[] = ["keep_inbox", "archive", "file", "auto_trash", "purge"];
+const ALL_ACTION_CLASSES = ["keep_inbox", "archive", "file", "auto_trash", "purge"] as const satisfies readonly ActionClass[];
 
 function matchesNeverTouchRule(rule: NeverTouchRuleInput, input: GuardInput): boolean {
   if (rule.kind === "address") {
     return rule.value.toLowerCase() === input.from_address.toLowerCase();
   }
   if (rule.kind === "domain") {
-    return rule.value.toLowerCase() === input.from_domain.toLowerCase();
+    const rule_domain = rule.value.toLowerCase();
+    const message_domain = input.from_domain.toLowerCase();
+    return message_domain === rule_domain || message_domain.endsWith(`.${rule_domain}`);
   }
   return input.subject.toLowerCase().includes(rule.value.toLowerCase());
 }
@@ -47,13 +49,18 @@ export function evaluateGuards(input: GuardInput): GuardVerdict[] {
     verdicts.push({ name: "never_touch", blocks: ALL_ACTION_CLASSES, absolute: true });
   }
 
-  // §5.3: these three protect against destruction, not organisation — "we've replied in this thread" and
-  // "we emailed the sender first" are exactly the shape of client correspondence, so making them absolute
-  // (as an earlier spec draft did) would make automatic filing unreachable and delete the record-keeping
-  // half of the product. They block trash/purge (and, for an open thread, archive) but never `file`.
+  // §5.3: these three protect against destruction, not organisation — active client correspondence is
+  // exactly the shape "we've replied in this thread" and "we've written to this sender" describe, so
+  // making them absolute (as an earlier spec draft did) would make automatic filing unreachable and
+  // delete the record-keeping half of the product. They block trash/purge (and, for an open thread,
+  // archive) but never `file`.
   if (input.replied_in_thread) {
     verdicts.push({ name: "replied_in_thread", blocks: ["archive", "auto_trash", "purge"], absolute: false });
   }
+  // sender_known (my_reply_count > 0) means "we have written to this sender at all", not specifically
+  // "we emailed them first" per §5.3 — no first-contact data exists to tell the two apart. sender_known
+  // is a strict superset, so this guard over-fires relative to the spec's predicate; that is the safe
+  // direction because it only ever blocks destruction, and the operator can still override it per-address.
   if (input.signals.sender_known) {
     verdicts.push({ name: "derived_allowlist", blocks: ["auto_trash", "purge"], absolute: false });
   }

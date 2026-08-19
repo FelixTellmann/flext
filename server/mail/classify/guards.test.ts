@@ -103,6 +103,24 @@ describe("never_touch", () => {
     expect(verdicts.map((verdict) => verdict.name)).toContain("never_touch");
   });
 
+  test("a domain rule protects a subdomain", () => {
+    const verdicts = evaluateGuards({
+      ...base_input,
+      from_domain: "mail.example.com",
+      never_touch_rules: [{ kind: "domain", value: "example.com" }],
+    });
+    expect(verdicts.map((verdict) => verdict.name)).toContain("never_touch");
+  });
+
+  test("a domain rule does not protect a merely similar domain", () => {
+    const verdicts = evaluateGuards({
+      ...base_input,
+      from_domain: "notexample.com",
+      never_touch_rules: [{ kind: "domain", value: "example.com" }],
+    });
+    expect(verdicts.map((verdict) => verdict.name)).not.toContain("never_touch");
+  });
+
   test("matches by subject pattern", () => {
     const verdicts = evaluateGuards({
       ...base_input,
