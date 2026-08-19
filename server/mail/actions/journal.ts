@@ -13,7 +13,7 @@ import type {
 import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
 import { isExecutableActionKind } from "@server/mail/actions/kinds";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the executor's journal port, kept out of executor.ts so a test
 // importing the executor cannot reach a real connection: every DATABASE_URL variant points at the same
@@ -57,21 +57,33 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
 // One statement per row: to_state_json and error differ per row, so a single UPDATE would need a CASE
 // expression over the batch for no gain at these sizes (the caller bounds the batch). Sequential rather
 // than concurrent so a failure part-way leaves a prefix written rather than an arbitrary subset.
+//
+// FIRST WRITE WINS, and the rule lives in the WHERE clause rather than in the caller so no code path can
+// bypass it. A crash between the mutation and the status update is the case §7.1 exists for: the row stays
+// pending holding the correct PRE-state, and the next run selects it again and re-captures — a POST-mutation
+// state. On Gmail that capture succeeds, because removing \Inbox leaves the UID stable, so an unconditional
+// write would replace the pre-state with the post-state; inverseOf would then filter every label it was
+// meant to restore against the set that no longer holds it, return no mutations, and undo would report a
+// clean reversal that did nothing to a permanently archived message. Re-issuing the mutation is the safe
+// half of the retry: removing an absent \Inbox changes nothing, and a move whose source UID is gone fails.
+//
+// An empty string counts as no recorded state and may be overwritten, matching parseActionState, so a row
+// cannot be stuck forever with a snapshot nothing can read.
 async function recordFromState(entries: FromStateEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
     await db
       .update(action)
       .set({ status: PENDING_STATUS, from_state_json: entry.from_state_json, updatedAt: now })
-      .where(eq(action.id, entry.action_id));
+      .where(and(eq(action.id, entry.action_id), or(isNull(action.from_state_json), eq(action.from_state_json, ""))));
   }
 }
 
 async function markApplied(entries: AppliedEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
-    // `error` is cleared because a retry that succeeds must not leave the previous run's failure standing
-    // next to an applied status.
+    // `error` is cleared because a row promoted again after an earlier failure must not carry that failure
+    // standing next to an applied status.
     await db
       .update(action)
       .set({ status: APPLIED_STATUS, to_state_json: entry.to_state_json, applied_at: now, error: null, updatedAt: now })
@@ -82,8 +94,10 @@ async function markApplied(entries: AppliedEntry[]): Promise<void> {
 async function markFailed(entries: FailedEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
-    // from_state_json is deliberately left untouched: it is what a retry or an undo works from, and a
-    // failed row that has already been mutated server-side is exactly the case it exists for.
+    // from_state_json is deliberately left untouched, and nothing rewrites it later: a failed row is never
+    // re-selected (loadPendingActions takes only pending ones) and never undone (loadUndoableAction takes
+    // only applied ones), so this snapshot is the sole record of where the message was before a mutation
+    // that may have half-landed — which is what §7.1's reconciliation compares against real server state.
     await db.update(action).set({ status: FAILED_STATUS, error: entry.error, updatedAt: now }).where(eq(action.id, entry.action_id));
   }
 }
@@ -93,7 +107,9 @@ async function markDeferred(entries: DeferredEntry[]): Promise<void> {
     const now = new Date();
     // A status of its own, not "failed": nothing went wrong, the action simply has no executable plan in
     // this phase (Ruling 4). It parks the row out of the pending set instead of re-examining it every run.
-    // The reason rides in `error` because it is the row's only free-text column.
+    // The reason rides in `error` because it is the row's only free-text column, which is a trap for any
+    // surface that reads a non-null `error` as a failure: §9's journal and the admin views must render
+    // `deferred` as its own outcome, or a deliberate deferral reads as a broken action.
     await db.update(action).set({ status: DEFERRED_STATUS, error: entry.reason, updatedAt: now }).where(eq(action.id, entry.action_id));
   }
 }

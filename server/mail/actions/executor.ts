@@ -56,6 +56,9 @@ export type UndoneEntry = { action_id: string };
 // live Action rows. server/mail/actions/journal.ts holds the only drizzle-backed implementation.
 export type ActionJournal = {
   loadPendingActions: (input: { mailbox_id: string; batch_size: number }) => Promise<PendingActionRow[]>;
+  // Writes from_state_json ONLY where the row has none. A crashed run leaves a pending row holding the
+  // correct pre-state, and the next run re-captures a post-mutation one; the first capture is the truth,
+  // and journal.ts enforces that in the UPDATE's WHERE clause rather than trusting a caller to check.
   recordFromState: (entries: FromStateEntry[]) => Promise<void>;
   markApplied: (entries: AppliedEntry[]) => Promise<void>;
   markFailed: (entries: FailedEntry[]) => Promise<void>;
@@ -205,6 +208,9 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
   // A throw here aborts the run with the mailbox untouched, and is deliberately not caught: marking these
   // rows failed would be another write to the journal that just refused one, and leaving them pending
   // without a pre-state is the one outcome undo cannot recover from.
+  //
+  // A row that already carries a pre-state keeps it — this is a re-run of a crashed one, and what was
+  // captured just now is the state that crash left behind, not the state to restore. The port enforces it.
   await journal.recordFromState(
     live_rows.map((row) => ({
       action_id: row.action_id,
@@ -218,9 +224,10 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
   try {
     outcome = await performMutation(provider, group.folder, uids, group.mutation);
   } catch (error) {
-    // Every row keeps its pre-state and becomes failed rather than applied, so a retry can finish from
-    // from_state_json. A move that succeeded server-side and threw on the way back lands here too, which
-    // is why the next run reconciles against real state instead of trusting this status.
+    // Every row keeps its pre-state and becomes failed rather than applied. Nothing re-runs a failed row —
+    // loadPendingActions selects only pending ones — so the pre-state stands for reconciliation and for the
+    // operator, not for a retry. A move that succeeded server-side and threw on the way back lands here
+    // too, which is why this status is a report of what we observed rather than a fact about the mailbox.
     const message = toRecordedError(error);
     await journal.markFailed(live_rows.map((row) => ({ action_id: row.action_id, error: message })));
     return { applied: 0, failed: pre_mutation_failures.length + live_rows.length };

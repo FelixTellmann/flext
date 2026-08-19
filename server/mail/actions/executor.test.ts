@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { ActionJournal, ExecuteActionsResult, PendingActionRow } from "@server/mail/actions/executor";
 import { executeActions } from "@server/mail/actions/executor";
-import { FILE_DEFERRED_REASON, GMAIL_INBOX_LABEL } from "@server/mail/actions/kinds";
-import { parseActionState } from "@server/mail/actions/state";
+import { FILE_DEFERRED_REASON, GMAIL_INBOX_LABEL, inverseOf, planFor } from "@server/mail/actions/kinds";
+import type { ActionStateSnapshot } from "@server/mail/actions/state";
+import { parseActionState, serializeActionState } from "@server/mail/actions/state";
 import type {
   CopyUidResult,
   ExpungeResult,
@@ -140,9 +141,18 @@ type CrashPoint = "record_from_state" | "mark_applied";
 
 type FakeJournal = ActionJournal & { rows: Map<string, JournalRow> };
 
-function createFakeJournal(input: { events: string[]; pending: PendingActionRow[]; crash_at?: CrashPoint }): FakeJournal {
+function createFakeJournal(input: {
+  events: string[];
+  pending: PendingActionRow[];
+  crash_at?: CrashPoint;
+  // A pre-state already on the row, as a run that crashed after mutating would have left it.
+  seeded_from_state?: Record<string, string>;
+}): FakeJournal {
   const rows = new Map<string, JournalRow>(
-    input.pending.map((row) => [row.action_id, { status: "pending", from_state_json: null, to_state_json: null, error: null }]),
+    input.pending.map((row) => [
+      row.action_id,
+      { status: "pending", from_state_json: input.seeded_from_state?.[row.action_id] ?? null, to_state_json: null, error: null },
+    ]),
   );
 
   function requireRow(action_id: string): JournalRow {
@@ -168,6 +178,11 @@ function createFakeJournal(input: { events: string[]; pending: PendingActionRow[
       }
       for (const entry of entries) {
         const row = requireRow(entry.action_id);
+        // Mirrors the WHERE clause in journal.ts exactly: a row that already carries a pre-state is not
+        // touched at all. The first capture is the truth.
+        if (row.from_state_json !== null && row.from_state_json !== "") {
+          continue;
+        }
         row.status = "pending";
         row.from_state_json = entry.from_state_json;
       }
@@ -294,6 +309,63 @@ describe("executeActions ordering (§7.1)", () => {
 
     expect(events.some((event) => event.startsWith("move "))).toBe(false);
     expect(journal.rows.get("action-11")?.status).toBe("pending");
+  });
+
+  test("a re-run of a crashed row keeps the original pre-state, so undo still has a real inverse", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 21, kind: "archive", folder: GMAIL_CANONICAL_FOLDER })];
+
+    // What the crashed run journalled before it mutated: the message still carried \Inbox.
+    const original_from_state: ActionStateSnapshot = {
+      folder: GMAIL_CANONICAL_FOLDER,
+      uid: 21,
+      uid_validity: UID_VALIDITY,
+      flags: ["\\Seen"],
+      labels: [GMAIL_INBOX_LABEL, "Work"],
+    };
+    const journalled = serializeActionState(original_from_state);
+    const journal = createFakeJournal({ events, pending, seeded_from_state: { "action-21": journalled } });
+
+    // The mailbox as that crash left it: \Inbox already removed, and on Gmail the UID survives a label
+    // removal, so this re-capture succeeds where a generic mailbox's would have failed on a missing UID.
+    const provider = createFakeProvider({
+      events,
+      gmail: true,
+      folder: GMAIL_CANONICAL_FOLDER,
+      trash_folder: GMAIL_TRASH_FOLDER,
+      messages: [{ uid: 21, flags: ["\\Seen"], labels: ["Work"] }],
+    });
+
+    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "gmail", provider, journal, batch_size: 50 });
+
+    // Re-issuing the mutation is harmless — removing an absent label changes nothing — and finishes the row.
+    expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
+    expect(events).toContain(`set_labels ${GMAIL_CANONICAL_FOLDER} 21 +[] -[${GMAIL_INBOX_LABEL}]`);
+
+    const row = journal.rows.get("action-21");
+    expect(row?.status).toBe("applied");
+    expect(row?.from_state_json).toBe(journalled);
+
+    const recovered = parseActionState(row?.from_state_json ?? null);
+    expect(recovered?.labels).toEqual(["Work", GMAIL_INBOX_LABEL]);
+
+    const plan = planFor("archive", "gmail", {
+      source_folder: GMAIL_CANONICAL_FOLDER,
+      archive_folder: null,
+      trash_folder: GMAIL_TRASH_FOLDER,
+    });
+    if (plan.outcome !== "planned") {
+      throw new Error("a Gmail archive must produce a planned action");
+    }
+
+    // The point of the whole rule: undo restores the label from the surviving pre-state.
+    expect(inverseOf(plan, recovered ?? original_from_state)).toEqual([
+      { verb: "set_labels", add_labels: [GMAIL_INBOX_LABEL], remove_labels: [] },
+    ]);
+
+    // And the counterfactual it exists to prevent — had the re-capture overwritten the pre-state, the
+    // inverse would be empty and undo would report a clean reversal that changed nothing.
+    expect(inverseOf(plan, { folder: GMAIL_CANONICAL_FOLDER, flags: ["\\Seen"], labels: ["Work"] })).toEqual([]);
   });
 
   test("a mutation that throws leaves every row failed with its pre-state intact", async () => {
