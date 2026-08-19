@@ -93,14 +93,23 @@ type SourceCategory = "applied" | "suppressed" | "neutral";
 const APPLIED_SOURCES = ["address_policy", "domain_policy"];
 const SUPPRESSED_SOURCES = ["guard", "suspended_policy", "thread_state"];
 
-function classifySource(source: string): SourceCategory {
-  if (APPLIED_SOURCES.includes(source)) {
+// A null source is a row whose `Action.source` is not one of the seven decide() emits (toDecisionSource
+// in classify/rules.ts). It must not read as "applied" or "suppressed" — neither is known to be true.
+function classifySource(source: string | null): SourceCategory {
+  if (source !== null && APPLIED_SOURCES.includes(source)) {
     return "applied";
   }
-  if (SUPPRESSED_SOURCES.includes(source)) {
+  if (source !== null && SUPPRESSED_SOURCES.includes(source)) {
     return "suppressed";
   }
   return "neutral";
+}
+
+function sourceLabel(source: string | null): string {
+  if (source === null) {
+    return "Unrecognised source";
+  }
+  return source_label[source] ?? source;
 }
 
 const source_category_style: Record<SourceCategory, string> = {
@@ -130,7 +139,7 @@ const SampleRow: FC<{ message: ShadowSampleMessage }> = ({ message }) => (
         {kind_label[message.kind] ?? message.kind}
       </span>
       <span className={clsx("rounded px-1.5 py-0.5 text-xs", source_category_style[classifySource(message.source)])}>
-        {source_label[message.source] ?? message.source}
+        {sourceLabel(message.source)}
       </span>
       <span className="text-gray-400 text-xs dark:text-dark-border">{message.internal_date.slice(0, 10)}</span>
       <LocationLink location={message.location} />
@@ -185,7 +194,7 @@ const ShadowBreakdown: FC<{ empty_message: string; report: ShadowReport }> = ({ 
         <div className="flex flex-wrap gap-1.5">
           {Object.entries(report.by_source).map(([source, count]) => (
             <span className={clsx("rounded px-1.5 py-0.5 text-xs", source_category_style[classifySource(source)])} key={source}>
-              {source_label[source] ?? source}: {count.toLocaleString()}
+              {sourceLabel(source)}: {count.toLocaleString()}
             </span>
           ))}
         </div>

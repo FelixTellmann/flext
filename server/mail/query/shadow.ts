@@ -1,6 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message } from "@server/db/schema";
 import type { DecisionSource } from "@server/mail/classify/rules";
+import { toDecisionSource } from "@server/mail/classify/rules";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
 import type { SQL } from "drizzle-orm";
@@ -19,7 +20,7 @@ type ShadowCountRow = { kind: string; source: string; count: number };
 export type ShadowSampleMessage = {
   message_id: string;
   kind: string;
-  source: DecisionSource;
+  source: DecisionSource | null;
   subject: string | null;
   from_address: string | null;
   internal_date: string;
@@ -123,7 +124,7 @@ async function loadSample(where: SQL, limit: number): Promise<ShadowSampleMessag
   return rows.map((row) => ({
     message_id: row.message_id,
     kind: row.kind,
-    source: row.source as DecisionSource,
+    source: toDecisionSource(row.source),
     subject: row.subject,
     from_address: row.from_address,
     internal_date: row.internal_date.toISOString(),

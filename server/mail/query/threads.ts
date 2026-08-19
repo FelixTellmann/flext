@@ -3,6 +3,7 @@ import { threadState } from "@server/db/schema";
 import type { ThreadStateValue } from "@server/mail/classify/rules";
 import type { SuppressionRow } from "@server/mail/query/policies";
 import { addSuppression } from "@server/mail/query/policies";
+import { resolveThreadState } from "@server/mail/query/signal-sql";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -41,7 +42,10 @@ function toThreadStateRow(raw: typeof threadState.$inferSelect): ThreadStateRow 
     id: raw.id,
     mailbox_id: raw.mailbox_id,
     thread_key: raw.thread_key,
-    state: raw.state as ThreadStateValue,
+    // ThreadState.state is a varchar with no database enum behind it, and resolveThreadState is the same
+    // narrowing the queue applies — a value the column should never hold reads as "open" here too rather
+    // than being asserted into the union and handed on as a state no consumer has a branch for.
+    state: resolveThreadState({ state: raw.state, snoozed_until: raw.snoozed_until, now: new Date() }),
     snoozed_until: raw.snoozed_until,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,

@@ -30,7 +30,24 @@ export type DecisionInput = GuardInput & {
   policies: readonly SenderPolicyInput[];
 };
 
-export type DecisionSource = "guard" | "thread_state" | "address_policy" | "domain_policy" | "suspended_policy" | "derived" | "fallback";
+export const DECISION_SOURCES = [
+  "guard",
+  "thread_state",
+  "address_policy",
+  "domain_policy",
+  "suspended_policy",
+  "derived",
+  "fallback",
+] as const;
+
+export type DecisionSource = (typeof DECISION_SOURCES)[number];
+
+// `Action.source` is a varchar with no database enum behind it, so a row written by an older build or by
+// hand can hold a value decide() never emits. Null says exactly that — "not one of ours" — rather than an
+// assertion that hands a caller a union member the string was never checked against.
+export function toDecisionSource(raw: string): DecisionSource | null {
+  return DECISION_SOURCES.find((value) => value === raw) ?? null;
+}
 
 export type Decision = {
   action: ActionClass | "needs_action";
