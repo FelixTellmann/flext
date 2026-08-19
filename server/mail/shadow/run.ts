@@ -213,6 +213,13 @@ export function buildShadowActionRow(input: {
   };
 }
 
+// `status` is deliberately absent from the SET clause, and re-adding it is a data-loss edit. The unique
+// key is (messageId, kind, runId) and runShadowPass takes an arbitrary run_id precisely so a sweep across
+// several mailboxes is ONE run — so a re-run with the same id meets rows that have since been approved,
+// applied or undone. Writing `shadow` back over one of those would leave from_state_json, to_state_json
+// and applied_at intact while the journal reported that nothing had been sent to the mailbox, and undo
+// requires `applied`: the mutation would stand on the server with no way left to reverse it. A row that
+// is genuinely new still gets `shadow` from the column default.
 async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
   if (rows.length === 0) {
     return;
@@ -225,7 +232,6 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
         sender_policy_id: sql`VALUES(\`senderPolicyId\`)`,
         mailbox_id: sql`VALUES(\`mailboxId\`)`,
         source: sql`VALUES(\`source\`)`,
-        status: SHADOW_STATUS,
         decided_at: sql`VALUES(\`decidedAt\`)`,
         updatedAt: sql`VALUES(\`updatedAt\`)`,
       },
