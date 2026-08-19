@@ -144,10 +144,12 @@ const APPROVAL_MEANING =
 const NULL_MAILBOX_EXPLANATION =
   "Written by a Phase 3 shadow pass, before decisions recorded their own mailbox. Approval matches that column against the mailbox you pick, so this row cannot be named by either scope — it is here to read.";
 
-// Filing is Phase 5's. The executor marks a promoted `file` row deferred and sends nothing, so approving
-// one must not be presented as queueing a move.
+// Filing is Phase 5's, and `deferred` is a terminal state: promoteShadowActions only moves rows that are
+// still `shadow`, and loadPendingActions only reads `pending`, so nothing in this phase can move a row the
+// executor has deferred. Approving a `file` decision would therefore strand it somewhere Phase 5 cannot
+// pick it up from without hand-written DML — which is why it is refused here rather than merely explained.
 const FILE_DEFERRAL_EXPLANATION =
-  "Filing has no executor in this phase. Approving this queues it, and an apply run will mark it deferred without sending anything to the mailbox.";
+  "Filing has no executor in this phase, so an apply run would park a file decision as deferred — a state nothing in Phase 4 can move it out of again. File decisions are not approvable, in either scope, until Phase 5 gives filing a destination.";
 
 const DESTRUCTIVE_CONFIRMATION_PHRASE = "APPROVE TRASH";
 
@@ -416,7 +418,7 @@ const ApprovableRowItem: FC<{ busy_key: string | null; gate_met: boolean; onAppr
     ) : (
       <ActionButton
         busy={busy_key === `action:${row.action_id}`}
-        disabled={busy_key !== null || !gate_met}
+        disabled={busy_key !== null || !gate_met || row.kind === "file"}
         label="Approve this one"
         onClick={onApprove}
         variant={secondary_button_focus}
@@ -439,6 +441,10 @@ const ApprovePolicyPanel: FC<{
 }> = ({ approvable, mailboxes, onApproved, onSelectMailbox, policy, report, selected_mailbox_id }) => {
   const category = classifyKind(policy.action);
   const ceremony = approval_ceremony[category];
+  // Bulk approval promotes every shadow decision this policy recorded whatever its kind, so a single
+  // `file` row anywhere in the run is enough to make the whole batch unapprovable — one deferred row is
+  // one row Phase 5 has to reach with hand-written DML.
+  const files_are_blocked = policy.action === "file" || (report.by_kind.file ?? 0) > 0;
   const [batch_size_draft, setBatchSizeDraft] = useState(ceremony.default_batch_size);
   const [acknowledged, setAcknowledged] = useState(false);
   const [phrase_draft, setPhraseDraft] = useState("");
@@ -450,7 +456,7 @@ const ApprovePolicyPanel: FC<{
   // One decision at a time is its own deliberation, so only the destructive tier carries the checkbox into
   // it; the typed phrase guards the bulk scope alone, where one click can reach the whole batch.
   const single_gate_met = category !== "destructive" || acknowledged;
-  const batch_gate_met = selected_mailbox_id !== undefined && acknowledgement_met && phrase_met;
+  const batch_gate_met = selected_mailbox_id !== undefined && acknowledgement_met && phrase_met && !files_are_blocked;
 
   const resetGates = () => {
     setAcknowledged(false);
@@ -532,7 +538,7 @@ const ApprovePolicyPanel: FC<{
             {report.examined.toLocaleString()} examined for this policy.
           </p>
         )}
-        {policy.action === "file" && <p className="mt-1 text-info text-sm">{FILE_DEFERRAL_EXPLANATION}</p>}
+        {files_are_blocked && <p className="mt-1 text-info text-sm">{FILE_DEFERRAL_EXPLANATION}</p>}
       </div>
 
       <p className="mb-3 text-gray-600 text-sm dark:text-dark-text">

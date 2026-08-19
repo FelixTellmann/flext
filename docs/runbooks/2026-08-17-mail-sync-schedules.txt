@@ -410,6 +410,8 @@ THE ORDER — EACH STEP DEPENDS ON THE ONE BEFORE IT
          APPROVE TRASH — a checkbox is not enough
        - an organisational decision (archive, keep_inbox) needs only the
          acknowledgement checkbox
+       - a file decision cannot be approved at all in this phase; the button
+         is disabled and says why. See "what Phase 4 deliberately left out"
 
      For the first ceremony, an organisational single row is the sane choice.
 
@@ -610,11 +612,16 @@ neighbouring day. Widen the range by a day before concluding a row is missing.
 WHAT PHASE 4 DELIBERATELY LEFT OUT
 -----------------------------------------------------------------------------
 
-file DECISIONS ARE DEFERRED, NOT BROKEN. §6's client axis is Phase 5, so
-filing has no executor. The executor marks those rows deferred and sends
-nothing to the mailbox. That is a designed outcome. There were roughly 2,366
-of them across the backlog when this was written, so an early apply run that
-reports mostly deferred is working correctly.
+file DECISIONS ARE NOT APPROVABLE. DO NOT TRY. §6's client axis is Phase 5,
+so filing has no executor, and deferred is a TERMINAL state: promotion only
+moves rows that are still shadow, and an apply run only reads pending, so a
+row the executor defers can never be picked up again by anything in this
+phase. There were roughly 2,366 file decisions across the backlog when this
+was written; approving them would park all 2,366 somewhere Phase 5 could only
+reach with hand-written DML. /admin/shadow refuses the approval in both
+scopes for exactly that reason — a disabled button here is the feature. A row
+already promoted before this gate existed still applies as deferred, and that
+part is a designed outcome, not a failure.
 
 purge DOES NOT EXIST. §1.7 keeps it for Phase 8, behind a separate scheduled
 sweep. Trash is reversible; permanent deletion is not in this phase at all.
