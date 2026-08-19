@@ -43,7 +43,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: 18.6,
     arriveAt: "2026-09-14T00:00",
     departAt: "2026-09-14T19:50",
-    kind: "transit",
+    kind: "city",
     arriveBy: "road",
     image: {
       src: "/images/travel/cape-town.jpg",
@@ -60,7 +60,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -73.99,
     arriveAt: "2026-09-15T05:20",
     departAt: "2026-09-25T07:41",
-    kind: "stay",
+    kind: "friends",
     arriveBy: "flight",
     image: {
       src: "/images/travel/new-york.jpg",
@@ -77,7 +77,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -71.08,
     arriveAt: "2026-09-25T11:59",
     departAt: "2026-09-29T07:55",
-    kind: "stay",
+    kind: "friends",
     arriveBy: "rail",
     image: {
       src: "/images/travel/boston.jpg",
@@ -94,7 +94,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -104.99,
     arriveAt: "2026-09-29T10:40",
     departAt: "2026-09-29T11:40",
-    kind: "transit",
+    kind: "city",
     arriveBy: "flight",
     image: {
       src: "/images/travel/denver.jpg",
@@ -112,7 +112,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -107.81,
     arriveAt: "2026-09-29T18:00",
     departAt: "2026-10-04T09:00",
-    kind: "stay",
+    kind: "friends",
     arriveBy: "road",
     image: {
       src: "/images/travel/telluride.jpg",
@@ -129,7 +129,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -109.6188,
     arriveAt: "2026-10-04T12:00",
     departAt: "2026-10-04T18:00",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/arches.jpg",
@@ -146,7 +146,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -109.5498,
     arriveAt: "2026-10-04T18:00",
     departAt: "2026-10-05T09:30",
-    kind: "stay",
+    kind: "city",
     arriveBy: "road",
     image: {
       src: "/images/travel/moab.jpg",
@@ -163,7 +163,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -109.8206,
     arriveAt: "2026-10-05T09:30",
     departAt: "2026-10-05T13:30",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/canyonlands.jpg",
@@ -180,7 +180,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -111.2615,
     arriveAt: "2026-10-05T13:30",
     departAt: "2026-10-05T17:30",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/capitol-reef.jpg",
@@ -196,7 +196,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -111.4197,
     arriveAt: "2026-10-05T17:30",
     departAt: "2026-10-06T11:00",
-    kind: "stay",
+    kind: "city",
     arriveBy: "road",
     image: {
       src: "/images/travel/torrey.jpg",
@@ -213,7 +213,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -112.1696,
     arriveAt: "2026-10-06T11:30",
     departAt: "2026-10-06T18:00",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/bryce-canyon.jpg",
@@ -230,7 +230,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -112.1567,
     arriveAt: "2026-10-06T18:00",
     departAt: "2026-10-07T09:00",
-    kind: "stay",
+    kind: "city",
     arriveBy: "road",
     image: {
       src: "/images/travel/bryce-canyon-city.jpg",
@@ -247,7 +247,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -112.9878,
     arriveAt: "2026-10-07T12:00",
     departAt: "2026-10-07T18:00",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/zion.jpg",
@@ -263,7 +263,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -112.9989,
     arriveAt: "2026-10-07T18:00",
     departAt: "2026-10-09T09:00",
-    kind: "stay",
+    kind: "city",
     arriveBy: "road",
     image: {
       src: "/images/travel/springdale.jpg",
@@ -281,7 +281,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -114.5139,
     arriveAt: "2026-10-09T11:30",
     departAt: "2026-10-09T13:30",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/valley-of-fire.jpg",
@@ -298,7 +298,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -114.737,
     arriveAt: "2026-10-09T14:30",
     departAt: "2026-10-09T16:00",
-    kind: "activity",
+    kind: "park",
     arriveBy: "road",
     image: {
       src: "/images/travel/hoover-dam.jpg",
@@ -314,7 +314,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -115.14,
     arriveAt: "2026-10-09T17:00",
     departAt: "2026-10-11T23:55",
-    kind: "stay",
+    kind: "city",
     arriveBy: "road",
     image: {
       src: "/images/travel/las-vegas.jpg",
@@ -332,7 +332,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: -77.45,
     arriveAt: "2026-10-12T07:28",
     departAt: "2026-10-15T18:45",
-    kind: "stay",
+    kind: "friends",
     arriveBy: "flight",
     image: {
       src: "/images/travel/washington.jpg",
@@ -349,7 +349,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     longitude: 18.6,
     arriveAt: "2026-10-16T15:20",
     departAt: "2026-10-18T00:00",
-    kind: "transit",
+    kind: "city",
     arriveBy: "flight",
     image: {
       src: "/images/travel/cape-town.jpg",

@@ -14,9 +14,9 @@ const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 const KIND_COLOR: Record<TravelStop["kind"], string> = {
-  stay: "#ec4899",
-  activity: "#22c55e",
-  transit: "#38bdf8",
+  city: "#38bdf8",
+  park: "#22c55e",
+  friends: "#ec4899",
 };
 
 // A leg is drawn as a sampled quadratic arc rather than a straight line: the control point sits
@@ -85,7 +85,7 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
         const is_flight = to.arriveBy === "flight";
         // Road legs follow their real driving geometry; flights and rail fall back to drawn arcs.
         const road = DRIVING_ROUTES[`${from.id}->${to.id}`];
-        // Movement is uniformly sky so pink stays reserved for accommodation; dashes mark flights.
+        // Movement is uniformly sky so pink stays reserved for the friends stops; dashes mark flights.
         const line = L.polyline(road ?? arcPoints(from, to, is_flight ? 0.22 : 0.08), {
           color: "#38bdf8",
           weight: road ? 2.5 : 2,
@@ -155,10 +155,17 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
     }
     const index = mapped.findIndex((stop) => stop.id === focusId);
     if (index < 0) return;
+    const target = mapped[index];
     const framed = [mapped[index - 1], mapped[index], mapped[index + 1]].filter(Boolean);
+    // Each neighbour is mirrored across the target so the bounds stay symmetric around it: the
+    // fly always centers on the clicked stop exactly, while still zooming out enough to keep the
+    // real neighbours in view. maxZoom caps how far a click zooms in; manual zoom is unaffected.
     map.flyToBounds(
-      framed.map((stop) => [stop.latitude, stop.longitude]),
-      { padding: [60, 60], maxZoom: 10, duration: 0.8 },
+      framed.flatMap((stop): [number, number][] => [
+        [stop.latitude, stop.longitude],
+        [2 * target.latitude - stop.latitude, 2 * target.longitude - stop.longitude],
+      ]),
+      { padding: [60, 60], maxZoom: 8, duration: 0.8 },
     );
   }, [focusId, mapped]);
 

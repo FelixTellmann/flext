@@ -25,15 +25,15 @@ export const formatDay = (value: number) => {
 };
 
 const KIND_DOT: Record<TravelStop["kind"], string> = {
-  stay: "bg-pink-500",
-  activity: "bg-green-500",
-  transit: "bg-sky-400",
+  city: "bg-sky-400",
+  park: "bg-green-500",
+  friends: "bg-pink-500",
 };
 
 const KIND_LABEL: Record<TravelStop["kind"], string> = {
-  stay: "Accommodation",
-  activity: "Activity",
-  transit: "Transit",
+  city: "City",
+  park: "Park",
+  friends: "With friends",
 };
 
 function locate(trip: TravelTrip, hours: number) {
