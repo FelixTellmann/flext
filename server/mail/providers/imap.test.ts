@@ -1,0 +1,431 @@
+import { describe, expect, test } from "bun:test";
+import type { CopyResponseObject, ImapFlow } from "imapflow";
+import { buildImapProvider } from "./imap";
+import type { MailboxCapabilities } from "./types";
+
+type FailurePoint = "move" | "copy" | "expunge" | "add_labels" | "remove_labels";
+
+type FakeOptions = {
+  uidplus?: boolean;
+  move?: boolean;
+  gmail?: boolean;
+  flavor?: "gmail" | "generic";
+  copyuid_destination?: number[] | null;
+  copyuid_uid_validity?: number | null;
+  fail?: FailurePoint;
+};
+
+type LockRecord = { folder: string; read_only: boolean; released: boolean };
+
+function formatSet(uids: number[]): string {
+  return uids.join(",");
+}
+
+function createFake(options: FakeOptions = {}) {
+  const uidplus = options.uidplus ?? true;
+  const move = options.move ?? true;
+  const gmail = options.gmail ?? false;
+
+  const commands: string[] = [];
+  const locks: LockRecord[] = [];
+
+  function copyResponse(destination: string, uids: number[]): CopyResponseObject {
+    const response: CopyResponseObject = { path: "INBOX", destination };
+
+    const uid_validity = options.copyuid_uid_validity === undefined ? 38505 : options.copyuid_uid_validity;
+    if (uid_validity !== null) {
+      response.uidValidity = BigInt(uid_validity);
+    }
+
+    const destination_uids =
+      options.copyuid_destination === undefined ? uids.map((_uid, index) => 9001 + index) : options.copyuid_destination;
+    if (destination_uids !== null) {
+      response.uidMap = new Map(uids.map((uid, index) => [uid, destination_uids[index]]));
+    }
+
+    return response;
+  }
+
+  const fake = {
+    mailbox: { path: "INBOX", uidValidity: 38504n, uidNext: 900, highestModseq: 77n, exists: 12 },
+
+    getMailboxLock: async (folder: string, lock_options?: { readOnly?: boolean }) => {
+      const record: LockRecord = { folder, read_only: lock_options?.readOnly === true, released: false };
+      locks.push(record);
+      commands.push(`SELECT ${folder} (${record.read_only ? "readonly" : "readwrite"})`);
+      return {
+        path: folder,
+        release: () => {
+          record.released = true;
+        },
+      };
+    },
+
+    messageMove: async (uids: number[], destination: string, move_options?: { uid?: boolean }) => {
+      commands.push(`${move_options?.uid === true ? "UID " : ""}MOVE ${formatSet(uids)} ${destination}`);
+      if (options.fail === "move") {
+        return false;
+      }
+      return copyResponse(destination, uids);
+    },
+
+    messageCopy: async (uids: number[], destination: string, copy_options?: { uid?: boolean }) => {
+      commands.push(`${copy_options?.uid === true ? "UID " : ""}COPY ${formatSet(uids)} ${destination}`);
+      if (options.fail === "copy") {
+        return false;
+      }
+      return copyResponse(destination, uids);
+    },
+
+    // Mirrors node_modules/imapflow/lib/commands/expunge.js: STORE +FLAGS (\Deleted), then
+    // `UID EXPUNGE <set>` only while UIDPLUS is advertised and the caller asked for UIDs — otherwise a
+    // bare `EXPUNGE`. The degradation is modelled rather than assumed so the tests below assert the
+    // command that would actually reach the wire.
+    messageDelete: async (uids: number[], delete_options?: { uid?: boolean }) => {
+      commands.push(`STORE ${formatSet(uids)} +FLAGS (\\Deleted)`);
+      const by_uid = delete_options?.uid === true && uidplus;
+      commands.push(by_uid ? `UID EXPUNGE ${formatSet(uids)}` : "EXPUNGE");
+      if (options.fail === "expunge") {
+        return false;
+      }
+      return true;
+    },
+
+    messageFlagsAdd: async (uids: number[], flags: string[], store_options?: { uid?: boolean; useLabels?: boolean }) => {
+      const operation = store_options?.useLabels === true ? "X-GM-LABELS" : "FLAGS";
+      commands.push(`${store_options?.uid === true ? "UID " : ""}STORE ${formatSet(uids)} +${operation} (${flags.join(" ")})`);
+      if (options.fail === "add_labels") {
+        return false;
+      }
+      return true;
+    },
+
+    messageFlagsRemove: async (uids: number[], flags: string[], store_options?: { uid?: boolean; useLabels?: boolean }) => {
+      const operation = store_options?.useLabels === true ? "X-GM-LABELS" : "FLAGS";
+      commands.push(`${store_options?.uid === true ? "UID " : ""}STORE ${formatSet(uids)} -${operation} (${flags.join(" ")})`);
+      if (options.fail === "remove_labels") {
+        return false;
+      }
+      return true;
+    },
+
+    list: async () => {
+      commands.push("LIST");
+      return [];
+    },
+
+    fetch: async function* (range: string) {
+      commands.push(`UID FETCH ${range}`);
+      yield* [];
+    },
+
+    search: async () => {
+      commands.push("UID SEARCH ALL");
+      return [];
+    },
+
+    on: () => undefined,
+    removeListener: () => undefined,
+    logout: async () => undefined,
+    close: () => undefined,
+  };
+
+  const capabilities: MailboxCapabilities = { condstore: true, qresync: true, uidplus, move, gmail };
+  const provider = buildImapProvider(fake as unknown as ImapFlow, capabilities, options.flavor ?? (gmail ? "gmail" : "generic"));
+
+  return { provider, commands, locks };
+}
+
+const INBOX_UIDS = [101, 102];
+
+describe("UID EXPUNGE is never allowed to become a bare EXPUNGE", () => {
+  test("expungeUids hard-fails when the server does not advertise UIDPLUS", async () => {
+    const { provider, commands, locks } = createFake({ uidplus: false });
+
+    await expect(provider.expungeUids("INBOX", INBOX_UIDS)).rejects.toThrow(/UIDPLUS/);
+    expect(commands).toEqual([]);
+    expect(locks).toEqual([]);
+  });
+
+  test("the refusal happens before the folder is even selected, so no EXPUNGE can reach the server", async () => {
+    const { provider, commands } = createFake({ uidplus: false });
+
+    await expect(provider.expungeUids("INBOX", INBOX_UIDS)).rejects.toThrow();
+    expect(commands).not.toContain("EXPUNGE");
+    expect(commands.some((command) => command.includes("EXPUNGE"))).toBe(false);
+  });
+
+  test("a move that would fall back to COPY + EXPUNGE also hard-fails without UIDPLUS", async () => {
+    const { provider, commands } = createFake({ uidplus: false, move: false });
+
+    await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UIDPLUS/);
+    expect(commands).toEqual([]);
+  });
+
+  test("a move over a server that does advertise MOVE still refuses without UIDPLUS, because COPYUID would be unknowable", async () => {
+    const { provider, commands } = createFake({ uidplus: false, move: true });
+
+    await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UIDPLUS/);
+    expect(commands).toEqual([]);
+  });
+
+  test("copyMessages refuses without UIDPLUS as well", async () => {
+    const { provider, commands } = createFake({ uidplus: false });
+
+    await expect(provider.copyMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UIDPLUS/);
+    expect(commands).toEqual([]);
+  });
+
+  test("expungeUids always names an explicit UID set", async () => {
+    const { provider, commands } = createFake();
+
+    const result = await provider.expungeUids("INBOX", INBOX_UIDS);
+
+    expect(commands).toEqual(["SELECT INBOX (readwrite)", "STORE 101,102 +FLAGS (\\Deleted)", "UID EXPUNGE 101,102"]);
+    expect(result).toEqual({ folder: "INBOX", expunged_uids: [101, 102] });
+  });
+
+  test("an empty UID set is refused rather than issued as a set-less expunge", async () => {
+    const { provider, commands } = createFake();
+
+    await expect(provider.expungeUids("INBOX", [])).rejects.toThrow(/empty UID set/);
+    expect(commands).toEqual([]);
+  });
+
+  test("a UID set carrying a non-UID is refused before any command is issued", async () => {
+    const zero = createFake();
+    await expect(zero.provider.expungeUids("INBOX", [0])).rejects.toThrow(/positive integers/);
+    expect(zero.commands).toEqual([]);
+
+    const fractional = createFake();
+    await expect(fractional.provider.moveMessages("INBOX", [101.5], "Archives/2026")).rejects.toThrow(/positive integers/);
+    expect(fractional.commands).toEqual([]);
+
+    const not_a_number = createFake();
+    await expect(not_a_number.provider.copyMessages("INBOX", [Number.NaN], "Archives/2026")).rejects.toThrow(/positive integers/);
+    expect(not_a_number.commands).toEqual([]);
+  });
+});
+
+describe("moveMessages", () => {
+  test("issues UID MOVE where the server advertises MOVE", async () => {
+    const { provider, commands } = createFake({ move: true });
+
+    const result = await provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
+
+    expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID MOVE 101,102 Archives/2026"]);
+    expect(result).toEqual({
+      target_folder: "Archives/2026",
+      destination_uid_validity: "38505",
+      pairs: [
+        { source_uid: 101, destination_uid: 9001 },
+        { source_uid: 102, destination_uid: 9002 },
+      ],
+    });
+  });
+
+  test("falls back to UID COPY + STORE \\Deleted + UID EXPUNGE over the same set where MOVE is absent", async () => {
+    const { provider, commands } = createFake({ move: false });
+
+    const result = await provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
+
+    expect(commands).toEqual([
+      "SELECT INBOX (readwrite)",
+      "UID COPY 101,102 Archives/2026",
+      "STORE 101,102 +FLAGS (\\Deleted)",
+      "UID EXPUNGE 101,102",
+    ]);
+    expect(result.pairs).toEqual([
+      { source_uid: 101, destination_uid: 9001 },
+      { source_uid: 102, destination_uid: 9002 },
+    ]);
+  });
+
+  test("the fallback expunges exactly the set it copied, never a wider one", async () => {
+    const { provider, commands } = createFake({ move: false });
+
+    await provider.moveMessages("INBOX", [7], "Archives/2026");
+
+    expect(commands).toContain("UID COPY 7 Archives/2026");
+    expect(commands).toContain("UID EXPUNGE 7");
+    expect(commands).not.toContain("EXPUNGE");
+  });
+
+  test("the whole move is refused when the server sends no COPYUID, so undo is never left without an address", async () => {
+    const { provider } = createFake({ copyuid_destination: null });
+
+    await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/COPYUID/);
+  });
+
+  test("a COPYUID without a UIDVALIDITY is refused too", async () => {
+    const { provider } = createFake({ copyuid_uid_validity: null });
+
+    await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/COPYUID/);
+  });
+
+  test("a refused UID MOVE surfaces as a throw rather than a silent no-op", async () => {
+    const { provider } = createFake({ fail: "move" });
+
+    await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UID MOVE/);
+  });
+
+  test("a fallback whose expunge fails throws, leaving the copy visible to the caller as a stopped sequence", async () => {
+    const { provider, commands } = createFake({ move: false, fail: "expunge" });
+
+    await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UID EXPUNGE/);
+    expect(commands).toContain("UID COPY 101,102 Archives/2026");
+  });
+});
+
+describe("copyMessages", () => {
+  test("issues UID COPY and touches nothing in the source folder", async () => {
+    const { provider, commands } = createFake();
+
+    const result = await provider.copyMessages("INBOX", [101], "Archives/2026");
+
+    expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID COPY 101 Archives/2026"]);
+    expect(commands.some((command) => command.includes("EXPUNGE") || command.includes("\\Deleted"))).toBe(false);
+    expect(result.pairs).toEqual([{ source_uid: 101, destination_uid: 9001 }]);
+  });
+});
+
+describe("setLabels", () => {
+  test("an add issues STORE +X-GM-LABELS", async () => {
+    const { provider, commands } = createFake({ gmail: true });
+
+    const result = await provider.setLabels("INBOX", [101], { add_labels: ["\\Inbox"], remove_labels: [] });
+
+    expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID STORE 101 +X-GM-LABELS (\\Inbox)"]);
+    expect(result).toEqual({ folder: "INBOX", uids: [101], added_labels: ["\\Inbox"], removed_labels: [] });
+  });
+
+  test("a removal issues STORE -X-GM-LABELS", async () => {
+    const { provider, commands } = createFake({ gmail: true });
+
+    await provider.setLabels("INBOX", [101], { add_labels: [], remove_labels: ["\\Inbox"] });
+
+    expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID STORE 101 -X-GM-LABELS (\\Inbox)"]);
+  });
+
+  test("additions are issued before removals, so a half-applied change gains a label rather than losing one", async () => {
+    const { provider, commands } = createFake({ gmail: true });
+
+    await provider.setLabels("INBOX", [101], { add_labels: ["Work", "Clients/Acme"], remove_labels: ["\\Inbox"] });
+
+    expect(commands).toEqual([
+      "SELECT INBOX (readwrite)",
+      "UID STORE 101 +X-GM-LABELS (Work Clients/Acme)",
+      "UID STORE 101 -X-GM-LABELS (\\Inbox)",
+    ]);
+  });
+
+  test("a label write against a folder server is refused instead of being silently dropped", async () => {
+    const { provider, commands } = createFake({ gmail: false });
+
+    await expect(provider.setLabels("INBOX", [101], { add_labels: ["\\Inbox"], remove_labels: [] })).rejects.toThrow(/Gmail label store/);
+    expect(commands).toEqual([]);
+  });
+
+  test("a Gmail server behind a generic-flavoured mailbox is refused as well", async () => {
+    const { provider } = createFake({ gmail: true, flavor: "generic" });
+
+    await expect(provider.setLabels("INBOX", [101], { add_labels: ["\\Inbox"], remove_labels: [] })).rejects.toThrow(/Gmail label store/);
+  });
+
+  test("a change with nothing to add and nothing to remove is refused rather than issued as an empty STORE", async () => {
+    const { provider, commands } = createFake({ gmail: true });
+
+    await expect(provider.setLabels("INBOX", [101], { add_labels: [], remove_labels: [] })).rejects.toThrow(/nothing to add/);
+    expect(commands).toEqual([]);
+  });
+
+  test("a rejected STORE throws instead of reporting labels that were never written", async () => {
+    const { provider } = createFake({ gmail: true, fail: "add_labels" });
+
+    await expect(provider.setLabels("INBOX", [101], { add_labels: ["Work"], remove_labels: [] })).rejects.toThrow(/STORE \+X-GM-LABELS/);
+  });
+});
+
+describe("locking", () => {
+  test("every read path takes a read-only lock", async () => {
+    const { provider, locks } = createFake();
+
+    await provider.openFolder("INBOX");
+    await provider.fetchHeaders("INBOX", "1:*");
+    await provider.fetchIdentities("INBOX");
+    await provider.fetchFlagChanges("INBOX", "77");
+    await provider.listUids("INBOX");
+
+    expect(locks).toHaveLength(5);
+    expect(locks.every((lock) => lock.read_only)).toBe(true);
+    expect(locks.every((lock) => lock.released)).toBe(true);
+  });
+
+  test("every mutation method takes a write lock", async () => {
+    const move = createFake({ move: true });
+    await move.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
+
+    const copy = createFake();
+    await copy.provider.copyMessages("INBOX", INBOX_UIDS, "Archives/2026");
+
+    const labels = createFake({ gmail: true });
+    await labels.provider.setLabels("INBOX", [101], { add_labels: ["\\Inbox"], remove_labels: [] });
+
+    const expunge = createFake();
+    await expunge.provider.expungeUids("INBOX", INBOX_UIDS);
+
+    for (const { locks } of [move, copy, labels, expunge]) {
+      expect(locks).toHaveLength(1);
+      expect(locks[0].read_only).toBe(false);
+      expect(locks[0].released).toBe(true);
+    }
+  });
+
+  test("the write lock is released when the mutation fails", async () => {
+    const move = createFake({ fail: "move" });
+    await expect(move.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow();
+    expect(move.locks[0].released).toBe(true);
+
+    const copy = createFake({ fail: "copy" });
+    await expect(copy.provider.copyMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow();
+    expect(copy.locks[0].released).toBe(true);
+
+    const labels = createFake({ gmail: true, fail: "remove_labels" });
+    await expect(labels.provider.setLabels("INBOX", [101], { add_labels: [], remove_labels: ["\\Inbox"] })).rejects.toThrow();
+    expect(labels.locks[0].released).toBe(true);
+
+    const expunge = createFake({ fail: "expunge" });
+    await expect(expunge.provider.expungeUids("INBOX", INBOX_UIDS)).rejects.toThrow();
+    expect(expunge.locks[0].released).toBe(true);
+  });
+
+  test("a read path never opens a writable mailbox even on a server that can mutate", async () => {
+    const { provider, commands } = createFake({ move: true, gmail: true });
+
+    await provider.listUids("INBOX");
+    await provider.openFolder("INBOX");
+
+    expect(commands.filter((command) => command.startsWith("SELECT"))).toEqual(["SELECT INBOX (readonly)", "SELECT INBOX (readonly)"]);
+  });
+});
+
+test("the provider exposes exactly four mutating methods and no purge", () => {
+  const { provider } = createFake();
+
+  const members = Object.keys(provider).sort();
+  expect(members).toEqual([
+    "capabilities",
+    "copyMessages",
+    "disconnect",
+    "expungeUids",
+    "fetchFlagChanges",
+    "fetchHeaders",
+    "fetchIdentities",
+    "listFolders",
+    "listUids",
+    "moveMessages",
+    "openFolder",
+    "setLabels",
+  ]);
+  expect(members.some((member) => member.toLowerCase().includes("purge"))).toBe(false);
+});
