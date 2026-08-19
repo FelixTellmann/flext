@@ -5,6 +5,7 @@ import { deriveSignals } from "@server/mail/classify/signals";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
 import {
+  isAutomatedSql,
   isBulkPrecedenceSql,
   isSenderNotSuppressedSql,
   isSentByMeSql,
@@ -83,7 +84,7 @@ function buildWhere(mailbox_id: string | null, sent_by_me: SQL<boolean>): SQL {
   const conditions: SQL[] = [
     isNull(message.list_id),
     isNull(message.list_unsubscribe),
-    isNull(message.auto_submitted),
+    not(isAutomatedSql()),
     not(isBulkPrecedenceSql()),
     eq(message.to_me, true),
     isNull(message.disappeared_at),
@@ -121,10 +122,13 @@ function buildReasons(signals: MessageSignals, params: { is_seen: boolean; sende
 
 function toNeedsActionRow(row: NeedsActionQueryRow, now: Date): NeedsActionRow {
   const sender_message_count = Number(row.sender_message_count ?? 0);
-  // list_id/list_unsubscribe/precedence/auto_submitted/to_me aren't re-selected: buildWhere already
-  // constrains every candidate row to list_id IS NULL, list_unsubscribe IS NULL, auto_submitted IS NULL,
-  // to_me = 1 and a Precedence that is not bulk|list — so no bulk or automated input can be set, and a
-  // null precedence derives the same is_bulk as the "urgent"/"first-class" value the row may carry.
+  // list_id/list_unsubscribe/precedence/auto_submitted/to_me are passed as their neutral values rather
+  // than re-selected, because buildWhere has already constrained every candidate row to list_id IS NULL,
+  // list_unsubscribe IS NULL, to_me = 1, NOT isBulkPrecedenceSql() and NOT isAutomatedSql(). A null
+  // precedence derives the same is_bulk as the "urgent"/"first-class" value the row may carry.
+  // from_address is the exception and is passed through for real: deriveSignals runs the §5.1 local-part
+  // regexes over it, and the NOT isAutomatedSql() term above is the only reason no surviving row trips
+  // them — pass a null auto_submitted without that term and the queue silently readmits automated mail.
   const signals = deriveSignals({
     list_id: null,
     list_unsubscribe: null,

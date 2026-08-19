@@ -1,7 +1,7 @@
 import { message, senderSuppression, threadState } from "@server/db/schema";
 import type { ThreadStateValue } from "@server/mail/classify/rules";
 import { THREAD_STATE_VALUES } from "@server/mail/classify/rules";
-import { BULK_PRECEDENCE_VALUES } from "@server/mail/classify/signals";
+import { AUTOMATED_LOCAL_PART_PATTERN, BULK_PRECEDENCE_VALUES } from "@server/mail/classify/signals";
 import type { MailboxFlavor } from "@server/mail/types";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { inArray, sql } from "drizzle-orm";
@@ -25,6 +25,16 @@ export function isBulkPrecedenceSql(): SQL<boolean> {
     BULK_PRECEDENCE_VALUES.map((value) => sql`${value}`),
     sql`, `,
   )})`;
+}
+
+// The SQL half of §5.1's is_automated: an Auto-Submitted header OR a no-reply@ / mailer-daemon@ /
+// postmaster@ / do-not-reply@ local part. The local-part half was missing from every SQL consumer until
+// 2026-08-19, and it is not a rounding error — 1,156 of 5,000 queue rows measured in production come from
+// a sender deriveSignals calls automated, so the queue and the rules engine disagreed about a quarter of
+// the queue. AUTOMATED_LOCAL_PART_PATTERN is bound as a parameter, not interpolated, and COALESCE keeps
+// NOT(...) usable: a bare REGEXP against a NULL from_address is NULL, which would drop every such row.
+export function isAutomatedSql(): SQL<boolean> {
+  return sql<boolean>`(${message.auto_submitted} IS NOT NULL OR LOWER(COALESCE(${message.from_address}, '')) REGEXP ${AUTOMATED_LOCAL_PART_PATTERN})`;
 }
 
 // "Sent by the mailbox owner" is tested differently per flavor: generic IMAP mirrors sent mail into a

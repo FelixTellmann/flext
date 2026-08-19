@@ -4,7 +4,7 @@ import type { VolumeBucket } from "@server/mail/classify/signals";
 import { volumeBucket } from "@server/mail/classify/signals";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
-import { isBulkPrecedenceSql } from "@server/mail/query/signal-sql";
+import { isAutomatedSql, isBulkPrecedenceSql } from "@server/mail/query/signal-sql";
 import type { SQL } from "drizzle-orm";
 import { and, asc, desc, eq, gte, isNull, like, ne, or, sql } from "drizzle-orm";
 
@@ -80,7 +80,7 @@ function splitLabels(raw: string | null): string[] {
 function senderAggregates() {
   return {
     bulk_count: sql<number>`SUM(${message.list_id} IS NOT NULL OR ${message.list_unsubscribe} IS NOT NULL OR ${isBulkPrecedenceSql()})`,
-    automated_count: sql<number>`SUM(${message.auto_submitted} IS NOT NULL)`,
+    automated_count: sql<number>`SUM(${isAutomatedSql()})`,
     unread_count: sql<number>`SUM(${message.is_seen} = 0)`,
     attachment_count: sql<number>`SUM(${message.has_attachment} = 1)`,
     // Gmail keeps INBOX as a label on the canonical All Mail folder; generic IMAP uses a real folder.
