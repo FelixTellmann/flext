@@ -33,10 +33,23 @@ export type PendingActionRow = {
   uid: number;
 };
 
+// An applied row, read back so server/mail/actions/undo.ts can issue its inverse. `applied_at` rides
+// along because §7.3 replays inverses newest-first and undo sorts on it rather than trusting the query's
+// ORDER BY. Declared here, next to the other journal DTOs, because the port is defined here.
+export type UndoableActionRow = {
+  action_id: string;
+  message_id: string;
+  kind: ExecutableActionKind;
+  from_state_json: string | null;
+  to_state_json: string | null;
+  applied_at: Date;
+};
+
 export type FromStateEntry = { action_id: string; from_state_json: string };
 export type AppliedEntry = { action_id: string; to_state_json: string };
 export type FailedEntry = { action_id: string; error: string };
 export type DeferredEntry = { action_id: string; reason: string };
+export type UndoneEntry = { action_id: string };
 
 // The database sits behind a port so the executor can be exercised over a fake: every DATABASE_URL variant
 // points at the same production MySQL, so a test that reached a real implementation would mutate ~29,000
@@ -47,6 +60,15 @@ export type ActionJournal = {
   markApplied: (entries: AppliedEntry[]) => Promise<void>;
   markFailed: (entries: FailedEntry[]) => Promise<void>;
   markDeferred: (entries: DeferredEntry[]) => Promise<void>;
+  // Undo's reads and its one write, on the same port rather than a second seam: one journal type, one
+  // drizzle-backed implementation, and a test that reaches neither.
+  loadUndoableAction: (input: { mailbox_id: string; action_id: string }) => Promise<UndoableActionRow | null>;
+  loadUndoableActionsByPolicy: (input: {
+    mailbox_id: string;
+    sender_policy_id: string;
+    batch_size: number;
+  }) => Promise<UndoableActionRow[]>;
+  markUndone: (entries: UndoneEntry[]) => Promise<void>;
 };
 
 export type ExecuteActionsInput = {
