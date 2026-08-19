@@ -299,6 +299,9 @@ function createFakeJournal(input: { events: string[]; seed: SeedRow[] }): FakeJo
     markApplied: async () => unsupported("markApplied"),
     markFailed: async () => unsupported("markFailed"),
     markDeferred: async () => unsupported("markDeferred"),
+    loadActionForPromotion: async () => unsupported("loadActionForPromotion"),
+    loadShadowActionsByPolicy: async () => unsupported("loadShadowActionsByPolicy"),
+    promoteShadowActions: async () => unsupported("promoteShadowActions"),
   };
 }
 

@@ -235,6 +235,17 @@ function createFakeJournal(input: {
     recordUndoFailure: async () => {
       throw new Error("recordUndoFailure is not part of this fixture");
     },
+    // Promotion's half of the journal port. The executor never reads or writes it, so reaching one here is
+    // a wiring bug rather than a case to fixture; server/mail/actions/promote.test.ts exercises them.
+    loadActionForPromotion: async () => {
+      throw new Error("loadActionForPromotion is not part of this fixture");
+    },
+    loadShadowActionsByPolicy: async () => {
+      throw new Error("loadShadowActionsByPolicy is not part of this fixture");
+    },
+    promoteShadowActions: async () => {
+      throw new Error("promoteShadowActions is not part of this fixture");
+    },
   };
 }
 

@@ -2,18 +2,21 @@ import { db } from "@server/db/drizzle";
 import { action, message } from "@server/db/schema";
 import type {
   ActionJournal,
+  ActionPromotionLookup,
   ActionUndoLookup,
   AppliedEntry,
   DeferredEntry,
   FailedEntry,
   FromStateEntry,
   PendingActionRow,
+  PromotedEntry,
   UndoableActionRow,
   UndoFailureEntry,
   UndoneEntry,
 } from "@server/mail/actions/executor";
 import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
 import { isExecutableActionKind } from "@server/mail/actions/kinds";
+import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 
@@ -244,6 +247,66 @@ async function markUndone(entries: UndoneEntry[]): Promise<void> {
   }
 }
 
+// Deliberately unfiltered beyond the primary key, matching loadActionForUndo: promote.ts classifies status
+// and mailbox itself so it can tell the operator WHY a row was refused instead of collapsing "no such
+// action", "another mailbox's action" and "not a shadow row" into one null.
+async function loadActionForPromotion(input: { action_id: string }): Promise<ActionPromotionLookup | null> {
+  if (input.action_id.length === 0) {
+    throw new Error("loadActionForPromotion needs an action id.");
+  }
+
+  const rows = await db
+    .select({ action_id: action.id, mailbox_id: action.mailbox_id, status: action.status })
+    .from(action)
+    .where(eq(action.id, input.action_id))
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+// Scoped to one mailbox and one policy, matching loadUndoableActionsByPolicy: an unscoped read here is
+// exactly what would let a stray call promote every shadow decision in the mailbox, or across mailboxes.
+async function loadShadowActionsByPolicy(input: {
+  mailbox_id: string;
+  sender_policy_id: string;
+  batch_size: number;
+}): Promise<ActionPromotionLookup[]> {
+  if (input.mailbox_id.length === 0 || input.sender_policy_id.length === 0) {
+    throw new Error(
+      "loadShadowActionsByPolicy needs both a mailbox id and a policy id: an unscoped promote would approve every shadow decision in this mailbox.",
+    );
+  }
+  if (!Number.isInteger(input.batch_size) || input.batch_size < 1) {
+    throw new Error(
+      `loadShadowActionsByPolicy needs a positive batch size, got ${input.batch_size}. The caller bounds how many decisions one approval may promote.`,
+    );
+  }
+
+  const rows = await db
+    .select({ action_id: action.id, mailbox_id: action.mailbox_id, status: action.status })
+    .from(action)
+    .where(
+      and(eq(action.status, SHADOW_STATUS), eq(action.mailbox_id, input.mailbox_id), eq(action.sender_policy_id, input.sender_policy_id)),
+    )
+    .orderBy(asc(action.decided_at), asc(action.id))
+    .limit(input.batch_size);
+
+  return rows;
+}
+
+// Writes status "pending" and NOTHING else. The `WHERE status = 'shadow'` guard is the enforcement point
+// for Ruling 1: no row this statement touches can have been "applied" (or undone, deferred, or already
+// pending) a moment before, because any of those fails the guard and the row is left exactly as it was.
+async function promoteShadowActions(entries: PromotedEntry[]): Promise<void> {
+  for (const entry of entries) {
+    const now = new Date();
+    await db
+      .update(action)
+      .set({ status: PENDING_STATUS, updatedAt: now })
+      .where(and(eq(action.id, entry.action_id), eq(action.status, SHADOW_STATUS)));
+  }
+}
+
 export function createDatabaseJournal(): ActionJournal {
   return {
     loadPendingActions,
@@ -255,5 +318,8 @@ export function createDatabaseJournal(): ActionJournal {
     loadUndoableActionsByPolicy,
     markUndone,
     recordUndoFailure,
+    loadActionForPromotion,
+    loadShadowActionsByPolicy,
+    promoteShadowActions,
   };
 }

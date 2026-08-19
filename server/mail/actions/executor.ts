@@ -68,6 +68,12 @@ export type UndoneEntry = { action_id: string };
 // the way and the row must resume from a new address; absent leaves the column alone.
 export type UndoFailureEntry = { action_id: string; error: string; to_state_json?: string };
 
+// One `Action` row read by id alone, unfiltered, so server/mail/actions/promote.ts can tell "no such
+// action" from "another mailbox's action" from "not a shadow row" — the same reason ActionUndoLookup
+// withholds nothing.
+export type ActionPromotionLookup = { action_id: string; mailbox_id: string | null; status: string };
+export type PromotedEntry = { action_id: string };
+
 // The database sits behind a port so the executor can be exercised over a fake: every DATABASE_URL variant
 // points at the same production MySQL, so a test that reached a real implementation would mutate ~29,000
 // live Action rows. server/mail/actions/journal.ts holds the only drizzle-backed implementation.
@@ -92,6 +98,19 @@ export type ActionJournal = {
   // Records why a reversal did not land WITHOUT touching `status`: the action is still applied, which is
   // what §9's journal must keep saying, and what keeps the row reachable for a retry.
   recordUndoFailure: (entries: UndoFailureEntry[]) => Promise<void>;
+  // Promotion's read and its one write, on the same port for the same reason undo's are: one journal
+  // type, one drizzle-backed implementation, and a test that reaches neither.
+  loadActionForPromotion: (input: { action_id: string }) => Promise<ActionPromotionLookup | null>;
+  loadShadowActionsByPolicy: (input: {
+    mailbox_id: string;
+    sender_policy_id: string;
+    batch_size: number;
+  }) => Promise<ActionPromotionLookup[]>;
+  // Writes status "pending" and NOTHING else — no from_state_json, to_state_json, or applied_at. Those
+  // belong to the executor's own steps 1-4; promotion only approves a shadow decision for the executor to
+  // pick up, and journal.ts's UPDATE is guarded on `WHERE status = 'shadow'` so this can never move a row
+  // that is not one, applied included.
+  promoteShadowActions: (entries: PromotedEntry[]) => Promise<void>;
 };
 
 export type ExecuteActionsInput = {
