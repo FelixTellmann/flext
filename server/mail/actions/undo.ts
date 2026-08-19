@@ -1,8 +1,9 @@
-import type { ActionJournal, UndoableActionRow } from "@server/mail/actions/executor";
+import type { ActionJournal, ActionUndoLookup, UndoableActionRow } from "@server/mail/actions/executor";
+import { APPLIED_STATUS } from "@server/mail/actions/executor";
 import type { MailboxMutation, MailboxState, PlannedAction } from "@server/mail/actions/kinds";
-import { applyToState, inverseOf, planFor } from "@server/mail/actions/kinds";
+import { applyToState, inverseOf, isExecutableActionKind, planFor } from "@server/mail/actions/kinds";
 import type { ActionFolders, ActionStateSnapshot } from "@server/mail/actions/state";
-import { parseActionState, resolveActionFolders } from "@server/mail/actions/state";
+import { parseActionState, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
 import { classifyMailboxError } from "@server/mail/errors";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
@@ -12,8 +13,10 @@ import type { MailboxFlavor } from "@server/mail/types";
 // both from kinds.ts. A local notion of "the opposite of archive" is exactly the drift kinds.ts exists to
 // prevent, and a drifted inverse restores the wrong thing with every test still green.
 //
-// An undone row becomes `undone`; it is never deleted. §9's journal is the trust surface, and a row that
-// vanished is worse than one that was reversed — the reversal is itself part of the record.
+// A row is only ever advanced to `undone`, and never deleted. A FAILED undo leaves the row `applied` and
+// writes the reason to `error`: `status` describes what is true of the MESSAGE, and "this action is
+// applied" stays true when the reversal did not land. Stamping it `failed` would both lie on §9's trust
+// surface and lock the row out of every loader here, making the retry unreachable.
 
 export const UNDONE_STATUS = "undone" as const;
 
@@ -21,7 +24,17 @@ export type UndoResult = {
   examined: number;
   undone: number;
   failed: number;
+  skipped: number;
 };
+
+// Why a single action did nothing, so Task 9 can tell the operator which of these it is instead of
+// rendering an empty result four different ways.
+export type NotUndoableReason = "missing" | "other_mailbox" | "already_undone" | "not_applied" | "unaddressable";
+
+export type UndoActionResult =
+  | { outcome: "undone" }
+  | { outcome: "failed"; error: string }
+  | { outcome: "not_undoable"; reason: NotUndoableReason; detail: string };
 
 export type UndoActionInput = {
   action_id: string;
@@ -49,9 +62,20 @@ type LiveAddress = {
   uid_validity: string;
 };
 
-type RowOutcome = { outcome: "undone"; address: LiveAddress } | { outcome: "failed"; error: string };
+type RowResult =
+  | { outcome: "undone"; action_id: string; address: LiveAddress }
+  // `to_state_json` is present only when the sequence got part of the way and the row must resume from a
+  // new address. Carried out to undoRows rather than written here, so there is exactly one place that
+  // records a failure and no refusal path can forget to.
+  | { outcome: "failed"; action_id: string; error: string; to_state_json?: string }
+  | { outcome: "skipped"; action_id: string };
 
 type MutationOutcome = { outcome: "issued"; address: LiveAddress } | { outcome: "failed"; error: string };
+
+// What the row's sequence did before it stopped, so a partial one can hand back an address to resume from.
+type SequenceOutcome =
+  | { outcome: "issued"; address: LiveAddress }
+  | { outcome: "failed"; error: string; progress: { address: LiveAddress; state: MailboxState } | null };
 
 function toRecordedError(error: unknown): string {
   return classifyMailboxError(error).message;
@@ -65,7 +89,8 @@ function toRecordedError(error: unknown): string {
 // Archive — the state between the two actions, not the one before them.
 //
 // applied_at is millisecond-precision, so two rows written inside one tick fall back to the action id
-// purely for determinism; that tie is genuinely ambiguous and no column in `Action` resolves it.
+// purely for determinism. That is a coin flip, not a chronological order — MySQL UUID() is v1 with its
+// time fields reversed, so it does not sort by time.
 function newestFirst(rows: UndoableActionRow[]): UndoableActionRow[] {
   return [...rows].sort((left, right) => {
     const delta = right.applied_at.getTime() - left.applied_at.getTime();
@@ -77,7 +102,7 @@ function newestFirst(rows: UndoableActionRow[]): UndoableActionRow[] {
 }
 
 // Sets, not sequences, and the executor already serializes them sorted — this exists so a comparison
-// between a freshly projected state and a stored one cannot fail on ordering alone.
+// between a projected state and a stored one cannot fail on ordering alone.
 function canonicalState(state: MailboxState): string {
   return JSON.stringify({
     folder: state.folder,
@@ -105,19 +130,27 @@ function requirePlan(
   return plan;
 }
 
-// The one check that catches a rebuilt plan disagreeing with what actually ran. planFor resolves its
-// targets from the server's SPECIAL-USE attributes live, so a mailbox that renamed or re-flagged its
-// Archive folder since the action would yield a plan whose inverse moves the message out of a folder it
-// was never in. Comparing the plan's projected result against the recorded to_state turns that into a
-// refusal instead of a mutation against an unrelated message.
-function requireAgreementWithRecordedResult(plan: PlannedAction, from_state: ActionStateSnapshot, to_state: ActionStateSnapshot): void {
-  const projected = applyToState(plan.mutation, from_state);
-  if (canonicalState(projected) === canonicalState(to_state)) {
-    return;
+// Every state the message passes through on the way back: index 0 is what the executor's mutation
+// produced, and index i is the state after the first i inverse mutations have landed. A sequence that
+// stopped half way rewrites to_state_json to where it actually got to, so a retry finds itself at some
+// i > 0 rather than at a dead address.
+function replayStates(plan: PlannedAction, from_state: MailboxState, inverse: MailboxMutation[]): MailboxState[] {
+  const states: MailboxState[] = [applyToState(plan.mutation, from_state)];
+  for (const mutation of inverse) {
+    states.push(applyToState(mutation, states[states.length - 1]));
   }
-  throw new Error(
-    `the plan rebuilt for this action does not produce the state the executor recorded: expected ${canonicalState(to_state)}, rebuilt ${canonicalState(projected)}. The mailbox's folder layout most likely changed since the action ran, so the inverse would address the wrong folder. Nothing was mutated.`,
-  );
+  return states;
+}
+
+// The resume point, and the check that the rebuilt plan agrees with what actually ran, in one step.
+// planFor resolves its targets from the server's SPECIAL-USE attributes live, so a mailbox that renamed
+// or re-flagged its Archive folder since the action would yield a plan whose inverse moves the message
+// out of a folder it was never in — and that plan produces no state matching the recorded one, so it
+// refuses instead of mutating. Index 0 is the untouched case; the last index means the sequence already
+// finished and only the status write was lost.
+function resumeIndexFor(states: MailboxState[], to_state: ActionStateSnapshot): number {
+  const recorded = canonicalState(to_state);
+  return states.findIndex((state) => canonicalState(state) === recorded);
 }
 
 // UIDs are unique for the life of a UIDVALIDITY and are never reused, so a stale UID addresses the same
@@ -158,9 +191,9 @@ async function issueMutation(input: {
     const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
     const pair = result.pairs.find((candidate) => candidate.source_uid === address.uid);
     if (pair === undefined) {
-      // An unconfirmed UID is not an error the provider throws on (§11) and this is not retried: after a
-      // partial move the message is either relocated without being reported or not relocated at all, and
-      // a blind retry would move an already-moved message a second time.
+      // An unconfirmed UID is not an error the provider throws on (§11) and this is not retried inside the
+      // run: after a partial move the message is either relocated without being reported or not relocated
+      // at all, and a blind retry would move an already-moved message a second time.
       return {
         outcome: "failed",
         error: `the server confirmed no destination for UID ${address.uid} moving out of ${address.folder}, so its state is unknown. Not retried — the next sync re-reads the mailbox and this row keeps its from_state.`,
@@ -186,6 +219,36 @@ async function issueMutation(input: {
   return { outcome: "issued", address };
 }
 
+// In order, stopping on the first failure. A Gmail trash undo is a move back followed by a label restore;
+// a succeeded move with a failed restore leaves the message correctly filed but unlabelled, which is why
+// the failure carries the progress it made rather than only the error.
+async function issueSequence(input: {
+  provider: MailboxProvider;
+  address: LiveAddress;
+  mutations: MailboxMutation[];
+  states: MailboxState[];
+  first_index: number;
+}): Promise<SequenceOutcome> {
+  let address = input.address;
+  let progress: { address: LiveAddress; state: MailboxState } | null = null;
+
+  for (const [offset, mutation] of input.mutations.entries()) {
+    let outcome: MutationOutcome;
+    try {
+      outcome = await issueMutation({ provider: input.provider, address, mutation });
+    } catch (error) {
+      return { outcome: "failed", error: toRecordedError(error), progress };
+    }
+    if (outcome.outcome === "failed") {
+      return { outcome: "failed", error: outcome.error, progress };
+    }
+    address = outcome.address;
+    progress = { address, state: input.states[input.first_index + offset + 1] };
+  }
+
+  return { outcome: "issued", address };
+}
+
 async function undoRow(input: {
   row: UndoableActionRow;
   flavor: MailboxFlavor;
@@ -193,13 +256,14 @@ async function undoRow(input: {
   folders: ActionFolders;
   live_address: LiveAddress | undefined;
   validities: Map<string, string>;
-}): Promise<RowOutcome> {
+}): Promise<RowResult> {
   const { row } = input;
 
   const from_state = parseActionState(row.from_state_json);
   if (from_state === null) {
     return {
       outcome: "failed",
+      action_id: row.action_id,
       error: `action ${row.action_id} has no usable from_state_json, so there is no recorded state to restore. Undo restores what was captured before the mutation and never reconstructs it from later sync data.`,
     };
   }
@@ -208,49 +272,71 @@ async function undoRow(input: {
   if (to_state === null) {
     return {
       outcome: "failed",
+      action_id: row.action_id,
       error: `action ${row.action_id} has no usable to_state_json, so the message the executor moved has no recorded address. §7.2: without COPYUID's destination there is nowhere for undo to write until the next full sync.`,
     };
   }
 
   let inverse: MailboxMutation[];
+  let states: MailboxState[];
+  let first_index: number;
   try {
     const plan = requirePlan(row, input.flavor, input.folders, from_state);
-    requireAgreementWithRecordedResult(plan, from_state, to_state);
     inverse = inverseOf(plan, from_state);
+    states = replayStates(plan, from_state, inverse);
+    first_index = resumeIndexFor(states, to_state);
   } catch (error) {
-    return { outcome: "failed", error: toRecordedError(error) };
+    return { outcome: "failed", action_id: row.action_id, error: toRecordedError(error) };
   }
 
-  // The action changed nothing, so its inverse is empty. That is a successful undo with no command to
-  // issue, not a failure: the row is already in the state it is being restored to.
-  let address: LiveAddress = input.live_address ?? { folder: to_state.folder, uid: to_state.uid, uid_validity: to_state.uid_validity };
-  if (inverse.length === 0) {
-    return { outcome: "undone", address };
+  if (first_index < 0) {
+    return {
+      outcome: "failed",
+      action_id: row.action_id,
+      error: `the recorded to_state ${canonicalState(to_state)} matches no point on this action's path back from ${canonicalState(states[0])}. The mailbox's folder layout most likely changed since the action ran, so the inverse would address the wrong folder. Nothing was mutated.`,
+    };
+  }
+
+  // Either the action changed nothing, or a previous attempt already issued the whole sequence and only
+  // the status write was lost. Both are successful undos with no command left to issue.
+  const remaining = inverse.slice(first_index);
+  const address: LiveAddress = input.live_address ?? { folder: to_state.folder, uid: to_state.uid, uid_validity: to_state.uid_validity };
+  if (remaining.length === 0) {
+    return { outcome: "undone", action_id: row.action_id, address };
   }
 
   try {
     await requireUidValidity({ provider: input.provider, validities: input.validities, address });
   } catch (error) {
-    return { outcome: "failed", error: toRecordedError(error) };
+    return { outcome: "failed", action_id: row.action_id, error: toRecordedError(error) };
   }
 
-  // In order, stopping on the first failure. A Gmail trash undo is a move back followed by a label
-  // restore; a succeeded move with a failed restore leaves the message correctly filed but unlabelled, so
-  // the row stays `failed` with from_state_json intact and a retry can finish the restore.
-  for (const mutation of inverse) {
-    let outcome: MutationOutcome;
-    try {
-      outcome = await issueMutation({ provider: input.provider, address, mutation });
-    } catch (error) {
-      return { outcome: "failed", error: toRecordedError(error) };
-    }
-    if (outcome.outcome === "failed") {
-      return { outcome: "failed", error: outcome.error };
-    }
-    address = outcome.address;
+  const outcome = await issueSequence({
+    provider: input.provider,
+    address,
+    mutations: remaining,
+    states,
+    first_index,
+  });
+
+  if (outcome.outcome === "issued") {
+    return { outcome: "undone", action_id: row.action_id, address: outcome.address };
   }
 
-  return { outcome: "undone", address };
+  if (outcome.progress === null) {
+    return { outcome: "failed", action_id: row.action_id, error: outcome.error };
+  }
+
+  // A sequence that got part of the way leaves the message at an address to_state_json does not name, and
+  // a retry starting from the old one could only fail again. Recording where it actually got to makes the
+  // resume reachable: replayStates matches that state at index i > 0 and the retry issues the tail.
+  const resumed = outcome.progress;
+  return {
+    outcome: "failed",
+    action_id: row.action_id,
+    error: outcome.error,
+    to_state_json: serializeActionState({ ...resumed.state, uid: resumed.address.uid, uid_validity: resumed.address.uid_validity }),
+  };
 }
 
 async function undoRows(input: {
@@ -258,10 +344,9 @@ async function undoRows(input: {
   flavor: MailboxFlavor;
   provider: MailboxProvider;
   journal: ActionJournal;
-}): Promise<UndoResult> {
-  const result: UndoResult = { examined: input.rows.length, undone: 0, failed: 0 };
+}): Promise<RowResult[]> {
   if (input.rows.length === 0) {
-    return result;
+    return [];
   }
 
   const folders = await resolveActionFolders(input.provider);
@@ -270,49 +355,101 @@ async function undoRows(input: {
   // each move leaves it at an address no journal row knows about.
   const live_addresses = new Map<string, LiveAddress>();
   const blocked_messages = new Set<string>();
+  const results: RowResult[] = [];
 
   for (const row of newestFirst(input.rows)) {
+    // Skipped, not failed, and nothing is written to it. A newer action on this message is still standing,
+    // so restoring this older one would produce a state the message was never in — but this row is still
+    // correctly applied and its mailbox state is untouched, and stamping it would make §9's journal claim
+    // something went wrong with an action that is exactly where it should be.
     if (blocked_messages.has(row.message_id)) {
-      // Skipped rather than attempted. A newer action on this message is still standing, so restoring
-      // this older one would produce a state the message was never in.
-      await input.journal.markFailed([
-        {
-          action_id: row.action_id,
-          error:
-            "a later action on this message could not be undone, so this one was not attempted. Undoing it now would restore an intermediate state rather than the original; retry once the later action is reversed.",
-        },
-      ]);
-      result.failed += 1;
+      results.push({ outcome: "skipped", action_id: row.action_id });
       continue;
     }
 
-    const outcome = await undoRow({
-      row,
-      flavor: input.flavor,
-      provider: input.provider,
-      folders,
-      live_address: live_addresses.get(row.message_id),
-      validities,
-    });
+    let result: RowResult;
+    try {
+      result = await undoRow({
+        row,
+        flavor: input.flavor,
+        provider: input.provider,
+        folders,
+        live_address: live_addresses.get(row.message_id),
+        validities,
+      });
+    } catch (error) {
+      result = { outcome: "failed", action_id: row.action_id, error: toRecordedError(error) };
+    }
 
-    if (outcome.outcome === "failed") {
-      await input.journal.markFailed([{ action_id: row.action_id, error: outcome.error }]);
+    results.push(result);
+
+    // Every failure lands here and nowhere else, so a refusal that never reached the mailbox is recorded
+    // as visibly as one that half did. `status` is untouched — the action is still applied.
+    if (result.outcome === "failed") {
+      await input.journal.recordUndoFailure(
+        result.to_state_json === undefined
+          ? [{ action_id: result.action_id, error: result.error }]
+          : [{ action_id: result.action_id, error: result.error, to_state_json: result.to_state_json }],
+      );
       blocked_messages.add(row.message_id);
-      result.failed += 1;
       continue;
     }
-
-    live_addresses.set(row.message_id, outcome.address);
-    // Written per row, immediately after its inverse lands, rather than batched at the end: a crash
-    // mid-replay must not leave an already-reversed row looking replayable.
-    await input.journal.markUndone([{ action_id: row.action_id }]);
-    result.undone += 1;
+    if (result.outcome === "undone") {
+      live_addresses.set(row.message_id, result.address);
+      // Written per row, immediately after its inverse lands, rather than batched at the end: a crash
+      // mid-replay must not leave an already-reversed row looking replayable.
+      await input.journal.markUndone([{ action_id: row.action_id }]);
+    }
   }
 
-  return result;
+  return results;
 }
 
-export async function undoAction(input: UndoActionInput): Promise<UndoResult> {
+// A lookup by id alone, classified here rather than filtered away in SQL, so "no such action", "that
+// action belongs to another mailbox", "already undone" and "never applied" stay distinguishable. A loader
+// that filtered on status and mailbox returns null for all four, and Task 9 has to tell the operator
+// which one it was.
+function classifyLookup(lookup: ActionUndoLookup | null, mailbox_id: string): UndoActionResult | { row: UndoableActionRow } {
+  if (lookup === null) {
+    return { outcome: "not_undoable", reason: "missing", detail: "no action with that id exists." };
+  }
+  if (lookup.mailbox_id !== mailbox_id) {
+    return {
+      outcome: "not_undoable",
+      reason: "other_mailbox",
+      detail: `that action belongs to mailbox ${lookup.mailbox_id ?? "(none recorded)"}, and undo must reach the server it mutated.`,
+    };
+  }
+  if (lookup.status === UNDONE_STATUS) {
+    return { outcome: "not_undoable", reason: "already_undone", detail: "that action has already been undone." };
+  }
+  if (lookup.status !== APPLIED_STATUS) {
+    return {
+      outcome: "not_undoable",
+      reason: "not_applied",
+      detail: `that action has status ${lookup.status}, so it never mutated the mailbox and there is nothing to reverse.`,
+    };
+  }
+  if (!isExecutableActionKind(lookup.kind) || lookup.applied_at === null) {
+    return {
+      outcome: "not_undoable",
+      reason: "unaddressable",
+      detail: `that action is applied but carries kind "${lookup.kind}" and applied_at ${lookup.applied_at === null ? "NULL" : "set"}; undo needs an executable kind and a time to order it by.`,
+    };
+  }
+  return {
+    row: {
+      action_id: lookup.action_id,
+      message_id: lookup.message_id,
+      kind: lookup.kind,
+      from_state_json: lookup.from_state_json,
+      to_state_json: lookup.to_state_json,
+      applied_at: lookup.applied_at,
+    },
+  };
+}
+
+export async function undoAction(input: UndoActionInput): Promise<UndoActionResult> {
   if (input.action_id.length === 0) {
     throw new Error("undoAction needs an action id.");
   }
@@ -320,11 +457,22 @@ export async function undoAction(input: UndoActionInput): Promise<UndoResult> {
     throw new Error("undoAction needs a mailbox id: the provider is connected to one server, and undo must reach the server it mutated.");
   }
 
-  const row = await input.journal.loadUndoableAction({ mailbox_id: input.mailbox_id, action_id: input.action_id });
-  if (row === null) {
-    return { examined: 0, undone: 0, failed: 0 };
+  const classified = classifyLookup(await input.journal.loadActionForUndo({ action_id: input.action_id }), input.mailbox_id);
+  if (!("row" in classified)) {
+    return classified;
   }
-  return undoRows({ rows: [row], flavor: input.flavor, provider: input.provider, journal: input.journal });
+
+  const results = await undoRows({ rows: [classified.row], flavor: input.flavor, provider: input.provider, journal: input.journal });
+  const result = results[0];
+  if (result === undefined || result.outcome === "skipped") {
+    throw new Error(
+      `undoAction was handed one row and got back ${result === undefined ? "none" : "a skipped one"}; a single row has no sibling to block it.`,
+    );
+  }
+  if (result.outcome === "failed") {
+    return { outcome: "failed", error: result.error };
+  }
+  return { outcome: "undone" };
 }
 
 // Scoped to one mailbox even though a policy is not: the caller supplies a provider connected to a single
@@ -345,5 +493,12 @@ export async function undoPolicyActions(input: UndoPolicyActionsInput): Promise<
     sender_policy_id: input.sender_policy_id,
     batch_size: input.batch_size,
   });
-  return undoRows({ rows, flavor: input.flavor, provider: input.provider, journal: input.journal });
+  const results = await undoRows({ rows, flavor: input.flavor, provider: input.provider, journal: input.journal });
+
+  return {
+    examined: rows.length,
+    undone: results.filter((result) => result.outcome === "undone").length,
+    failed: results.filter((result) => result.outcome === "failed").length,
+    skipped: results.filter((result) => result.outcome === "skipped").length,
+  };
 }

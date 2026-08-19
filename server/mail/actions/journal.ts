@@ -2,12 +2,14 @@ import { db } from "@server/db/drizzle";
 import { action, message } from "@server/db/schema";
 import type {
   ActionJournal,
+  ActionUndoLookup,
   AppliedEntry,
   DeferredEntry,
   FailedEntry,
   FromStateEntry,
   PendingActionRow,
   UndoableActionRow,
+  UndoFailureEntry,
   UndoneEntry,
 } from "@server/mail/actions/executor";
 import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
@@ -95,9 +97,9 @@ async function markFailed(entries: FailedEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
     // from_state_json is deliberately left untouched, and nothing rewrites it later: a failed row is never
-    // re-selected (loadPendingActions takes only pending ones) and never undone (loadUndoableAction takes
-    // only applied ones), so this snapshot is the sole record of where the message was before a mutation
-    // that may have half-landed — which is what §7.1's reconciliation compares against real server state.
+    // re-selected (loadPendingActions takes only pending ones) and never undone (undo refuses any status
+    // but applied), so this snapshot is the sole record of where the message was before a mutation that
+    // may have half-landed — which is what §7.1's reconciliation compares against real server state.
     await db.update(action).set({ status: FAILED_STATUS, error: entry.error, updatedAt: now }).where(eq(action.id, entry.action_id));
   }
 }
@@ -152,22 +154,31 @@ function toUndoableRow(row: UndoableRowShape): UndoableActionRow[] {
   ];
 }
 
-// Only `applied` rows are undoable. A shadow row never touched the mailbox, a pending or failed one has
-// no confirmed destination to address, and an already-undone one would be replayed a second time.
-async function loadUndoableAction(input: { mailbox_id: string; action_id: string }): Promise<UndoableActionRow | null> {
-  if (input.mailbox_id.length === 0 || input.action_id.length === 0) {
-    throw new Error(
-      "loadUndoableAction needs both a mailbox id and an action id: an unscoped lookup could return a row from another server.",
-    );
+// Deliberately unfiltered beyond the primary key: undo classifies status, mailbox and addressability
+// itself so it can say WHY a row cannot be reversed. Filtering here would collapse "no such action",
+// "another mailbox's action", "already undone" and "never applied" into one null. Read-only, one row by
+// primary key, and undo refuses to act on anything outside the caller's mailbox.
+async function loadActionForUndo(input: { action_id: string }): Promise<ActionUndoLookup | null> {
+  if (input.action_id.length === 0) {
+    throw new Error("loadActionForUndo needs an action id.");
   }
 
   const rows = await db
-    .select(undoable_columns)
+    .select({
+      action_id: action.id,
+      message_id: action.message_id,
+      mailbox_id: action.mailbox_id,
+      status: action.status,
+      kind: action.kind,
+      from_state_json: action.from_state_json,
+      to_state_json: action.to_state_json,
+      applied_at: action.applied_at,
+    })
     .from(action)
-    .where(and(eq(action.id, input.action_id), eq(action.mailbox_id, input.mailbox_id), eq(action.status, APPLIED_STATUS)))
+    .where(eq(action.id, input.action_id))
     .limit(1);
 
-  return rows.flatMap(toUndoableRow)[0] ?? null;
+  return rows[0] ?? null;
 }
 
 // §7.3's bulk-undo-by-rule: every action a policy ever took, newest-first. The ORDER BY is what makes
@@ -201,6 +212,29 @@ async function loadUndoableActionsByPolicy(input: {
   return rows.flatMap(toUndoableRow);
 }
 
+// `status` is NOT touched. A reversal that did not land leaves the action applied, because that is what is
+// still true of the message; stamping it `failed` would make §9's journal report a broken action next to a
+// message sitting exactly where that action put it, and would lock the row out of every loader above so
+// the retry could never reach it. The reason rides in `error`, alongside markDeferred's — which is why any
+// surface reading a non-null `error` as a failure is wrong for both.
+//
+// `to_state_json` is rewritten only when the sequence got part of the way: the message is then at an
+// address the old value does not name, and a retry starting from a dead address could only fail again.
+// The status guard keeps this from touching a row some other run has already advanced.
+async function recordUndoFailure(entries: UndoFailureEntry[]): Promise<void> {
+  for (const entry of entries) {
+    const now = new Date();
+    const fields =
+      entry.to_state_json === undefined
+        ? { error: entry.error, updatedAt: now }
+        : { error: entry.error, to_state_json: entry.to_state_json, updatedAt: now };
+    await db
+      .update(action)
+      .set(fields)
+      .where(and(eq(action.id, entry.action_id), eq(action.status, APPLIED_STATUS)));
+  }
+}
+
 // An UPDATE, never a DELETE: §9's journal is the trust surface, and a row that vanished is worse than one
 // that was reversed. from_state_json and to_state_json are left standing so the reversal stays auditable.
 async function markUndone(entries: UndoneEntry[]): Promise<void> {
@@ -217,8 +251,9 @@ export function createDatabaseJournal(): ActionJournal {
     markApplied,
     markFailed,
     markDeferred,
-    loadUndoableAction,
+    loadActionForUndo,
     loadUndoableActionsByPolicy,
     markUndone,
+    recordUndoFailure,
   };
 }

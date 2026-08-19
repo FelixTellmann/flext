@@ -223,14 +223,17 @@ function createFakeJournal(input: {
 
     // Undo's half of the journal port. The executor never reads or writes it, so reaching one here is a
     // wiring bug rather than a case to fixture; server/mail/actions/undo.test.ts exercises them.
-    loadUndoableAction: async () => {
-      throw new Error("loadUndoableAction is not part of this fixture");
+    loadActionForUndo: async () => {
+      throw new Error("loadActionForUndo is not part of this fixture");
     },
     loadUndoableActionsByPolicy: async () => {
       throw new Error("loadUndoableActionsByPolicy is not part of this fixture");
     },
     markUndone: async () => {
       throw new Error("markUndone is not part of this fixture");
+    },
+    recordUndoFailure: async () => {
+      throw new Error("recordUndoFailure is not part of this fixture");
     },
   };
 }

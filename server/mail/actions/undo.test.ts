@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { ActionJournal, UndoableActionRow } from "@server/mail/actions/executor";
-import type { ExecutableActionKind } from "@server/mail/actions/kinds";
+import type { ActionJournal, ActionUndoLookup, UndoableActionRow } from "@server/mail/actions/executor";
 import { GMAIL_INBOX_LABEL } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { serializeActionState } from "@server/mail/actions/state";
-import type { UndoResult } from "@server/mail/actions/undo";
+import type { UndoActionResult, UndoResult } from "@server/mail/actions/undo";
 import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import type {
   CopyUidResult,
@@ -31,6 +30,7 @@ const TRASH_VALIDITY = "3000";
 const GMAIL_ALL_VALIDITY = "4000";
 const GMAIL_TRASH_VALIDITY = "5000";
 
+const MAILBOX_ID = "mailbox-1";
 const MESSAGE_ID = "message-1";
 
 type FakeFolder = {
@@ -50,6 +50,8 @@ type FakeMailbox = {
 
 type ProviderFailure = "move" | "set_labels";
 
+// Mutable so a test can clear the failure and re-run the same undo against the same mailbox, which is the
+// only way to prove a retry actually reaches the row and resumes.
 type FakeProviderOptions = {
   events: string[];
   mailbox: FakeMailbox;
@@ -97,7 +99,6 @@ function locate(mailbox: FakeMailbox, message_id: string): { folder: string; uid
 
 function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
   const { events, mailbox } = options;
-  const unconfirmed = options.unconfirmed_uids ?? [];
 
   function requireFolder(path: string): FakeFolder {
     const folder = mailbox.folders.find((candidate) => candidate.path === path);
@@ -144,6 +145,7 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
       }
       const source = requireFolder(path);
       const target = requireFolder(target_folder);
+      const unconfirmed = options.unconfirmed_uids ?? [];
 
       const pairs = [];
       const unconfirmed_uids: number[] = [];
@@ -192,24 +194,40 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
   };
 }
 
-type JournalRow = {
-  status: string;
-  from_state_json: string | null;
-  to_state_json: string | null;
-  error: string | null;
+type SeedRow = {
+  action_id: string;
+  kind: string;
+  applied_at: string | null;
+  from_state: ActionStateSnapshot;
+  to_state: ActionStateSnapshot | null;
+  message_id?: string;
+  mailbox_id?: string;
+  status?: string;
+  from_state_json?: string | null;
 };
 
-type FakeJournal = ActionJournal & { rows: Map<string, JournalRow> };
+// Seeded and mutated in the shape the drizzle loader returns, so the fake cannot quietly hide a status or
+// a mailbox the production query would have surfaced.
+type FakeJournal = ActionJournal & { rows: Map<string, ActionUndoLookup & { error: string | null }> };
 
-function createFakeJournal(input: { events: string[]; undoable: UndoableActionRow[] }): FakeJournal {
-  const rows = new Map<string, JournalRow>(
-    input.undoable.map((row) => [
-      row.action_id,
-      { status: "applied", from_state_json: row.from_state_json, to_state_json: row.to_state_json, error: null },
-    ]),
-  );
+function seedLookup(row: SeedRow): ActionUndoLookup & { error: string | null } {
+  return {
+    action_id: row.action_id,
+    message_id: row.message_id ?? MESSAGE_ID,
+    mailbox_id: row.mailbox_id ?? MAILBOX_ID,
+    status: row.status ?? "applied",
+    kind: row.kind,
+    from_state_json: row.from_state_json === undefined ? serializeActionState(row.from_state) : row.from_state_json,
+    to_state_json: row.to_state === null ? null : serializeActionState(row.to_state),
+    applied_at: row.applied_at === null ? null : new Date(row.applied_at),
+    error: null,
+  };
+}
 
-  function requireRow(action_id: string): JournalRow {
+function createFakeJournal(input: { events: string[]; seed: SeedRow[] }): FakeJournal {
+  const rows = new Map(input.seed.map((row) => [row.action_id, seedLookup(row)]));
+
+  function requireRow(action_id: string): ActionUndoLookup & { error: string | null } {
     const row = rows.get(action_id);
     if (row === undefined) {
       throw new Error(`the journal was asked to update unknown action ${action_id}`);
@@ -224,16 +242,34 @@ function createFakeJournal(input: { events: string[]; undoable: UndoableActionRo
   return {
     rows,
 
-    loadUndoableAction: async (query) => {
-      input.events.push(`load_undoable ${query.action_id}`);
-      return input.undoable.find((row) => row.action_id === query.action_id) ?? null;
+    loadActionForUndo: async (query) => {
+      input.events.push(`load_for_undo ${query.action_id}`);
+      return rows.get(query.action_id) ?? null;
     },
 
-    // Deliberately handed over OLDEST-FIRST. The production query orders newest-first so `limit` takes
-    // the newest batch; undo re-sorts what it is given, and that is what these tests exercise.
+    // Filtered as the production query is, but handed over OLDEST-FIRST on purpose. That query orders
+    // newest-first so `limit` takes the newest batch; undo re-sorts what it is given, and that is what
+    // these tests exercise.
     loadUndoableActionsByPolicy: async (query) => {
       input.events.push(`load_undoable_by_policy ${query.sender_policy_id}`);
-      return [...input.undoable].sort((left, right) => left.applied_at.getTime() - right.applied_at.getTime());
+      const undoable: UndoableActionRow[] = [];
+      for (const row of rows.values()) {
+        if (row.status !== "applied" || row.mailbox_id !== query.mailbox_id || row.applied_at === null) {
+          continue;
+        }
+        if (row.kind !== "archive" && row.kind !== "auto_trash" && row.kind !== "file") {
+          continue;
+        }
+        undoable.push({
+          action_id: row.action_id,
+          message_id: row.message_id,
+          kind: row.kind,
+          from_state_json: row.from_state_json,
+          to_state_json: row.to_state_json,
+          applied_at: row.applied_at,
+        });
+      }
+      return undoable.sort((left, right) => left.applied_at.getTime() - right.applied_at.getTime()).slice(0, query.batch_size);
     },
 
     markUndone: async (entries) => {
@@ -245,44 +281,54 @@ function createFakeJournal(input: { events: string[]; undoable: UndoableActionRo
       }
     },
 
-    markFailed: async (entries) => {
-      input.events.push(`mark_failed ${entries.map((entry) => entry.action_id).join(",")}`);
+    recordUndoFailure: async (entries) => {
+      input.events.push(`record_undo_failure ${entries.map((entry) => entry.action_id).join(",")}`);
       for (const entry of entries) {
         const row = requireRow(entry.action_id);
-        row.status = "failed";
+        // The production statement guards on status = applied and never sets it; a fake that moved the
+        // status would hide exactly the defect this method exists to fix.
         row.error = entry.error;
+        if (entry.to_state_json !== undefined) {
+          row.to_state_json = entry.to_state_json;
+        }
       }
     },
 
     loadPendingActions: async () => unsupported("loadPendingActions"),
     recordFromState: async () => unsupported("recordFromState"),
     markApplied: async () => unsupported("markApplied"),
+    markFailed: async () => unsupported("markFailed"),
     markDeferred: async () => unsupported("markDeferred"),
-  };
-}
-
-function undoableRow(input: {
-  action_id: string;
-  kind: ExecutableActionKind;
-  applied_at: string;
-  from_state: ActionStateSnapshot;
-  to_state: ActionStateSnapshot | null;
-  message_id?: string;
-  from_state_json?: string | null;
-}): UndoableActionRow {
-  return {
-    action_id: input.action_id,
-    message_id: input.message_id ?? MESSAGE_ID,
-    kind: input.kind,
-    from_state_json: input.from_state_json === undefined ? serializeActionState(input.from_state) : input.from_state_json,
-    to_state_json: input.to_state === null ? null : serializeActionState(input.to_state),
-    applied_at: new Date(input.applied_at),
   };
 }
 
 function moveEvents(events: string[]): string[] {
   return events.filter((event) => event.startsWith("move ") || event.startsWith("set_labels "));
 }
+
+const GENERIC_ARCHIVE_FROM: ActionStateSnapshot = { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: ["\\Seen"], labels: null };
+const GENERIC_ARCHIVE_TO: ActionStateSnapshot = {
+  folder: ARCHIVE_FOLDER,
+  uid: 9001,
+  uid_validity: ARCHIVE_VALIDITY,
+  flags: ["\\Seen"],
+  labels: null,
+};
+
+const GMAIL_TRASH_FROM: ActionStateSnapshot = {
+  folder: GMAIL_CANONICAL_FOLDER,
+  uid: 40,
+  uid_validity: GMAIL_ALL_VALIDITY,
+  flags: ["\\Seen"],
+  labels: [GMAIL_INBOX_LABEL, "Receipts"],
+};
+const GMAIL_TRASH_TO: ActionStateSnapshot = {
+  folder: GMAIL_TRASH_FOLDER,
+  uid: 700,
+  uid_validity: GMAIL_TRASH_VALIDITY,
+  flags: ["\\Seen"],
+  labels: [],
+};
 
 describe("undoAction — single action (§7.3)", () => {
   test("moves a generic archive back to the folder from_state_json recorded", async () => {
@@ -291,20 +337,20 @@ describe("undoAction — single action (§7.3)", () => {
     const provider = createFakeProvider({ events, mailbox });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: ["\\Seen"], labels: null },
-          to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: ["\\Seen"], labels: null },
-        }),
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 1, failed: 0 } satisfies UndoResult);
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([`move ${ARCHIVE_FOLDER} 9001 -> ${INBOX}`]);
     expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: INBOX, uid: 6000 });
   });
@@ -313,27 +359,26 @@ describe("undoAction — single action (§7.3)", () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
     const provider = createFakeProvider({ events, mailbox });
-    const from_state: ActionStateSnapshot = { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: [], labels: null };
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state,
-          to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: [], labels: null },
-        }),
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
       ],
     });
 
-    await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+    await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
 
     expect(journal.rows.has("action-1")).toBe(true);
     const row = journal.rows.get("action-1");
     expect(row?.status).toBe("undone");
     expect(row?.error).toBeNull();
-    expect(row?.from_state_json).toBe(serializeActionState(from_state));
+    expect(row?.from_state_json).toBe(serializeActionState(GENERIC_ARCHIVE_FROM));
     expect(row?.to_state_json).not.toBeNull();
   });
 
@@ -343,8 +388,8 @@ describe("undoAction — single action (§7.3)", () => {
     const provider = createFakeProvider({ events, mailbox });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
@@ -356,13 +401,13 @@ describe("undoAction — single action (§7.3)", () => {
             labels: [GMAIL_INBOX_LABEL, "Newsletters"],
           },
           to_state: { folder: GMAIL_CANONICAL_FOLDER, uid: 40, uid_validity: GMAIL_ALL_VALIDITY, flags: [], labels: ["Newsletters"] },
-        }),
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "gmail", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 1, failed: 0 } satisfies UndoResult);
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([`set_labels ${GMAIL_CANONICAL_FOLDER} 40 +[${GMAIL_INBOX_LABEL}] -[]`]);
     expect(mailbox.labels.get(MESSAGE_ID)).toEqual(["Newsletters", GMAIL_INBOX_LABEL]);
   });
@@ -376,26 +421,20 @@ describe("undoAction — single action (§7.3)", () => {
     const provider = createFakeProvider({ events, mailbox });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "auto_trash",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state: {
-            folder: GMAIL_CANONICAL_FOLDER,
-            uid: 40,
-            uid_validity: GMAIL_ALL_VALIDITY,
-            flags: ["\\Seen"],
-            labels: [GMAIL_INBOX_LABEL, "Receipts"],
-          },
-          to_state: { folder: GMAIL_TRASH_FOLDER, uid: 700, uid_validity: GMAIL_TRASH_VALIDITY, flags: ["\\Seen"], labels: [] },
-        }),
+          from_state: GMAIL_TRASH_FROM,
+          to_state: GMAIL_TRASH_TO,
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "gmail", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 1, failed: 0 } satisfies UndoResult);
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([
       `move ${GMAIL_TRASH_FOLDER} 700 -> ${GMAIL_CANONICAL_FOLDER}`,
       `set_labels ${GMAIL_CANONICAL_FOLDER} 7000 +[Receipts,${GMAIL_INBOX_LABEL}] -[]`,
@@ -417,91 +456,164 @@ describe("undoAction — single action (§7.3)", () => {
     };
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({ action_id: "action-1", kind: "archive", applied_at: "2026-08-19T10:00:00.000Z", from_state: state, to_state: state }),
-      ],
+      seed: [{ action_id: "action-1", kind: "archive", applied_at: "2026-08-19T10:00:00.000Z", from_state: state, to_state: state }],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "gmail", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 1, failed: 0 } satisfies UndoResult);
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([]);
     expect(journal.rows.get("action-1")?.status).toBe("undone");
   });
+});
 
-  test("an action that is not applied, or belongs to another mailbox, undoes nothing", async () => {
+describe("undoAction — why nothing happened is reportable", () => {
+  function fixtures(seed: SeedRow[]): { events: string[]; provider: MailboxProvider; journal: FakeJournal } {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
-    const provider = createFakeProvider({ events, mailbox });
-    const journal = createFakeJournal({ events, undoable: [] });
+    return { events, provider: createFakeProvider({ events, mailbox }), journal: createFakeJournal({ events, seed }) };
+  }
 
-    const result = await undoAction({ action_id: "action-missing", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+  const base = {
+    kind: "archive",
+    applied_at: "2026-08-19T10:00:00.000Z",
+    from_state: GENERIC_ARCHIVE_FROM,
+    to_state: GENERIC_ARCHIVE_TO,
+  };
 
-    expect(result).toEqual({ examined: 0, undone: 0, failed: 0 } satisfies UndoResult);
-    expect(events).toEqual(["load_undoable action-missing"]);
+  test("an action that does not exist", async () => {
+    const { events, provider, journal } = fixtures([]);
+    const result = await undoAction({ action_id: "action-missing", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(result).toEqual({ outcome: "not_undoable", reason: "missing", detail: "no action with that id exists." });
+    expect(events).toEqual(["load_for_undo action-missing"]);
+  });
+
+  test("an action belonging to another mailbox", async () => {
+    const { provider, journal } = fixtures([{ ...base, action_id: "action-1", mailbox_id: "mailbox-2" }]);
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(result.outcome).toBe("not_undoable");
+    expect(result).toMatchObject({ reason: "other_mailbox" });
+    expect(journal.rows.get("action-1")?.status).toBe("applied");
+  });
+
+  test("an action that has already been undone", async () => {
+    const { provider, journal } = fixtures([{ ...base, action_id: "action-1", status: "undone" }]);
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(result).toEqual({
+      outcome: "not_undoable",
+      reason: "already_undone",
+      detail: "that action has already been undone.",
+    });
+  });
+
+  test("an action that never mutated the mailbox", async () => {
+    const { provider, journal } = fixtures([{ ...base, action_id: "action-1", status: "shadow" }]);
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(result).toMatchObject({ outcome: "not_undoable", reason: "not_applied" });
+    expect(result).toMatchObject({ detail: expect.stringContaining("shadow") });
+  });
+
+  test("an applied action with no applied_at cannot be ordered and is reported, not hidden", async () => {
+    const { provider, journal } = fixtures([{ ...base, action_id: "action-1", applied_at: null }]);
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(result).toMatchObject({ outcome: "not_undoable", reason: "unaddressable" });
   });
 });
 
-describe("undoAction — refusals leave the mailbox untouched", () => {
-  test("stops on the first failure in the sequence: the row stays failed, never undone", async () => {
-    const events: string[] = [];
-    const mailbox = gmailMailbox({ folder: GMAIL_TRASH_FOLDER, uid: 700, labels: [] });
-    const provider = createFakeProvider({ events, mailbox, fail: "set_labels" });
-    const from_state: ActionStateSnapshot = {
-      folder: GMAIL_CANONICAL_FOLDER,
-      uid: 40,
-      uid_validity: GMAIL_ALL_VALIDITY,
-      flags: [],
-      labels: [GMAIL_INBOX_LABEL, "Receipts"],
-    };
-    const journal = createFakeJournal({
-      events,
-      undoable: [
-        undoableRow({
-          action_id: "action-1",
-          kind: "auto_trash",
-          applied_at: "2026-08-19T10:00:00.000Z",
-          from_state,
-          to_state: { folder: GMAIL_TRASH_FOLDER, uid: 700, uid_validity: GMAIL_TRASH_VALIDITY, flags: [], labels: [] },
-        }),
-      ],
-    });
-
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "gmail", provider, journal });
-
-    expect(result).toEqual({ examined: 1, undone: 0, failed: 1 } satisfies UndoResult);
-    // The message really is filed correctly and unlabelled — the exact partial state the row must stay
-    // `failed` for, so a retry can finish the restore from from_state_json.
-    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: GMAIL_CANONICAL_FOLDER, uid: 7000 });
-    expect(mailbox.labels.get(MESSAGE_ID)).toEqual([]);
-    const row = journal.rows.get("action-1");
-    expect(row?.status).toBe("failed");
-    expect(row?.error).toContain("STORE X-GM-LABELS was rejected");
-    expect(row?.from_state_json).toBe(serializeActionState(from_state));
-  });
-
-  test("an unconfirmed UID fails only that row and does not throw", async () => {
+describe("undoAction — a failed reversal stays applied and stays reachable", () => {
+  test("a whole-sequence failure leaves status applied, records the reason, and a retry completes it", async () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
-    const provider = createFakeProvider({ events, mailbox, unconfirmed_uids: [9001] });
+    const options: FakeProviderOptions = { events, mailbox, unconfirmed_uids: [9001] };
+    const provider = createFakeProvider(options);
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: [], labels: null },
-          to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: [], labels: null },
-        }),
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+    const first = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    expect(first.outcome).toBe("failed");
 
-    expect(result).toEqual({ examined: 1, undone: 0, failed: 1 } satisfies UndoResult);
-    expect(journal.rows.get("action-1")?.error).toContain("confirmed no destination for UID 9001");
+    // The action is still applied — which is what is still true of the message — and the reason is on the
+    // row. Stamping `failed` here would lock it out of every loader and make the retry below impossible.
+    const after_failure = journal.rows.get("action-1");
+    expect(after_failure?.status).toBe("applied");
+    expect(after_failure?.error).toContain("confirmed no destination for UID 9001");
+    expect(after_failure?.to_state_json).toBe(serializeActionState(GENERIC_ARCHIVE_TO));
     expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: ARCHIVE_FOLDER, uid: 9001 });
+
+    options.unconfirmed_uids = [];
+    const second = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(second).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    expect(journal.rows.get("action-1")?.status).toBe("undone");
+    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: INBOX, uid: 6000 });
+  });
+
+  // Defect 2: the move back landed, so the message is at an address to_state_json did not name. Recording
+  // the address it actually reached is what lets the retry issue only the tail of the sequence.
+  test("a partial sequence records where the message actually got to, and the retry resumes from there", async () => {
+    const events: string[] = [];
+    const mailbox = gmailMailbox({ folder: GMAIL_TRASH_FOLDER, uid: 700, labels: [] });
+    const options: FakeProviderOptions = { events, mailbox, fail: "set_labels" };
+    const provider = createFakeProvider(options);
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "auto_trash",
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GMAIL_TRASH_FROM,
+          to_state: GMAIL_TRASH_TO,
+        },
+      ],
+    });
+
+    const first = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
+
+    expect(first).toEqual({ outcome: "failed", error: "STORE X-GM-LABELS was rejected" } satisfies UndoActionResult);
+    // Correctly filed, unlabelled — the exact partial state the row must stay applied for.
+    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: GMAIL_CANONICAL_FOLDER, uid: 7000 });
+    expect(mailbox.labels.get(MESSAGE_ID)).toEqual([]);
+
+    const after_failure = journal.rows.get("action-1");
+    expect(after_failure?.status).toBe("applied");
+    expect(after_failure?.from_state_json).toBe(serializeActionState(GMAIL_TRASH_FROM));
+    expect(after_failure?.to_state_json).toBe(
+      serializeActionState({ folder: GMAIL_CANONICAL_FOLDER, uid: 7000, uid_validity: GMAIL_ALL_VALIDITY, flags: ["\\Seen"], labels: [] }),
+    );
+
+    const resumed_events: string[] = [];
+    options.fail = undefined;
+    options.events = resumed_events;
+    const resumed_provider = createFakeProvider({ ...options, events: resumed_events });
+    const second = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      flavor: "gmail",
+      provider: resumed_provider,
+      journal,
+    });
+
+    expect(second).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    // Only the tail. A retry that restarted the sequence would move a message that is already home.
+    expect(moveEvents(resumed_events)).toEqual([`set_labels ${GMAIL_CANONICAL_FOLDER} 7000 +[Receipts,${GMAIL_INBOX_LABEL}] -[]`]);
+    expect(mailbox.labels.get(MESSAGE_ID)).toEqual(["Receipts", GMAIL_INBOX_LABEL]);
+    expect(journal.rows.get("action-1")?.status).toBe("undone");
   });
 
   test("a changed UIDVALIDITY refuses before any mutation is issued", async () => {
@@ -510,22 +622,23 @@ describe("undoAction — refusals leave the mailbox untouched", () => {
     const provider = createFakeProvider({ events, mailbox });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: [], labels: null },
-          to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: "99999", flags: [], labels: null },
-        }),
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: { ...GENERIC_ARCHIVE_TO, uid_validity: "99999" },
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 0, failed: 1 } satisfies UndoResult);
+    expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
     expect(journal.rows.get("action-1")?.error).toContain("UIDVALIDITY");
+    expect(journal.rows.get("action-1")?.status).toBe("applied");
   });
 
   test("a row with no from_state_json has nothing to restore and is not guessed at", async () => {
@@ -534,49 +647,74 @@ describe("undoAction — refusals leave the mailbox untouched", () => {
     const provider = createFakeProvider({ events, mailbox });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: [], labels: null },
+          from_state: GENERIC_ARCHIVE_FROM,
           from_state_json: null,
-          to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: [], labels: null },
-        }),
+          to_state: GENERIC_ARCHIVE_TO,
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 0, failed: 1 } satisfies UndoResult);
+    expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
     expect(journal.rows.get("action-1")?.error).toContain("no usable from_state_json");
   });
 
-  test("a rebuilt plan that disagrees with the recorded result refuses rather than addressing another folder", async () => {
+  test("a row with no to_state_json has no address to work back from", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "archive",
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: null,
+        },
+      ],
+    });
+
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+
+    expect(result).toMatchObject({ outcome: "failed" });
+    expect(moveEvents(events)).toEqual([]);
+    expect(journal.rows.get("action-1")?.error).toContain("no usable to_state_json");
+    expect(journal.rows.get("action-1")?.status).toBe("applied");
+  });
+
+  test("a rebuilt plan that matches no point on the path back refuses rather than addressing another folder", async () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: TRASH_FOLDER, uid: 9001 });
     const provider = createFakeProvider({ events, mailbox });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
-          from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: [], labels: null },
+          from_state: GENERIC_ARCHIVE_FROM,
           // The executor recorded a landing in Trash, but the archive plan rebuilt from today's
-          // SPECIAL-USE attributes lands in Archives/2026.
-          to_state: { folder: TRASH_FOLDER, uid: 9001, uid_validity: TRASH_VALIDITY, flags: [], labels: null },
-        }),
+          // SPECIAL-USE attributes lands in Archives/2026, and no state on the path back is Trash.
+          to_state: { folder: TRASH_FOLDER, uid: 9001, uid_validity: TRASH_VALIDITY, flags: ["\\Seen"], labels: null },
+        },
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: "mailbox-1", flavor: "generic", provider, journal });
+    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
 
-    expect(result).toEqual({ examined: 1, undone: 0, failed: 1 } satisfies UndoResult);
+    expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
-    expect(journal.rows.get("action-1")?.error).toContain("does not produce the state the executor recorded");
+    expect(journal.rows.get("action-1")?.error).toContain("matches no point on this action's path back");
   });
 });
 
@@ -587,38 +725,39 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
   // message no longer is — so it fails, blocks its sibling, and the message stays in Deleted Items. Even
   // if that stale UID had hit something, the end state would be Archives/2026: the INTERMEDIATE state
   // between the two actions, never the original. Every assertion below changes if the sort is removed.
-  const older = undoableRow({
-    action_id: "action-archive",
-    kind: "archive",
-    applied_at: "2026-08-19T10:00:00.000Z",
-    from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: ["\\Seen"], labels: null },
-    to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: ["\\Seen"], labels: null },
-  });
-
-  const newer = undoableRow({
-    action_id: "action-trash",
-    kind: "auto_trash",
-    applied_at: "2026-08-19T11:00:00.000Z",
-    from_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: ["\\Seen"], labels: null },
-    to_state: { folder: TRASH_FOLDER, uid: 9500, uid_validity: TRASH_VALIDITY, flags: ["\\Seen"], labels: null },
-  });
+  const chain: SeedRow[] = [
+    {
+      action_id: "action-archive",
+      kind: "archive",
+      applied_at: "2026-08-19T10:00:00.000Z",
+      from_state: GENERIC_ARCHIVE_FROM,
+      to_state: GENERIC_ARCHIVE_TO,
+    },
+    {
+      action_id: "action-trash",
+      kind: "auto_trash",
+      applied_at: "2026-08-19T11:00:00.000Z",
+      from_state: GENERIC_ARCHIVE_TO,
+      to_state: { folder: TRASH_FOLDER, uid: 9500, uid_validity: TRASH_VALIDITY, flags: ["\\Seen"], labels: null },
+    },
+  ];
 
   test("replays a chain newest-first and restores the original state, not the intermediate one", async () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: TRASH_FOLDER, uid: 9500 });
     const provider = createFakeProvider({ events, mailbox });
-    const journal = createFakeJournal({ events, undoable: [older, newer] });
+    const journal = createFakeJournal({ events, seed: chain });
 
     const result = await undoPolicyActions({
       sender_policy_id: "policy-1",
-      mailbox_id: "mailbox-1",
+      mailbox_id: MAILBOX_ID,
       flavor: "generic",
       provider,
       journal,
       batch_size: 50,
     });
 
-    expect(result).toEqual({ examined: 2, undone: 2, failed: 0 } satisfies UndoResult);
+    expect(result).toEqual({ examined: 2, undone: 2, failed: 0, skipped: 0 } satisfies UndoResult);
 
     // Newest inverse first, and the second addresses the UID the first minted (6000) rather than the
     // 9001 the journal recorded — a chain walks the message backwards through addresses no row knows.
@@ -628,67 +767,77 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
     expect(journal.rows.get("action-archive")?.status).toBe("undone");
   });
 
-  test("a newer inverse that fails blocks the older one rather than restoring an intermediate state", async () => {
+  test("a newer inverse that fails skips the older one and leaves it completely untouched", async () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: TRASH_FOLDER, uid: 9500 });
     const provider = createFakeProvider({ events, mailbox, unconfirmed_uids: [9500] });
-    const journal = createFakeJournal({ events, undoable: [older, newer] });
+    const journal = createFakeJournal({ events, seed: chain });
 
     const result = await undoPolicyActions({
       sender_policy_id: "policy-1",
-      mailbox_id: "mailbox-1",
+      mailbox_id: MAILBOX_ID,
       flavor: "generic",
       provider,
       journal,
       batch_size: 50,
     });
 
-    expect(result).toEqual({ examined: 2, undone: 0, failed: 2 } satisfies UndoResult);
+    expect(result).toEqual({ examined: 2, undone: 0, failed: 1, skipped: 1 } satisfies UndoResult);
     expect(moveEvents(events)).toEqual([`move ${TRASH_FOLDER} 9500 -> ${ARCHIVE_FOLDER}`]);
     expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: TRASH_FOLDER, uid: 9500 });
-    expect(journal.rows.get("action-archive")?.error).toContain("a later action on this message could not be undone");
+
+    // Never attempted, still correctly applied, mailbox state untouched — so nothing is written to it. A
+    // stamped row would have §9's journal report a broken action next to a message that is exactly where
+    // that action put it.
+    const skipped = journal.rows.get("action-archive");
+    expect(skipped?.status).toBe("applied");
+    expect(skipped?.error).toBeNull();
+    expect(events).not.toContain("record_undo_failure action-archive");
+
+    // The attempted one carries the reason and is still applied, so re-running the bulk undo reaches both.
+    expect(journal.rows.get("action-trash")?.status).toBe("applied");
+    expect(journal.rows.get("action-trash")?.error).toContain("confirmed no destination for UID 9500");
   });
 
   test("actions on different messages are independent — one failure does not block the others", async () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
-    const other_folder = mailbox.folders.find((folder) => folder.path === ARCHIVE_FOLDER);
-    other_folder?.messages.set(9002, "message-2");
+    mailbox.folders.find((folder) => folder.path === ARCHIVE_FOLDER)?.messages.set(9002, "message-2");
     mailbox.labels.set("message-2", null);
 
     const provider = createFakeProvider({ events, mailbox, unconfirmed_uids: [9001] });
     const journal = createFakeJournal({
       events,
-      undoable: [
-        undoableRow({
+      seed: [
+        {
           action_id: "action-1",
           kind: "archive",
           applied_at: "2026-08-19T11:00:00.000Z",
-          from_state: { folder: INBOX, uid: 11, uid_validity: INBOX_VALIDITY, flags: [], labels: null },
-          to_state: { folder: ARCHIVE_FOLDER, uid: 9001, uid_validity: ARCHIVE_VALIDITY, flags: [], labels: null },
-        }),
-        undoableRow({
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
+        {
           action_id: "action-2",
           message_id: "message-2",
           kind: "archive",
           applied_at: "2026-08-19T10:00:00.000Z",
           from_state: { folder: INBOX, uid: 12, uid_validity: INBOX_VALIDITY, flags: [], labels: null },
           to_state: { folder: ARCHIVE_FOLDER, uid: 9002, uid_validity: ARCHIVE_VALIDITY, flags: [], labels: null },
-        }),
+        },
       ],
     });
 
     const result = await undoPolicyActions({
       sender_policy_id: "policy-1",
-      mailbox_id: "mailbox-1",
+      mailbox_id: MAILBOX_ID,
       flavor: "generic",
       provider,
       journal,
       batch_size: 50,
     });
 
-    expect(result).toEqual({ examined: 2, undone: 1, failed: 1 } satisfies UndoResult);
-    expect(journal.rows.get("action-1")?.status).toBe("failed");
+    expect(result).toEqual({ examined: 2, undone: 1, failed: 1, skipped: 0 } satisfies UndoResult);
+    expect(journal.rows.get("action-1")?.status).toBe("applied");
     expect(journal.rows.get("action-2")?.status).toBe("undone");
     expect(locate(mailbox, "message-2")).toEqual({ folder: INBOX, uid: 6000 });
   });
@@ -697,10 +846,10 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
     const provider = createFakeProvider({ events, mailbox });
-    const journal = createFakeJournal({ events, undoable: [] });
+    const journal = createFakeJournal({ events, seed: [] });
 
     await expect(
-      undoPolicyActions({ sender_policy_id: "", mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 }),
+      undoPolicyActions({ sender_policy_id: "", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal, batch_size: 50 }),
     ).rejects.toThrow("needs a policy id");
     expect(events).toEqual([]);
   });

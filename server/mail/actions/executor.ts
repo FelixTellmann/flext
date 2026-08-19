@@ -45,11 +45,28 @@ export type UndoableActionRow = {
   applied_at: Date;
 };
 
+// One `Action` row read by id alone, with nothing filtered away, so undo can tell "no such action" from
+// "another mailbox's action" from "already undone" from "never applied". `kind` and `applied_at` arrive
+// unnarrowed for the same reason: a row that cannot be addressed must be reportable, not invisible.
+export type ActionUndoLookup = {
+  action_id: string;
+  message_id: string;
+  mailbox_id: string | null;
+  status: string;
+  kind: string;
+  from_state_json: string | null;
+  to_state_json: string | null;
+  applied_at: Date | null;
+};
+
 export type FromStateEntry = { action_id: string; from_state_json: string };
 export type AppliedEntry = { action_id: string; to_state_json: string };
 export type FailedEntry = { action_id: string; error: string };
 export type DeferredEntry = { action_id: string; reason: string };
 export type UndoneEntry = { action_id: string };
+// A failed undo does NOT change `status`. `to_state_json` is present only when the sequence got part of
+// the way and the row must resume from a new address; absent leaves the column alone.
+export type UndoFailureEntry = { action_id: string; error: string; to_state_json?: string };
 
 // The database sits behind a port so the executor can be exercised over a fake: every DATABASE_URL variant
 // points at the same production MySQL, so a test that reached a real implementation would mutate ~29,000
@@ -63,15 +80,18 @@ export type ActionJournal = {
   markApplied: (entries: AppliedEntry[]) => Promise<void>;
   markFailed: (entries: FailedEntry[]) => Promise<void>;
   markDeferred: (entries: DeferredEntry[]) => Promise<void>;
-  // Undo's reads and its one write, on the same port rather than a second seam: one journal type, one
+  // Undo's reads and its two writes, on the same port rather than a second seam: one journal type, one
   // drizzle-backed implementation, and a test that reaches neither.
-  loadUndoableAction: (input: { mailbox_id: string; action_id: string }) => Promise<UndoableActionRow | null>;
+  loadActionForUndo: (input: { action_id: string }) => Promise<ActionUndoLookup | null>;
   loadUndoableActionsByPolicy: (input: {
     mailbox_id: string;
     sender_policy_id: string;
     batch_size: number;
   }) => Promise<UndoableActionRow[]>;
   markUndone: (entries: UndoneEntry[]) => Promise<void>;
+  // Records why a reversal did not land WITHOUT touching `status`: the action is still applied, which is
+  // what §9's journal must keep saying, and what keeps the row reachable for a retry.
+  recordUndoFailure: (entries: UndoFailureEntry[]) => Promise<void>;
 };
 
 export type ExecuteActionsInput = {
