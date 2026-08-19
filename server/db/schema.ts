@@ -339,6 +339,10 @@ export const action = mysqlTable(
     // Carried on every row, including shadow-only ones written by Phase 3, so that §7's bulk-undo-by-rule
     // and §10's get_shadow_report(policy_id) can be built later without a backfill.
     sender_policy_id: varchar("senderPolicyId", { length: 191 }),
+    // Nullable: rows written by Phase 3's shadow runner predate this column, and a NOT NULL add would
+    // fail or backfill ~29k rows with a meaningless value. Needed so undo reaches the same server it
+    // mutated and §7.3's batching by (mailbox, folder, target) can be built later.
+    mailbox_id: varchar("mailboxId", { length: 191 }),
     kind: varchar("kind", { length: 191 }).notNull(),
     // Decision.source (rules.ts): without it, a policy that fired, one an absolute guard overrode, one a
     // scoped guard suppressed, and a suspended policy are all indistinguishable rows sharing `kind` and
@@ -358,6 +362,7 @@ export const action = mysqlTable(
   (table) => ({
     statusDecidedAtIndex: index("Action_status_decidedAt_idx").on(table.status, table.decided_at),
     senderPolicyIdIndex: index("Action_senderPolicyId_idx").on(table.sender_policy_id),
+    mailboxIdStatusIndex: index("Action_mailboxId_status_idx").on(table.mailbox_id, table.status),
     messageIdKindRunIdUnique: uniqueIndex("Action_messageId_kind_runId_key").on(table.message_id, table.kind, table.run_id),
   }),
 );
