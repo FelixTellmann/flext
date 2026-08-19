@@ -1,4 +1,6 @@
 import { message, senderSuppression, threadState } from "@server/db/schema";
+import type { ThreadStateValue } from "@server/mail/classify/rules";
+import { THREAD_STATE_VALUES } from "@server/mail/classify/rules";
 import { BULK_PRECEDENCE_VALUES } from "@server/mail/classify/signals";
 import type { MailboxFlavor } from "@server/mail/types";
 import type { AnyColumn, SQL } from "drizzle-orm";
@@ -42,6 +44,34 @@ export function isSentByMeSql(flavor: MailboxFlavor, sent_folders: string[]): SQ
     return sql<boolean>`0`;
   }
   return sql<boolean>`${inArray(message.folder, sent_folders)}`;
+}
+
+// The one spelling of the thread group key: a null threadKey cannot be grouped against other messages, so
+// each such message stands as its own single-message thread under its own id. It is also the key
+// server/mail/query/threads.ts writes into ThreadState, so every consumer must join ThreadState on this
+// expression and never on the raw column — the raw column matches no row for a null threadKey (23 live
+// messages today), which silently loses every snooze, done and dismissal the operator made on them.
+export function threadGroupKeySql(): SQL<string> {
+  return sql<string>`COALESCE(${message.thread_key}, ${message.id})`;
+}
+
+// The TypeScript half of the expiry rule isThreadOpenSql encodes below, for consumers that read
+// ThreadState.state as a value instead of testing it in SQL: a snooze suppresses only until its deadline
+// passes, so a lapsed one resolves back to "open", while a snooze with no deadline never expires. Both
+// halves live here so the queue and the shadow journal cannot disagree about a thread the operator
+// snoozed. An absent row, and any state the column holds that is not one of the four, both read as open.
+export function resolveThreadState(params: { state: string | null; snoozed_until: Date | null; now: Date }): ThreadStateValue {
+  const state = THREAD_STATE_VALUES.find((value) => value === params.state);
+
+  if (state === undefined) {
+    return "open";
+  }
+
+  if (state === "snoozed" && params.snoozed_until !== null && params.snoozed_until.getTime() <= params.now.getTime()) {
+    return "open";
+  }
+
+  return state;
 }
 
 // §1.9's `thread_state = 'open'` as a suppression test rather than an equality, because most threads have

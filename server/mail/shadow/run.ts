@@ -1,14 +1,13 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message, sender, threadState } from "@server/db/schema";
-import type { Decision, DecisionInput, SenderPolicyInput, ThreadStateValue } from "@server/mail/classify/rules";
+import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
 import { decide } from "@server/mail/classify/rules";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex } from "@server/mail/query/policies";
-import { isSentByMeSql } from "@server/mail/query/signal-sql";
+import { isSentByMeSql, resolveThreadState, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
-import type { SQL } from "drizzle-orm";
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 
 export type RunShadowPassInput = { mailbox_id: string; batch_size: number };
@@ -38,6 +37,7 @@ type ShadowMessageRow = {
   sender_message_count: number | null;
   my_reply_count: number | null;
   thread_state: string | null;
+  thread_snoozed_until: Date | null;
 };
 
 type ShadowActionRow = {
@@ -50,12 +50,8 @@ type ShadowActionRow = {
   updatedAt: Date;
 };
 
-function threadGroupKey(): SQL<string> {
-  return sql<string>`COALESCE(${message.thread_key}, ${message.id})`;
-}
-
 async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_folders: string[]): Promise<Map<string, ThreadFacts>> {
-  const group_key = threadGroupKey();
+  const group_key = threadGroupKeySql();
   const is_mine = isSentByMeSql(flavor, sent_folders);
 
   const ranked = db.$with("ranked").as(
@@ -118,10 +114,11 @@ async function fetchMessageBatch(input: { mailbox_id: string; after_id: string |
       sender_message_count: sender.message_count,
       my_reply_count: sender.my_reply_count,
       thread_state: threadState.state,
+      thread_snoozed_until: threadState.snoozed_until,
     })
     .from(message)
     .leftJoin(sender, eq(sender.address, message.from_address))
-    .leftJoin(threadState, and(eq(threadState.mailbox_id, message.mailbox_id), eq(threadState.thread_key, message.thread_key)))
+    .leftJoin(threadState, and(eq(threadState.mailbox_id, message.mailbox_id), eq(threadState.thread_key, threadGroupKeySql())))
     .where(and(...conditions))
     .orderBy(asc(message.id))
     .limit(input.batch_size);
@@ -182,7 +179,7 @@ function buildDecisionInput(
     has_attachment: row.has_attachment,
     replied_in_thread: thread_facts.replied_in_thread,
     never_touch_rules: params.policy_index.never_touch,
-    thread_state: (row.thread_state ?? "open") as ThreadStateValue,
+    thread_state: resolveThreadState({ state: row.thread_state, snoozed_until: row.thread_snoozed_until, now: params.now }),
     last_in_thread_is_mine: thread_facts.last_in_thread_is_mine,
     sender_suppressed: params.policy_index.suppressed.has(from_address.toLowerCase()),
     policies: selectPolicies(params.policy_index, from_address, from_domain),

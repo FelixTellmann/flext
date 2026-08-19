@@ -4,7 +4,13 @@ import type { MessageSignals } from "@server/mail/classify/signals";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
-import { isBulkPrecedenceSql, isSenderNotSuppressedSql, isSentByMeSql, isThreadOpenSql } from "@server/mail/query/signal-sql";
+import {
+  isBulkPrecedenceSql,
+  isSenderNotSuppressedSql,
+  isSentByMeSql,
+  isThreadOpenSql,
+  threadGroupKeySql,
+} from "@server/mail/query/signal-sql";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
 import { and, asc, eq, gte, isNull, not, sql } from "drizzle-orm";
@@ -46,14 +52,6 @@ type NeedsActionQueryRow = {
 };
 
 type MailboxSentConfig = { id: string; flavor: string; sent_folders: string | null };
-
-// A null threadKey cannot be grouped against other messages, so each one stands as its own
-// single-message thread rather than being dropped or collapsed together. It is also the key
-// server/mail/query/threads.ts writes into ThreadState, so a queue row with no threadKey is still
-// snoozable, done-able and dismissable.
-function threadGroupKey(): SQL<string> {
-  return sql<string>`COALESCE(${message.thread_key}, ${message.id})`;
-}
 
 async function loadMailboxSentConfigs(mailbox_id: string | null): Promise<MailboxSentConfig[]> {
   return db
@@ -170,7 +168,7 @@ export async function listNeedsAction(input: {
   const sent_by_me = sentByMeSql(await loadMailboxSentConfigs(input.mailbox_id));
   const where = buildWhere(input.mailbox_id, sent_by_me);
   const now = new Date();
-  const group_key = threadGroupKey();
+  const group_key = threadGroupKeySql();
   const mailbox_scope = input.mailbox_id === null ? undefined : eq(message.mailbox_id, input.mailbox_id);
 
   // §1.9's last_in_thread_is_mine, ranked over every live message in the thread rather than over the

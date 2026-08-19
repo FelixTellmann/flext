@@ -1,7 +1,9 @@
 import type { ActionClass, GuardInput, GuardName, GuardVerdict } from "@server/mail/classify/guards";
 import { evaluateGuards, isBlocked } from "@server/mail/classify/guards";
 
-export type ThreadStateValue = "open" | "snoozed" | "done" | "dismissed";
+export const THREAD_STATE_VALUES = ["open", "snoozed", "done", "dismissed"] as const;
+
+export type ThreadStateValue = (typeof THREAD_STATE_VALUES)[number];
 
 export type PolicyScope = "address" | "domain";
 
