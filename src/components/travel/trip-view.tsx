@@ -25,9 +25,15 @@ export const formatDay = (value: number) => {
 };
 
 const KIND_DOT: Record<TravelStop["kind"], string> = {
-  city: "bg-sky-400",
-  park: "bg-green-500",
-  friends: "bg-pink-500",
+  stay: "bg-pink-500",
+  activity: "bg-green-500",
+  transit: "bg-sky-400",
+};
+
+const KIND_LABEL: Record<TravelStop["kind"], string> = {
+  stay: "Accommodation",
+  activity: "Activity",
+  transit: "Transit",
 };
 
 function locate(trip: TravelTrip, hours: number) {
@@ -103,10 +109,26 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
               <span>{formatDay(trip_start)}</span>
               <span>{formatDay(asTime(trip.endsAt))}</span>
             </div>
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 d:text-gray-400 text-gray-600 text-xs">
+              {(Object.keys(KIND_LABEL) as TravelStop["kind"][]).map((kind) => (
+                <span key={kind}>
+                  <span className={clsx("mr-1.5 inline-block h-2 w-2 rounded-full", KIND_DOT[kind])} />
+                  {KIND_LABEL[kind]}
+                </span>
+              ))}
+              <span>
+                <span className="mr-1.5 inline-block h-0.5 w-4 bg-sky-400 align-middle" />
+                Drive / rail
+              </span>
+              <span>
+                <span className="mr-1.5 inline-block w-4 border-sky-400 border-t-2 border-dashed align-middle" />
+                Flight
+              </span>
+            </div>
           </div>
 
           <div className="border-gray-200 d:border-dark-border border-b p-5">
-            <div className="heading-pre">{active.kind === "park" ? "National park" : "Stop"}</div>
+            <div className="heading-pre">{KIND_LABEL[active.kind]}</div>
             <h2 className="heading-sm">{active.name}</h2>
             <p className="d:text-gray-400 text-gray-600 text-sm">{active.region}</p>
             <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
@@ -167,7 +189,7 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
 
       <div className="order-1 h-[45vh] min-h-0 md:order-2 md:h-auto md:flex-1">
         <ClientOnly fallback={<div className="h-full w-full bg-card d:bg-card-dark" />}>
-          <TripMap stops={trip.stops} activeId={active.id} onSelect={setSelectedId} />
+          <TripMap stops={trip.stops} activeId={active.id} focusId={selectedId} onSelect={setSelectedId} />
         </ClientOnly>
       </div>
     </div>

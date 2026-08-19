@@ -14,9 +14,9 @@ const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 const KIND_COLOR: Record<TravelStop["kind"], string> = {
-  city: "#38bdf8",
-  park: "#22c55e",
-  friends: "#ec4899",
+  stay: "#ec4899",
+  activity: "#22c55e",
+  transit: "#38bdf8",
 };
 
 // A leg is drawn as a sampled quadratic arc rather than a straight line: the control point sits
@@ -44,11 +44,14 @@ const arcPoints = (from: TravelStop, to: TravelStop, bow: number): [number, numb
 
 type TripMapProps = {
   stops: TravelStop[];
+  /** Drives the marker highlight; follows the timeline scrub as well as clicks. */
   activeId: string | null;
+  /** Drives the zoom: an explicit selection frames its neighbours, null frames the whole trip. */
+  focusId: string | null;
   onSelect: (id: string) => void;
 };
 
-export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
+export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }) => {
   const container_ref = useRef<HTMLDivElement | null>(null);
   const map_ref = useRef<LeafletMap | null>(null);
   const markers_ref = useRef<Map<string, CircleMarker>>(new Map());
@@ -69,7 +72,9 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
       const L = await import("leaflet");
       if (disposed || !container_ref.current || map_ref.current) return;
 
-      const map = L.map(container_ref.current, { scrollWheelZoom: false, attributionControl: true });
+      // Wheel zoom is safe here: the page is a fixed viewport that never scrolls itself, and
+      // Leaflet preventDefaults the trackpad-pinch wheel events so the site does not zoom with it.
+      const map = L.map(container_ref.current, { scrollWheelZoom: true, attributionControl: true });
       map_ref.current = map;
 
       tiles_ref.current = L.tileLayer(TILES.light, { attribution: ATTRIBUTION, subdomains: "abcd", maxZoom: 19 }).addTo(map);
@@ -80,8 +85,9 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
         const is_flight = to.arriveBy === "flight";
         // Road legs follow their real driving geometry; flights and rail fall back to drawn arcs.
         const road = DRIVING_ROUTES[`${from.id}->${to.id}`];
+        // Movement is uniformly sky so pink stays reserved for accommodation; dashes mark flights.
         const line = L.polyline(road ?? arcPoints(from, to, is_flight ? 0.22 : 0.08), {
-          color: is_flight ? "#ec4899" : "#38bdf8",
+          color: "#38bdf8",
           weight: road ? 2.5 : 2,
           opacity: road ? 0.75 : 0.55,
           dashArray: is_flight ? "6 6" : undefined,
@@ -133,11 +139,28 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, onSelect }) => {
       marker.setRadius(is_active ? 9 : 6);
       if (is_active) marker.bringToFront();
     }
-    const active = mapped.find((stop) => stop.id === activeId);
-    if (active && map_ref.current) {
-      map_ref.current.flyTo([active.latitude, active.longitude], Math.max(map_ref.current.getZoom(), 5), { duration: 0.6 });
+  }, [activeId]);
+
+  // Zoom frames the selected stop together with its neighbours, so the view carries the context
+  // of where the leg came from and where it goes; deselecting frames the whole trip again.
+  useEffect(() => {
+    const map = map_ref.current;
+    if (!map) return;
+    if (!focusId) {
+      map.flyToBounds(
+        mapped.map((stop) => [stop.latitude, stop.longitude]),
+        { padding: [40, 40], duration: 0.8 },
+      );
+      return;
     }
-  }, [activeId, mapped]);
+    const index = mapped.findIndex((stop) => stop.id === focusId);
+    if (index < 0) return;
+    const framed = [mapped[index - 1], mapped[index], mapped[index + 1]].filter(Boolean);
+    map.flyToBounds(
+      framed.map((stop) => [stop.latitude, stop.longitude]),
+      { padding: [60, 60], maxZoom: 10, duration: 0.8 },
+    );
+  }, [focusId, mapped]);
 
   // The panel layout resizes the map's box (breakpoint changes, panel collapse), and Leaflet
   // caches container dimensions, so every observed resize must invalidate them.
