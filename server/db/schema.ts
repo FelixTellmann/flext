@@ -340,6 +340,11 @@ export const action = mysqlTable(
     // and §10's get_shadow_report(policy_id) can be built later without a backfill.
     sender_policy_id: varchar("senderPolicyId", { length: 191 }),
     kind: varchar("kind", { length: 191 }).notNull(),
+    // Decision.source (rules.ts): without it, a policy that fired, one an absolute guard overrode, one a
+    // scoped guard suppressed, and a suspended policy are all indistinguishable rows sharing `kind` and
+    // `senderPolicyId` — and §8 gates promoting a policy to auto on the operator reviewing exactly that
+    // distinction in its shadow record.
+    source: varchar("source", { length: 191 }).notNull(),
     status: varchar("status", { length: 191 }).default("shadow").notNull(),
     // Snapshot of the mutable state (folder, flags, labels) before this action, so Phase 4's undo can
     // restore it exactly rather than reconstruct it from later, possibly-incomplete sync data.

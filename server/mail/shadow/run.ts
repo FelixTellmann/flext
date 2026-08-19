@@ -44,6 +44,7 @@ type ShadowActionRow = {
   message_id: string;
   sender_policy_id: string | null;
   kind: string;
+  source: Decision["source"];
   status: "shadow";
   run_id: string;
   decided_at: Date;
@@ -193,6 +194,7 @@ function buildShadowActionRow(input: { message_id: string; decision: Decision; r
     message_id: input.message_id,
     sender_policy_id: input.decision.policy_id,
     kind: input.decision.action,
+    source: input.decision.source,
     status: SHADOW_STATUS,
     run_id: input.run_id,
     decided_at: input.now,
@@ -210,6 +212,7 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
     .onDuplicateKeyUpdate({
       set: {
         sender_policy_id: sql`VALUES(\`senderPolicyId\`)`,
+        source: sql`VALUES(\`source\`)`,
         status: SHADOW_STATUS,
         decided_at: sql`VALUES(\`decidedAt\`)`,
         updatedAt: sql`VALUES(\`updatedAt\`)`,
