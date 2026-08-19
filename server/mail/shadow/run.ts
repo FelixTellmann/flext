@@ -1,5 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message, sender, threadState } from "@server/db/schema";
+import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
 import { decide } from "@server/mail/classify/rules";
 import { deriveSignals } from "@server/mail/classify/signals";
@@ -16,8 +17,6 @@ import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 export type RunShadowPassInput = { mailbox_id: string; batch_size: number; run_id: string | null };
 
 export type RunShadowPassResult = { examined: number; journaled: number; by_decision: Record<string, number> };
-
-const SHADOW_STATUS = "shadow" as const;
 
 type ThreadFacts = { replied_in_thread: boolean; last_in_thread_is_mine: boolean };
 
@@ -49,7 +48,7 @@ export type ShadowActionRow = {
   mailbox_id: string;
   kind: string;
   source: Decision["source"];
-  status: "shadow";
+  status: typeof SHADOW_STATUS;
   run_id: string;
   decided_at: Date;
   updatedAt: Date;

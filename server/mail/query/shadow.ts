@@ -1,5 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message } from "@server/db/schema";
+import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { DecisionSource } from "@server/mail/classify/rules";
 import { toDecisionSource } from "@server/mail/classify/rules";
 import type { MessageLocation } from "@server/mail/query/deep-link";
@@ -60,7 +61,7 @@ async function latestRunId(): Promise<string | null> {
   const [row] = await db
     .select({ run_id: action.run_id })
     .from(action)
-    .where(eq(action.status, "shadow"))
+    .where(eq(action.status, SHADOW_STATUS))
     .orderBy(desc(action.decided_at), desc(action.id))
     .limit(1);
   return row?.run_id ?? null;
