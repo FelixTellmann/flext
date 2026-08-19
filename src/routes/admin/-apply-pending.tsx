@@ -42,8 +42,10 @@ const EXAMINED_NOTE =
 const STILL_PENDING_NOTE =
   "A row still pending after a run is not proof that nothing happened to it. The outcome is recorded after the mutation, so a write-back that itself failed can leave a message already moved. Read the journal and the mailbox rather than assuming.";
 
+// A count here would be prose the screen cannot keep true: apply runs consume the backlog. The property
+// is what the operator needs, and it holds at any count.
 const DEFERRED_STANDING_NOTE =
-  "2,366 of the decisions waiting across the backlog are file decisions. Filing has no executor in this phase, so a run over them reports deferred and sends nothing to the mailbox — expect that number, it is not a fault.";
+  "Much of the backlog is file decisions, and filing has no executor in this phase. Every one of them reports deferred and sends nothing to the mailbox, so a run whose outcome is mostly deferred is behaving as designed, not failing.";
 
 const CONFIRMATION_LABEL = "I understand this opens the mailbox and moves real messages.";
 

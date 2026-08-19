@@ -360,3 +360,270 @@ Those numbers only fall as YOU snooze and dismiss threads through the
 UI — each of those actions is what populates the two tables. If you turn
 Phase 3 on and the queue does not shrink immediately, that is expected;
 it is not a sign the filters are broken.
+
+
+=============================================================================
+PHASE 4 — THE FIRST REAL MAILBOX MUTATION (added 2026-08-19)
+=============================================================================
+
+Phase 4 adds the executor, undo and the Action Journal. It is the first
+code in this project that can move or delete a real message.
+
+Nothing in it has ever touched a real mailbox. Every mutating path was
+verified by typecheck, by unit tests over a fake provider, and by reading.
+Those tests assert which IMAP commands get issued; they cannot prove a real
+server answers them the way the code expects. So the sequence below is not a
+smoke test to get through — it IS the acceptance test for the whole phase,
+and it is the only thing that will tell you whether the executor and undo
+actually work.
+
+Do it once, deliberately, on one message you would not mind losing.
+
+
+-----------------------------------------------------------------------------
+THE ORDER — EACH STEP DEPENDS ON THE ONE BEFORE IT
+-----------------------------------------------------------------------------
+
+  1. Apply migration 0005:
+
+         bun run db:migrate
+
+     server/db/migrations/0005_bumpy_lily_hollister.sql adds Action.mailboxId
+     (nullable) plus an index on (mailboxId, status). It has NOT been applied
+     yet — as of this write-up
+
+         SELECT COUNT(mailboxId) FROM Action;
+
+     still fails with ER_BAD_FIELD_ERROR. Nothing below works until it does.
+
+  2. Re-run a shadow pass, per mailbox, from /admin/shadow.
+
+     REQUIRED, not optional. See the next section for why: without a fresh
+     pass, Phase 4 is inert and every approve button does nothing.
+
+  3. Review the shadow report at /admin/shadow and pick ONE decision.
+
+  4. Approve exactly one decision. The approval ceremony differs by what the
+     decision would do:
+
+       - a destructive decision (trash) makes you TYPE the phrase
+         APPROVE TRASH — a checkbox is not enough
+       - an organisational decision (archive, keep_inbox) needs only the
+         acknowledgement checkbox
+
+     For the first ceremony, an organisational single row is the sane choice.
+
+  5. Apply it. The "Apply approved actions" panel lives on the Needs Action
+     and Senders screens (same component, both places). It takes ONE mailbox
+     and a batch size — there is deliberately no apply-everything button.
+
+     USE BATCH SIZE 1. The default is 25.
+
+  6. Go and look in the actual mail client. Not the dashboard — the mail
+     client. Confirm the message is where the decision said it would go and
+     that nothing else moved.
+
+     This is the step the tests cannot do for you, and it is the whole point
+     of the ceremony. Do not skip it because the journal says "applied": the
+     journal records what the code believes happened.
+
+  7. Undo it from the Action Journal at /admin/journal.
+
+  8. Go and look in the actual mail client AGAIN. Confirm the message is back
+     in its original folder and — on Gmail — that its labels came back too.
+     See "Reasoned but never measured" below for why the labels are the
+     interesting half.
+
+  9. ONLY THEN approve a batch.
+
+Steps 6 and 8 are the acceptance test. Steps 1-5, 7 and 9 are plumbing
+around them.
+
+
+-----------------------------------------------------------------------------
+WHY THE SHADOW PASS MUST BE RE-RUN — PHASE 3'S ROWS CANNOT BE APPROVED
+-----------------------------------------------------------------------------
+
+Until commit 9c08118 the shadow runner never recorded action.mailbox_id, so
+every one of the roughly 29,000 rows a Phase 3 pass wrote has that column
+NULL.
+
+Phase 4 matches on that column everywhere it matters:
+
+    promoteAction              (server/mail/actions/promote.ts)
+    loadShadowActionsByPolicy  (server/mail/actions/journal.ts)
+    loadPendingActions         (server/mail/actions/journal.ts)
+    loadActionForUndo          (server/mail/actions/journal.ts)
+    loadUndoableActionsByPolicy(server/mail/actions/journal.ts)
+
+A NULL there matches no mailbox, so those rows are readable and permanently
+un-approvable. Approve one and the answer is "that action belongs to mailbox
+(none recorded)". The /admin/shadow list labels them, so this is a known
+limitation rather than a dead button — but if you skip step 2, EVERY row you
+can see is one of them and the whole phase does nothing.
+
+NO BACKFILL OF THE OLD ROWS IS NEEDED. Don't write one. The shadow report
+reads only the latest run id, so a fresh pass both mints rows with the column
+populated and is what the report shows you. The old rows just sit there.
+
+
+-----------------------------------------------------------------------------
+THE READ-ONLY INVARIANT, REDEFINED — RUN THESE GREPS IN THE NEXT PHASE
+-----------------------------------------------------------------------------
+
+Phases 1-3 held a flat rule: nothing under server/mail may mutate a mailbox.
+Phase 4 did not remove that rule, it NARROWED it. The live contract is now
+four clauses:
+
+  - mutating IMAP calls exist ONLY in server/mail/providers/imap.ts
+  - they are reached ONLY through the MailboxProvider mutation methods —
+    moveMessages, copyMessages, setLabels, expungeUids
+  - those are called ONLY from server/mail/actions/executor.ts and undo.ts
+  - read paths still pass { readOnly: true }; exactly ONE non-read-only
+    getMailboxLock exists, inside withWriteLock
+
+Grep 1 — every mutating imapflow call, and where it lives:
+
+    grep -rn 'messageMove\|messageCopy\|messageDelete\|messageFlagsAdd\|messageFlagsRemove\|messageFlagsSet' server --include='*.ts' | grep -v '\.test\.ts'
+
+Output on 2026-08-19, all eight lines in one file:
+
+    server/mail/providers/imap.ts:184:    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
+    server/mail/providers/imap.ts:192:    requireApplied(await client.messageDelete(uids, { uid: true }), `UID EXPUNGE ${uids.join(",")}`, folder);
+    server/mail/providers/imap.ts:307:        // Branching on MOVE here rather than leaving it to imapflow is deliberate: its `messageMove`
+    server/mail/providers/imap.ts:308:        // silently emulates a move with COPY + messageDelete when the server lacks MOVE, and that
+    server/mail/providers/imap.ts:309:        // messageDelete is the call that degrades to a bare EXPUNGE. The emulation stays ours.
+    server/mail/providers/imap.ts:311:          return toCopyUidResult(await client.messageMove(uids, target_folder, { uid: true }), "UID MOVE", target_folder, uids);
+    server/mail/providers/imap.ts:352:          const applied = await client.messageFlagsAdd(uids, add_labels, { uid: true, useLabels: true });
+    server/mail/providers/imap.ts:356:          const applied = await client.messageFlagsRemove(uids, remove_labels, { uid: true, useLabels: true });
+
+Three of those eight are the comment at 307-309, which is prose, not a call.
+Any path OUTSIDE server/mail/providers/imap.ts is a breach.
+
+Grep 2 — the write lock, which must stay a population of exactly one:
+
+    grep -rn 'getMailboxLock' server --include='*.ts' | grep -v '\.test\.ts'
+
+Output on 2026-08-19:
+
+    server/mail/providers/imap.ts:172:    const lock = await client.getMailboxLock(folder, { readOnly: false });
+    server/mail/providers/imap.ts:211:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:231:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:244:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:271:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:288:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+
+One readOnly: false, at line 172, inside withWriteLock. Five read locks. A
+second readOnly: false anywhere is a breach.
+
+Grep 3 — who calls the mutation methods. Only two files may appear:
+
+    grep -rn 'provider\.moveMessages\|provider\.copyMessages\|provider\.setLabels\|provider\.expungeUids' server --include='*.ts' | grep -v '\.test\.ts'
+
+Output on 2026-08-19:
+
+    server/mail/actions/undo.ts:191:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:208:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/actions/executor.ts:176:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:193:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+
+executor.ts and undo.ts, nothing else. copyMessages and expungeUids have no
+caller yet — they exist for the no-MOVE fallback path inside imap.ts.
+
+
+-----------------------------------------------------------------------------
+§11 ERROR HANDLING — WHAT YOU WILL ACTUALLY MEET
+-----------------------------------------------------------------------------
+
+A PARTIAL BATCH FAILURE MARKS ONLY THE UNCONFIRMED UIDS FAILED. COPYUID tells
+the executor exactly which UIDs the server confirmed; the rest are marked
+failed individually. It does not assume the whole batch went one way. The
+executor re-reads state on its next run rather than carrying a belief forward.
+
+A MISSING UIDPLUS HARD-FAILS. It does not fall back. This is deliberate and
+it is the single most important refusal in the phase: without UIDPLUS there
+is no UID EXPUNGE, only a bare EXPUNGE, and a bare EXPUNGE destroys EVERY
+\Deleted-flagged message in the folder — including ones you flagged by hand
+in a mail client ten minutes earlier. imapflow's own messageMove emulates a
+move with COPY + messageDelete when the server lacks MOVE, and that is the
+path that degrades to a bare EXPUNGE, which is why imap.ts branches on MOVE
+itself instead of delegating (see the comment at imap.ts:307).
+
+A CRASH MID-BATCH LEAVES PENDING ROWS. The next run reconciles them; the
+pre-state was journalled before the mutation was issued, so nothing is lost.
+
+A PENDING ROW DOES NOT PROVE THE MUTATION DID NOT HAPPEN. This is the one
+that will mislead you. The pre-state is written before the mutation and the
+outcome after it, so markFailed can itself fail on a mutation that actually
+succeeded. Only comparing real server state against the row's from_state and
+to_state settles what happened. The apply panel says this on screen for the
+same reason.
+
+
+-----------------------------------------------------------------------------
+REASONED BUT NEVER MEASURED — WATCH THESE ON THE FIRST RUN
+-----------------------------------------------------------------------------
+
+These are the things the ceremony exists to prove. They are all defensible
+reasoning, and none of them has met a real server or the production database.
+
+THE GMAIL LABEL-DROP MODEL. The code assumes that moving a message to
+[Gmail]/Trash drops its other labels server-side, so undo issues a move back
+FOLLOWED BY a set_labels restoring what from_state recorded. If Gmail turns
+out to keep the labels, the restore is redundant but harmless; if it drops
+more than assumed, the restore is what saves you. Three of the four mailboxes
+here are Gmail, so this is the common path, not the edge case. Both
+assumption sites carry comments naming what to correct:
+server/mail/actions/kinds.ts:163 (the inverse sequence) and kinds.ts:223 (the
+state model). Step 8 of the ceremony is where you find out.
+
+recordFromState'S FIRST-WRITE-WINS WHERE CLAUSE. journal.ts:83 updates only
+where from_state_json IS NULL or empty, so a retry can never overwrite the
+pre-state a crash left behind. That statement cannot be executed in a test —
+production is the only database this project has — so the ceremony is the
+first time it ever runs.
+
+createDatabaseJournal HAS NO TEST BEHIND IT, for the same reason: it is the
+real-database implementation, and the tests all drive fakes. It now has live
+callers in server/orpc/mail.ts.
+
+THE ORPCError WIRE MAPPING. NOT_FOUND for an unknown mailbox (server/orpc/mail.ts:77)
+and FORBIDDEN for a disabled one (:80) have never been exercised without a dev
+server. Worth one deliberate glance: pick a disabled mailbox in
+the apply panel and confirm you get the amber "disabled" wording rather than
+a red generic failure.
+
+UNDO REFUSES AFTER AN \Archive OR \Trash FOLDER RENAME. undo.ts resolves its
+targets from the server's live SPECIAL-USE attributes, so if a folder was
+renamed or re-flagged since the action, the rebuilt plan does not match the
+recorded to_state and undo declines rather than moving mail out of a folder
+it was never in. If undo refuses, this is the likely reason, and refusing is
+the correct behaviour — not a bug to work around.
+
+JOURNAL DATE FILTERS USE LOCAL-DAY BOUNDS. journal.tsx widens each filter
+date to that day's local edges (T00:00:00 and T23:59:59.999). If the server's
+timezone differs from the browser's, rows near midnight can appear on the
+neighbouring day. Widen the range by a day before concluding a row is missing.
+
+
+-----------------------------------------------------------------------------
+WHAT PHASE 4 DELIBERATELY LEFT OUT
+-----------------------------------------------------------------------------
+
+file DECISIONS ARE DEFERRED, NOT BROKEN. §6's client axis is Phase 5, so
+filing has no executor. The executor marks those rows deferred and sends
+nothing to the mailbox. That is a designed outcome. There were roughly 2,366
+of them across the backlog when this was written, so an early apply run that
+reports mostly deferred is working correctly.
+
+purge DOES NOT EXIST. §1.7 keeps it for Phase 8, behind a separate scheduled
+sweep. Trash is reversible; permanent deletion is not in this phase at all.
+
+NOTHING MAY SET autonomy: "auto". §8 reserves promotion-to-auto for Phase 6.
+Phase 4 is propose-only: every single mutation waits on a human click. There
+is no code path that acts on its own.
+
+RESCUE DETECTION IS PHASE 6. Until then, a policy that makes a mistake stays
+active until YOU suspend it, and the Action Journal is the only mechanism
+that will show you it happened. Read the journal after a batch, not just the
+counters.

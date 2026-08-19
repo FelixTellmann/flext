@@ -315,3 +315,9 @@ Record the §11 error-handling behaviour the operator will meet: a partial batch
 - **Filing to client folders is Phase 5**, so `file` here is either a single configured target or deferred — Task 2 decides and must say which.
 - **Rescue detection is Phase 6.** Until then, a policy that makes a mistake stays active until the operator suspends it; the journal is the only detection mechanism.
 - **The shadow report's mailbox attribution** is only partly addressed by `action.mailbox_id`; re-shaping the report is not this phase's work.
+
+---
+
+**Completed: 2026-08-19**
+- Verified: `bun test` 339 pass / 0 fail across 22 files; `sh tmp/tsc-mine.sh` clean in scope (0 foreign errors); `bunx biome check --fix src/routes/admin/-apply-pending.tsx` clean; `bun run build` succeeding. The redefined read-only invariant was re-checked by running all three greps and pasting their real output into the runbook: every mutating imapflow call is inside `server/mail/providers/imap.ts`, exactly one `getMailboxLock` is non-read-only (imap.ts:172, inside `withWriteLock`) against five read locks, and the only callers of `provider.moveMessages` / `setLabels` are `executor.ts` and `undo.ts`.
+- Open: no browser has rendered the apply panel, the Action Journal or the approval ceremony. Migration `0005_bumpy_lily_hollister.sql` is unapplied — `SELECT COUNT(mailboxId) FROM Action` still fails with `ER_BAD_FIELD_ERROR` — so no Phase 4 row is approvable yet, and the ~29,000 Phase 3 shadow rows carry a NULL `mailbox_id` and never will be. Above all, the ceremony itself is the operator's and is the phase's real acceptance test: nothing here has touched a real mailbox, so the Gmail label-drop model, `recordFromState`'s first-write-wins `WHERE`, `createDatabaseJournal`, and the `FORBIDDEN`/`NOT_FOUND` wire mapping are all reasoned rather than measured. The runbook's Phase 4 section is the sequence. Silence = confirmed.
