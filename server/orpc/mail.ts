@@ -1,12 +1,24 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, mailboxObservedAddress, syncRun } from "@server/db/schema";
+import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import { encryptCredential } from "@server/mail/crypto/credentials";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FETCH_SPEC } from "@server/mail/providers/headers";
 import { createImapProvider } from "@server/mail/providers/imap";
 import { observeCertificate } from "@server/mail/providers/tls";
 import { listNeedsAction } from "@server/mail/query/needs-action";
+import {
+  deleteNeverTouchRule,
+  deletePolicy,
+  listNeverTouchRules,
+  listPolicies,
+  upsertNeverTouchRule,
+  upsertPolicy,
+} from "@server/mail/query/policies";
 import { getDashboardSummary, getSenderProfile, listSenders } from "@server/mail/query/senders";
+import { getShadowReport, getShadowSummary } from "@server/mail/query/shadow";
+import { dismissThread, markThreadDone, snoozeThread } from "@server/mail/query/threads";
+import { runShadowPass } from "@server/mail/shadow/run";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { runSyncForAllMailboxes } from "@server/mail/sync/run";
 import { parseMailboxFlavor, parseStringList, serializeStringList, sync_mode_schema } from "@server/mail/types";
@@ -15,6 +27,21 @@ import { z } from "zod";
 import { authed } from "./base";
 
 const mailbox_id_schema = z.object({ id: z.string().min(1) });
+
+const thread_target_schema = z.object({
+  mailbox_id: z.string().min(1).max(191),
+  thread_key: z.string().min(1).max(512),
+});
+
+// §8: every policy is born in shadow; nothing may promote to "auto" until Phase 4 gives the executor
+// something to promote into. upsertPolicy in the query layer already rejects it, but rejecting it here
+// too means the caller sees a clear message instead of that layer's opaque throw.
+const policy_autonomy_schema = z
+  .enum(["shadow", "auto"])
+  .default("shadow")
+  .refine((value): value is "shadow" => value === "shadow", {
+    message: 'policy autonomy must be "shadow" in this phase — auto has no executor yet (§8)',
+  });
 
 // Every procedure here is `authed`: they read mailbox configuration and start IMAP work, so none of them
 // may answer an anonymous caller. The middleware in ./base also covers server-side callers, which a
@@ -240,4 +267,76 @@ export const mailProcedures = {
     ),
 
   getDashboardSummary: authed.handler(async () => getDashboardSummary()),
+
+  listPolicies: authed
+    .input(
+      z.object({
+        scope: z.enum(["address", "domain", "all"]).default("all"),
+        suspended: z.enum(["all", "active", "suspended"]).default("all"),
+        search: z.string().nullable().default(null),
+      }),
+    )
+    .handler(async ({ input }) => listPolicies({ scope: input.scope, suspended: input.suspended, search: input.search })),
+
+  upsertPolicy: authed
+    .input(
+      z.object({
+        scope: z.enum(["address", "domain"]),
+        value: z.string().min(1).max(320),
+        // POLICY_ACTIONS is the same allowlist rules.ts and the query layer enforce — imported rather than
+        // retyped, so "purge" (the irreversible sweep action reserved for the separate Phase 8 job) has
+        // exactly one place it could ever be added back.
+        action: z.enum(POLICY_ACTIONS),
+        client: z.string().max(191).nullable().default(null),
+        topic: z.string().max(191).nullable().default(null),
+        autonomy: policy_autonomy_schema,
+        source: z.string().min(1).max(191),
+        suspended_at: z.date().nullable().default(null),
+        suspension_reason: z.string().nullable().default(null),
+      }),
+    )
+    .handler(async ({ input }) => upsertPolicy(input)),
+
+  deletePolicy: authed.input(mailbox_id_schema).handler(async ({ input }) => deletePolicy(input.id)),
+
+  listNeverTouchRules: authed.handler(async () => listNeverTouchRules()),
+
+  upsertNeverTouchRule: authed
+    .input(
+      z.object({
+        id: z.string().min(1).optional(),
+        kind: z.enum(["address", "domain", "subject_pattern"]),
+        value: z.string().min(1).max(512),
+        note: z.string().nullable().default(null),
+      }),
+    )
+    .handler(async ({ input }) => upsertNeverTouchRule(input)),
+
+  deleteNeverTouchRule: authed.input(mailbox_id_schema).handler(async ({ input }) => deleteNeverTouchRule(input.id)),
+
+  snoozeThread: authed.input(thread_target_schema.extend({ until: z.date() })).handler(async ({ input }) => snoozeThread(input)),
+
+  markThreadDone: authed.input(thread_target_schema).handler(async ({ input }) => markThreadDone(input)),
+
+  dismissThread: authed
+    .input(
+      thread_target_schema.extend({
+        sender_address: z.string().max(320).nullable().default(null),
+        reason: z.string().min(1),
+      }),
+    )
+    .handler(async ({ input }) => dismissThread(input)),
+
+  getShadowReport: authed.input(z.object({ policy_id: z.string().min(1) })).handler(async ({ input }) => getShadowReport(input)),
+
+  getShadowSummary: authed.handler(async () => getShadowSummary()),
+
+  runShadowPass: authed
+    .input(
+      z.object({
+        mailbox_id: z.string().min(1),
+        batch_size: z.number().int().positive().max(1000).default(500),
+      }),
+    )
+    .handler(async ({ input }) => runShadowPass(input)),
 };
