@@ -48,7 +48,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     image: {
       src: "/images/travel/cape-town.jpg",
       alt: "Table Mountain across the bay",
-      credit: "Photo: South African Tourism (CC BY 2.0)",
+      credit: "Photo: Danie van der Merwe (CC BY 2.0)",
     },
     note: "Flight UA2222 to Newark, departing 19:50.",
   },
@@ -354,7 +354,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     image: {
       src: "/images/travel/cape-town.jpg",
       alt: "Table Mountain across the bay",
-      credit: "Photo: South African Tourism (CC BY 2.0)",
+      credit: "Photo: Danie van der Merwe (CC BY 2.0)",
     },
   },
 ];

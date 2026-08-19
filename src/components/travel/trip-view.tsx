@@ -56,7 +56,7 @@ const StopCard: FC<{ stop: TravelStop; framed: boolean }> = ({ stop, framed }) =
   >
     {stop.image ? (
       <div className="relative">
-        <img src={stop.image.src} alt={stop.image.alt} loading="lazy" className="aspect-[3/1] w-full object-cover" />
+        <img src={stop.image.src} alt={stop.image.alt} loading="lazy" className="aspect-video w-full object-cover" />
         <span className="absolute right-1.5 bottom-1 text-[9px] text-white/70 drop-shadow">{stop.image.credit}</span>
       </div>
     ) : null}
