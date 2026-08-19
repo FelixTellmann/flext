@@ -1,8 +1,19 @@
+import { ORPCError } from "@orpc/client";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import clsx from "clsx";
 import { type FC, type ReactNode, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import type { ErrorMeaning, KnownStatus, StateSnapshot } from "./-action-journal";
+import {
+  changedValues,
+  error_meaning_detail,
+  error_meaning_headline,
+  error_meaning_style,
+  status_label,
+  status_meaning,
+  status_style,
+} from "./-action-journal";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 // Mirrors ACTION_JOURNAL_STATUS_FILTERS in server/mail/query/actions.ts — an admin route can't import a
@@ -24,9 +35,6 @@ const journal_search_schema = z.object({
 type JournalSearch = z.infer<typeof journal_search_schema>;
 type JournalResult = Awaited<ReturnType<typeof orpc.mail.listActionJournal>>;
 type JournalRow = JournalResult["rows"][number];
-type StateSnapshot = NonNullable<JournalRow["from_state"]>;
-type KnownStatus = NonNullable<JournalRow["known_status"]>;
-type ErrorMeaning = NonNullable<JournalRow["error"]>["meaning"];
 type MessageLocation = JournalRow["location"];
 type PolicyRow = Awaited<ReturnType<typeof orpc.mail.listPolicies>>[number];
 type MailboxRow = Awaited<ReturnType<typeof orpc.mail.listMailboxes>>[number];
@@ -84,59 +92,33 @@ const secondary_button_focus = clsx(secondary_button, focus_ring);
 const muted_text = "text-gray-400 text-xs dark:text-dark-border";
 const neutral_chip = "rounded bg-gray-100 px-1 py-0.5 text-gray-600 text-xs dark:bg-dark-bg dark:text-dark-text";
 
-// Mirrors ACTION_STATUS_MEANINGS in server/mail/actions/status.ts — same client-bundle reason as the
-// filter list above. Six statuses exist and all six are spelled out here; a row whose status is none of
-// them still renders (known_status is null then) rather than falling through to a blank cell.
-const status_label: Record<KnownStatus, string> = {
-  shadow: "Shadow",
-  pending: "Pending",
-  applied: "Applied",
-  failed: "Failed",
-  deferred: "Deferred",
-  undone: "Undone",
+// The banner reports the outcome of a mutation, so on a screen whose whole discipline is meaning-keyed
+// colour it cannot be one tone for everything: "reversed" and "the reversal did not land" are not the same
+// news. `info` is for outcomes where nothing was changed and nothing broke — a refusal, or work in flight.
+type BannerTone = "success" | "info" | "warning" | "danger";
+
+const banner_style: Record<BannerTone, string> = {
+  success: "border-success/40 bg-success/10 text-success",
+  info: "border-info/40 bg-info/10 text-info",
+  warning: "border-warning/40 bg-warning/10 text-warning",
+  danger: "border-danger/40 bg-danger/10 text-danger",
 };
 
-const status_meaning: Record<KnownStatus, string> = {
-  shadow: "Decided but never approved. Nothing has been sent to the mailbox.",
-  pending: "Approved, and the mailbox may or may not already have been changed — the pre-state is recorded and the outcome is unconfirmed.",
-  applied: "The mutation landed and was confirmed. Reversible.",
-  failed: "The mutation did not land. The recorded pre-state is what the message should still look like.",
-  deferred: "Deliberately not executed in this phase — there is no plan for it yet, and nothing was sent to the mailbox.",
-  undone: "Applied and then reversed. The message is back at its recorded pre-state.",
-};
+type OutcomeBanner = { text: string; tone: BannerTone };
 
-const status_style: Record<KnownStatus, string> = {
-  shadow: "bg-gray-100 text-gray-700 dark:bg-dark-bg dark:text-dark-text",
-  pending: "bg-warning/10 text-warning",
-  applied: "bg-success/10 text-success",
-  failed: "bg-danger/10 text-danger",
-  deferred: "bg-info/10 text-info",
-  undone: "bg-info/10 text-info",
-};
+// A refusal is not a crash. requireEnabledMailbox throws FORBIDDEN for a disabled mailbox and NOT_FOUND
+// for an unknown one, each with a worded explanation and nothing sent to the mailbox — amber, and the
+// message shown as written. Anything else reached us as a real failure and stays red.
+function toFailureBanner(prefix: string, error: unknown): OutcomeBanner {
+  if (error instanceof ORPCError && (error.code === "FORBIDDEN" || error.code === "NOT_FOUND")) {
+    return { text: error.message, tone: "warning" };
+  }
+  return { text: `${prefix}: ${error instanceof Error ? error.message : String(error)}`, tone: "danger" };
+}
 
-// `error` is non-null in three different states and only one of them is a failure, so the presentation is
-// driven by classifyActionError's `meaning`, never by the presence of the text. Painting a deferred row
-// or a stale undo failure red would tell the operator their mail is broken when it is not.
-const error_meaning_headline: Record<ErrorMeaning, string> = {
-  failed: "The mutation did not land",
-  deferred: "Deliberately not executed in this phase",
-  undo_failed: "The action still stands — a reversal did not land",
-  unknown: "Recorded note",
-};
-
-const error_meaning_detail: Record<ErrorMeaning, string> = {
-  failed: "Nothing was changed in the mailbox — the message should still look like the state on the left.",
-  deferred: "Nothing was sent to the mailbox. Filing has no executable plan yet, so this row is parked, not broken.",
-  undo_failed: "The action itself is still applied and the message is where it put it. Undo can be retried.",
-  unknown: "This row's status is not one the journal classifies, so what the note means cannot be stated.",
-};
-
-const error_meaning_style: Record<ErrorMeaning, string> = {
-  failed: "border-danger/40 bg-danger/10 text-danger",
-  deferred: "border-info/40 bg-info/10 text-info",
-  undo_failed: "border-warning/40 bg-warning/10 text-warning",
-  unknown: "border-gray-300 bg-gray-100 text-gray-700 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text",
-};
+const Banner: FC<{ banner: OutcomeBanner; className: string }> = ({ banner, className }) => (
+  <p className={clsx("rounded border p-2 text-sm", banner_style[banner.tone], className)}>{banner.text}</p>
+);
 
 // Mirrors action.kind (server/mail/classify/rules.ts's ActionClass plus "needs_action"), display only.
 const kind_label: Record<string, string> = {
@@ -211,14 +193,6 @@ function missingStateNote(row: JournalRow): string {
   return "not recorded";
 }
 
-function difference(left: string[] | null, right: string[] | null): Set<string> {
-  if (left === null) {
-    return new Set<string>();
-  }
-  const other = new Set(right ?? []);
-  return new Set(left.filter((value) => !other.has(value)));
-}
-
 const ValueList: FC<{ changed: Set<string>; changed_style: string; missing: string; values: string[] | null }> = ({
   changed,
   changed_style,
@@ -273,10 +247,12 @@ const StateDiff: FC<{ row: JournalRow }> = ({ row }) => {
     );
   }
 
-  const removed_flags = difference(before?.flags ?? null, after?.flags ?? null);
-  const added_flags = difference(after?.flags ?? null, before?.flags ?? null);
-  const removed_labels = difference(before?.labels ?? null, after?.labels ?? null);
-  const added_labels = difference(after?.labels ?? null, before?.labels ?? null);
+  // changedValues yields nothing unless BOTH snapshots exist — a pending or failed row has no post-state,
+  // and marking its whole pre-state as removed would contradict the note beside it.
+  const removed_flags = changedValues(before, after, "flags");
+  const added_flags = changedValues(after, before, "flags");
+  const removed_labels = changedValues(before, after, "labels");
+  const added_labels = changedValues(after, before, "labels");
   const folder_changed = before !== null && after !== null && before.folder !== after.folder;
 
   return (
@@ -441,6 +417,17 @@ const RowActions: FC<{ busy_key: string | null; onApprove: () => void; onUndo: (
     );
   }
 
+  // An unrecognised status must not be folded in with failed and deferred: those two are known to have
+  // left the mailbox alone, and this one is not known to have done anything at all. Claiming "no mutation
+  // landed" here would contradict the status cell, which says exactly that nothing can be said.
+  if (row.known_status === null) {
+    return (
+      <span className="block max-w-48 text-gray-500 text-xs dark:text-dark-text">
+        Unrecognised status — whether anything landed is unknown, so no reversal is offered from here.
+      </span>
+    );
+  }
+
   return (
     <span className="block max-w-48 text-gray-500 text-xs dark:text-dark-text">Nothing to reverse — no mutation landed for this row.</span>
   );
@@ -537,7 +524,7 @@ const UndoByPolicyPanel: FC<{ mailboxes: MailboxRow[]; onDone: () => Promise<voi
   const [batch_size_draft, setBatchSizeDraft] = useState("50");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<OutcomeBanner | null>(null);
   const [result, setResult] = useState<UndoByPolicyResult | null>(null);
 
   const runUndo = async () => {
@@ -547,7 +534,7 @@ const UndoByPolicyPanel: FC<{ mailboxes: MailboxRow[]; onDone: () => Promise<voi
     const parsed_batch_size = Number(batch_size_draft);
     const batch_size = Number.isFinite(parsed_batch_size) && parsed_batch_size > 0 ? Math.min(200, Math.floor(parsed_batch_size)) : 50;
     setBusy(true);
-    setMessage("Reversing — one mailbox at a time, newest action first…");
+    setMessage({ text: "Reversing — one mailbox at a time, newest action first…", tone: "info" });
     setResult(null);
     try {
       const outcome = await orpc.mail.undoByPolicy({
@@ -560,7 +547,7 @@ const UndoByPolicyPanel: FC<{ mailboxes: MailboxRow[]; onDone: () => Promise<voi
       setConfirmed(false);
       await onDone();
     } catch (error) {
-      setMessage(`Bulk undo failed: ${error instanceof Error ? error.message : String(error)}`);
+      setMessage(toFailureBanner("Bulk undo failed", error));
     } finally {
       setBusy(false);
     }
@@ -640,7 +627,7 @@ const UndoByPolicyPanel: FC<{ mailboxes: MailboxRow[]; onDone: () => Promise<voi
         I understand this moves real messages back to their recorded pre-state.
       </label>
 
-      {message !== null && <p className="mt-3 rounded border border-info/40 bg-info/10 p-2 text-sm">{message}</p>}
+      {message !== null && <Banner banner={message} className="mt-3" />}
       {result !== null && <UndoByPolicySummary result={result} />}
     </Panel>
   );
@@ -652,7 +639,7 @@ function AdminJournalPage() {
   const navigate = Route.useNavigate();
   const router = useRouter();
   const [busy_key, setBusyKey] = useState<string | null>(null);
-  const [action_status, setActionStatus] = useState<string | null>(null);
+  const [action_status, setActionStatus] = useState<OutcomeBanner | null>(null);
   const [sender_draft, setSenderDraft] = useState(search.sender ?? "");
 
   // reset_offset is for filter changes, which must land back on page one; the pagination buttons pass
@@ -670,17 +657,23 @@ function AdminJournalPage() {
     try {
       const outcome = await orpc.mail.undoAction({ action_id: row.action_id, mailbox_id: row.mailbox_id });
       if (outcome.outcome === "undone") {
-        setActionStatus("Reversed — the message is back at its recorded pre-state.");
+        setActionStatus({ text: "Reversed — the message is back at its recorded pre-state.", tone: "success" });
       }
+      // Amber, not red, and worded the same way the row's own error note is: the action is still applied
+      // and the message is still where it put it, so this is a retry, not a broken mailbox.
       if (outcome.outcome === "failed") {
-        setActionStatus(`The reversal did not land: ${outcome.error}. The action still stands and can be retried.`);
+        setActionStatus({
+          text: `The reversal did not land: ${outcome.error}. The action still stands and can be retried.`,
+          tone: "warning",
+        });
       }
+      // A refusal means nothing was touched — it reads as information, not as damage.
       if (outcome.outcome === "not_undoable") {
-        setActionStatus(`Not undoable (${outcome.reason}): ${outcome.detail}`);
+        setActionStatus({ text: `Not undoable (${outcome.reason}): ${outcome.detail}`, tone: "info" });
       }
       await router.invalidate();
     } catch (error) {
-      setActionStatus(`Undo failed: ${error instanceof Error ? error.message : String(error)}`);
+      setActionStatus(toFailureBanner("Undo failed", error));
     } finally {
       setBusyKey(null);
     }
@@ -699,13 +692,13 @@ function AdminJournalPage() {
       if (result.scope === "action") {
         setActionStatus(
           result.outcome === "promoted"
-            ? "Approved — the row is pending and will change the mailbox only when an apply run picks it up."
-            : `Not approvable (${result.reason}): ${result.detail}`,
+            ? { text: "Approved — the row is pending and will change the mailbox only when an apply run picks it up.", tone: "success" }
+            : { text: `Not approvable (${result.reason}): ${result.detail}`, tone: "info" },
         );
       }
       await router.invalidate();
     } catch (error) {
-      setActionStatus(`Approve failed: ${error instanceof Error ? error.message : String(error)}`);
+      setActionStatus(toFailureBanner("Approve failed", error));
     } finally {
       setBusyKey(null);
     }
@@ -837,7 +830,7 @@ function AdminJournalPage() {
       </Panel>
 
       <Panel title={`Actions (${journal.total.toLocaleString()})`}>
-        {action_status !== null && <p className="mb-3 rounded border border-info/40 bg-info/10 p-2 text-sm">{action_status}</p>}
+        {action_status !== null && <Banner banner={action_status} className="mb-3" />}
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
