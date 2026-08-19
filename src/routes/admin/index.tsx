@@ -5,6 +5,7 @@ const admin_links = [
   { to: "/admin/needs-action", label: "Needs Action", description: "Threads waiting on a reply from you." },
   { to: "/admin/senders", label: "Senders", description: "Who is writing in, and whether you've replied." },
   { to: "/admin/mail", label: "Mailboxes", description: "Connections, sync runs, and certificates." },
+  { to: "/admin/shadow", label: "Shadow Report", description: "What each policy would have done — review before promoting it to auto." },
 ] as const;
 
 const AdminHome: FC = () => {
