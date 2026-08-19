@@ -6,6 +6,11 @@ const admin_links = [
   { to: "/admin/senders", label: "Senders", description: "Who is writing in, and whether you've replied." },
   { to: "/admin/mail", label: "Mailboxes", description: "Connections, sync runs, and certificates." },
   { to: "/admin/shadow", label: "Shadow Report", description: "What each policy would have done — review before promoting it to auto." },
+  {
+    to: "/admin/journal",
+    label: "Action Journal",
+    description: "Every action ever decided or taken, with the state it recorded before acting — and how to reverse it.",
+  },
 ] as const;
 
 const AdminHome: FC = () => {
