@@ -1,7 +1,7 @@
 import { ClientOnly, Link } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { TravelStop, TravelTrip } from "content/travel";
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useState } from "react";
 import { TripMap } from "~/components/travel/trip-map";
 
 const HOUR = 3_600_000;
@@ -47,6 +47,21 @@ function locate(trip: TravelTrip, hours: number) {
 
 export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
   const [hours, setHours] = useState(0);
+
+  // The root layout still renders a min-h-screen main and footer under this fixed overlay, so
+  // without locking scroll the page scrolls an invisible background behind the map.
+  useEffect(() => {
+    const previous_root = document.documentElement.style.overflow;
+    const previous_body = document.body.style.overflow;
+    // Both elements: Chrome keeps body as a scroller when only the root is hidden.
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+    return () => {
+      document.documentElement.style.overflow = previous_root;
+      document.body.style.overflow = previous_body;
+    };
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const trip_start = asTime(trip.startsAt);

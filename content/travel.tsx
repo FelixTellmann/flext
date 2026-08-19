@@ -79,7 +79,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-29T11:40",
     kind: "transit",
     arriveBy: "flight",
-    lodging: { name: "Avis rental car pickup" },
+    lodging: { name: "Avis one-way rental, drop-off in Las Vegas" },
     note: "Land at 10:40, collect the car, and drive south-west into the Rockies.",
   },
   {
@@ -235,7 +235,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     kind: "stay",
     arriveBy: "road",
     lodging: { name: "MGM Grand", bookedOn: "2026-06-20" },
-    note: "Two nights, then flight UA284 east at 23:55.",
+    note: "Drop the one-way rental, then two nights before flight UA284 east at 23:55.",
   },
   {
     id: "washington",
@@ -262,27 +262,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
   },
 ];
 
-const UNITED_STATES_2026_QUESTIONS: TravelQuestion[] = [
-  {
-    question: "Which hotel is the Boulder, Utah night?",
-    detail:
-      "The 5 October night is a Booking.com reservation for Boulder, but the only unplaced confirmation is Red Sands Hotel in Kanab, roughly two hours south and on the far side of Bryce.",
-  },
-  {
-    question: "Where does the Avis car go back?",
-    detail: "Collected at Denver airport on 29 September, and the onward flight leaves Las Vegas, so this looks like a one-way drop.",
-  },
-  {
-    question: "Is the MGM Grand booking still live?",
-    detail:
-      "An invalid-card warning arrived on 20 June and the card was updated on 21 June, but the reservation was never explicitly reconfirmed.",
-  },
-  {
-    question: "Nothing booked for Washington DC?",
-    detail:
-      "Four nights from 12 October with no reservation in any mailbox, which fits staying with friends as in New York, Boston and Telluride.",
-  },
-];
+const UNITED_STATES_2026_QUESTIONS: TravelQuestion[] = [];
 
 const UNITED_STATES_2026: TravelTrip = {
   slug: "2026-09-united-states",

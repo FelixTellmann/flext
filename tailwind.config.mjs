@@ -87,7 +87,7 @@ export default {
         glowLight: "0px 2px 12px -4px #e05912",
       },
       spacing: {
-        header: "66px",
+        header: "80px", // matches the fixed header's h-20
         wrapper: "62.5rem",
       },
       maxWidth: {
