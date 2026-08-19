@@ -8,6 +8,7 @@ import {
   type MailboxState,
   NON_ACTION_KINDS,
   type PlanContext,
+  type PlannedAction,
   type PlanRequestKind,
   planFor,
 } from "@server/mail/actions/kinds";
@@ -52,13 +53,28 @@ function contextFor(flavor: MailboxFlavor, from_state: MailboxState): PlanContex
   return { source_folder: from_state.folder, archive_folder: GENERIC_ARCHIVE, trash_folder: GENERIC_TRASH };
 }
 
+function plannedFor(kind: "archive" | "auto_trash", flavor: MailboxFlavor, from_state: MailboxState): PlannedAction {
+  const plan = planFor(kind, flavor, contextFor(flavor, from_state));
+  if (plan.outcome !== "planned") {
+    throw new Error(`expected ${flavor} ${kind} to produce a planned action`);
+  }
+  return plan;
+}
+
+// The whole returned sequence, folded in order — never just its first element. Undoing a Gmail trash takes
+// a move followed by a label restore, so a helper that applied one mutation would pass while losing every
+// label on three of the four mailboxes.
+function undo(plan: PlannedAction, from_state: MailboxState, to_state: MailboxState): MailboxState {
+  return inverseOf(plan, from_state).reduce((current_state, mutation) => applyToState(mutation, current_state), to_state);
+}
+
 const flavors: MailboxFlavor[] = ["gmail", "generic"];
 
 // The load-bearing property, over every kind x flavor x state rather than a few hand-picked examples:
-// perform the action against the state the journal recorded, then perform the inverse against the result,
-// and land back on exactly the state we started from. This is the only thing that makes undo correct, and
-// it is asserted rather than assumed because a plan and its inverse disagreeing is silent — the mailbox
-// simply ends up somewhere else and no test fails.
+// perform the action against the state the journal recorded, then perform the whole inverse sequence
+// against the result, and land back on exactly the state we started from — folder, flags and labels. This
+// is the only thing that makes undo correct, and it is asserted rather than assumed because a plan and its
+// inverse disagreeing is silent: the mailbox simply ends up somewhere else and no test fails.
 describe("every action round-trips through its inverse", () => {
   for (const kind of EXECUTABLE_ACTION_KINDS) {
     for (const flavor of flavors) {
@@ -72,9 +88,8 @@ describe("every action round-trips through its inverse", () => {
           }
 
           const to_state = applyToState(plan.mutation, from_state);
-          const restored = applyToState(inverseOf(plan, from_state), to_state);
 
-          expect(restored).toEqual(from_state);
+          expect(undo(plan, from_state, to_state)).toEqual(from_state);
         });
       }
     }
@@ -92,31 +107,88 @@ describe("every action round-trips through its inverse", () => {
   });
 });
 
+describe("a Gmail trash loses its labels, so its inverse restores them", () => {
+  const from_state = gmail_states[1];
+  const plan = plannedFor("auto_trash", "gmail", from_state);
+  const to_state = applyToState(plan.mutation, from_state);
+
+  test("the move into Trash drops every user label, the way Gmail does", () => {
+    expect(to_state.folder).toBe(GMAIL_TRASH);
+    expect(to_state.labels).toEqual([]);
+  });
+
+  test("the inverse is a move back followed by a label restore, in that order", () => {
+    expect(inverseOf(plan, from_state)).toEqual([
+      { verb: "move", source_folder: GMAIL_TRASH, target_folder: GMAIL_CANONICAL_FOLDER },
+      { verb: "set_labels", add_labels: from_state.labels ?? [], remove_labels: [] },
+    ]);
+  });
+
+  // The mutation this ruling exists for. If the restore were dropped, this assertion is what fails.
+  test("the move back alone would silently lose the labels", () => {
+    const [move_back] = inverseOf(plan, from_state);
+    expect(applyToState(move_back, to_state).labels).toEqual([]);
+    expect(undo(plan, from_state, to_state).labels).toEqual(from_state.labels);
+  });
+
+  test("the restore removes nothing, because the move out of Trash already discards what the move in attached", () => {
+    const [, restore] = inverseOf(plan, from_state);
+    if (restore.verb !== "set_labels") {
+      throw new Error("expected the second mutation to be a label restore");
+    }
+    expect(restore.remove_labels).toEqual([]);
+  });
+
+  test("a Gmail message with no labels needs no restore, and none is invented", () => {
+    const unlabelled = gmail_states[2];
+    expect(inverseOf(plannedFor("auto_trash", "gmail", unlabelled), unlabelled)).toEqual([
+      { verb: "move", source_folder: GMAIL_TRASH, target_folder: GMAIL_CANONICAL_FOLDER },
+    ]);
+  });
+
+  for (const flavor of flavors) {
+    test(`${flavor} auto_trash is a move to the Trash folder the caller resolved`, () => {
+      const from_state = statesFor(flavor)[0];
+      const expected_trash = flavor === "gmail" ? GMAIL_TRASH : GENERIC_TRASH;
+      expect(plannedFor("auto_trash", flavor, from_state).mutation).toEqual({
+        verb: "move",
+        source_folder: from_state.folder,
+        target_folder: expected_trash,
+      });
+    });
+  }
+
+  test("a generic trash inverts with a single move, since a folder server keeps no labels to lose", () => {
+    const from_generic = generic_states[0];
+    expect(inverseOf(plannedFor("auto_trash", "generic", from_generic), from_generic)).toEqual([
+      { verb: "move", source_folder: GENERIC_TRASH, target_folder: "INBOX" },
+    ]);
+  });
+});
+
 describe("archive means one thing per flavor", () => {
   test("Gmail archive drops the \\Inbox label and is never a move", () => {
-    const plan = planFor("archive", "gmail", contextFor("gmail", gmail_states[0]));
-    expect(plan.outcome).toBe("planned");
-    if (plan.outcome !== "planned") {
-      return;
-    }
+    const plan = plannedFor("archive", "gmail", gmail_states[0]);
     expect(plan.mutation).toEqual({ verb: "set_labels", add_labels: [], remove_labels: [GMAIL_INBOX_LABEL] });
   });
 
-  test("Gmail archive leaves the folder and the UID-bearing location untouched", () => {
+  test("Gmail archive leaves the folder and the rest of the label set untouched", () => {
     const from_state = gmail_states[1];
-    const plan = planFor("archive", "gmail", contextFor("gmail", from_state));
-    if (plan.outcome !== "planned") {
-      throw new Error("expected a planned action");
-    }
-    const to_state = applyToState(plan.mutation, from_state);
+    const to_state = applyToState(plannedFor("archive", "gmail", from_state).mutation, from_state);
     expect(to_state.folder).toBe(from_state.folder);
     // Code-unit order, so a backslash-prefixed system label sorts after a plain one.
     expect(to_state.labels).toEqual(["Work", "\\Important"]);
   });
 
+  test("the inverse of a Gmail archive is the single label add that puts \\Inbox back", () => {
+    const from_state = gmail_states[0];
+    expect(inverseOf(plannedFor("archive", "gmail", from_state), from_state)).toEqual([
+      { verb: "set_labels", add_labels: [GMAIL_INBOX_LABEL], remove_labels: [] },
+    ]);
+  });
+
   test("generic archive moves to the folder the caller resolved, not to a name this module invented", () => {
-    const plan = planFor("archive", "generic", contextFor("generic", generic_states[0]));
-    expect(plan).toEqual({
+    expect(planFor("archive", "generic", contextFor("generic", generic_states[0]))).toEqual({
       outcome: "planned",
       kind: "archive",
       flavor: "generic",
@@ -130,32 +202,13 @@ describe("archive means one thing per flavor", () => {
       throw new Error("expected a planned action");
     }
     const recorded = state("INBOX/Clients", [], null);
-    expect(inverseOf(plan, recorded)).toEqual({ verb: "move", source_folder: GENERIC_ARCHIVE, target_folder: "INBOX/Clients" });
+    expect(inverseOf(plan, recorded)).toEqual([{ verb: "move", source_folder: GENERIC_ARCHIVE, target_folder: "INBOX/Clients" }]);
   });
 
-  test("the inverse of a Gmail archive never adds \\Inbox to a message that did not carry it", () => {
+  test("an archive that removed a label the message never had inverts to nothing at all", () => {
     const from_state = gmail_states[3];
-    const plan = planFor("archive", "gmail", contextFor("gmail", from_state));
-    if (plan.outcome !== "planned") {
-      throw new Error("expected a planned action");
-    }
-    expect(inverseOf(plan, from_state)).toEqual({ verb: "set_labels", add_labels: [], remove_labels: [] });
+    expect(inverseOf(plannedFor("archive", "gmail", from_state), from_state)).toEqual([]);
   });
-});
-
-describe("auto_trash moves on both flavors and stays reversible", () => {
-  for (const flavor of flavors) {
-    test(`${flavor} auto_trash is a move to the caller's Trash whose inverse moves back`, () => {
-      const from_state = statesFor(flavor)[0];
-      const plan = planFor("auto_trash", flavor, contextFor(flavor, from_state));
-      if (plan.outcome !== "planned") {
-        throw new Error("expected a planned action");
-      }
-      const expected_trash = flavor === "gmail" ? GMAIL_TRASH : GENERIC_TRASH;
-      expect(plan.mutation).toEqual({ verb: "move", source_folder: from_state.folder, target_folder: expected_trash });
-      expect(inverseOf(plan, from_state)).toEqual({ verb: "move", source_folder: expected_trash, target_folder: from_state.folder });
-    });
-  }
 });
 
 describe("file is deferred to Phase 5 rather than executed or thrown", () => {
@@ -242,10 +295,7 @@ describe("the kind set cannot drift from the rules engine", () => {
 
 describe("state model guards", () => {
   test("a label mutation against a server with no label store throws rather than inventing an empty set", () => {
-    const plan = planFor("archive", "gmail", contextFor("gmail", gmail_states[0]));
-    if (plan.outcome !== "planned") {
-      throw new Error("expected a planned action");
-    }
+    const plan = plannedFor("archive", "gmail", gmail_states[0]);
     expect(() => applyToState(plan.mutation, state("INBOX", [], null))).toThrow(/label/);
     expect(() => inverseOf(plan, state("INBOX", [], null))).toThrow(/label/);
   });
@@ -256,6 +306,11 @@ describe("state model guards", () => {
     );
   });
 
+  test("a move leaves a folder server's null label set null rather than turning it into an empty one", () => {
+    const moved = applyToState({ verb: "move", source_folder: "INBOX", target_folder: GENERIC_TRASH }, generic_states[0]);
+    expect(moved.labels).toBeNull();
+  });
+
   test("no action touches flags", () => {
     const flagged = state(GMAIL_CANONICAL_FOLDER, ["\\Seen", "\\Flagged"], [GMAIL_INBOX_LABEL]);
     for (const kind of EXECUTABLE_ACTION_KINDS) {
@@ -263,7 +318,9 @@ describe("state model guards", () => {
       if (plan.outcome !== "planned") {
         continue;
       }
-      expect(applyToState(plan.mutation, flagged).flags).toEqual(flagged.flags);
+      const to_state = applyToState(plan.mutation, flagged);
+      expect(to_state.flags).toEqual(flagged.flags);
+      expect(undo(plan, flagged, to_state).flags).toEqual(flagged.flags);
     }
   });
 

@@ -160,22 +160,44 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   throw new Error(`planFor received an action kind with no plan and no explicit refusal: ${String(unhandled)}`);
 }
 
+// A sequence, not a single command: undoing a Gmail trash takes two, because the move into Trash drops
+// every user label server-side and moving back restores only the folder. §7.3 says undo "issues the
+// inverse" without promising it is one IMAP command, §1.7 lists trash as reversible, and from_state_json
+// records labels precisely so they can be put back — capturing them and then discarding them at undo time
+// would make the capture pointless. Three of the four mailboxes here are Gmail, so a folder-only inverse
+// would be correct on generic and silently lossy on nearly all real traffic.
+//
 // Takes the state recorded in from_state_json, not the plan alone, because only the recorded state knows
-// which folder to move back to (§7.2) and which of the touched labels the message actually carried.
-// Deferred plans are excluded at the type level: they are never executed, so they can never be undone.
-export function inverseOf(plan: PlannedAction, from_state: MailboxState): MailboxMutation {
+// which folder to move back to (§7.2) and which labels the message actually carried. Deferred plans are
+// excluded at the type level: they are never executed, so they can never be undone. A mutation that would
+// change nothing is left out rather than issued as an empty command.
+export function inverseOf(plan: PlannedAction, from_state: MailboxState): MailboxMutation[] {
   const { mutation } = plan;
 
   if (mutation.verb === "move") {
-    return { verb: "move", source_folder: mutation.target_folder, target_folder: from_state.folder };
+    const move_back: MailboxMutation = { verb: "move", source_folder: mutation.target_folder, target_folder: from_state.folder };
+
+    if (from_state.labels === null || from_state.labels.length === 0) {
+      return [move_back];
+    }
+
+    // Order is load-bearing: put the message back where it belongs, then re-label it there. remove_labels
+    // is empty because the move back out of Trash already discards whatever the server attached on the way
+    // in — naming a token this module never wrote would be asserting a server fact it cannot verify.
+    return [move_back, { verb: "set_labels", add_labels: [...from_state.labels], remove_labels: [] }];
   }
 
   const original_labels = requireLabels(from_state);
-  return {
-    verb: "set_labels",
+  const restore = {
+    verb: "set_labels" as const,
     add_labels: mutation.remove_labels.filter((label) => original_labels.includes(label)),
     remove_labels: mutation.add_labels.filter((label) => !original_labels.includes(label)),
   };
+
+  if (restore.add_labels.length === 0 && restore.remove_labels.length === 0) {
+    return [];
+  }
+  return [restore];
 }
 
 // The pure model of what a mutation does to a message, so the executor can compute to_state_json and undo
@@ -189,7 +211,13 @@ export function applyToState(mutation: MailboxMutation, state: MailboxState): Ma
         `a move out of "${mutation.source_folder}" was applied to a message in "${state.folder}". The UIDs in a move address one folder, so running it against another mutates unrelated messages.`,
       );
     }
-    return { ...state, folder: mutation.target_folder };
+    // On a label store a move is a label rewrite, not a relocation: the destination becomes the only thing
+    // the message is filed under and every user label is gone. That is what makes a lone move-back lossy,
+    // and modelling it here is what makes the restoring set_labels load-bearing in the round-trip test
+    // rather than decorative. Both moves this module produces — into Trash, and undo's move back out —
+    // leave a Gmail message with no user labels.
+    const labels: string[] | null = state.labels === null ? null : [];
+    return { ...state, folder: mutation.target_folder, labels };
   }
 
   const current_labels = requireLabels(state);
