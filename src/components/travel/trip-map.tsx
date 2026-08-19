@@ -46,7 +46,7 @@ type TripMapProps = {
   stops: TravelStop[];
   /** Drives the marker highlight; follows the timeline scrub as well as clicks. */
   activeId: string | null;
-  /** Drives the zoom: an explicit selection frames its neighbours, null frames the whole trip. */
+  /** Drives the zoom: an explicit selection centers that stop, null frames the whole trip. */
   focusId: string | null;
   onSelect: (id: string) => void;
 };
@@ -141,8 +141,7 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
     }
   }, [activeId]);
 
-  // Zoom frames the selected stop together with its neighbours, so the view carries the context
-  // of where the leg came from and where it goes; deselecting frames the whole trip again.
+  // Selecting a stop centers it at a fixed regional zoom; deselecting frames the whole trip again.
   useEffect(() => {
     const map = map_ref.current;
     if (!map) return;
@@ -156,17 +155,10 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
     const index = mapped.findIndex((stop) => stop.id === focusId);
     if (index < 0) return;
     const target = mapped[index];
-    const framed = [mapped[index - 1], mapped[index], mapped[index + 1]].filter(Boolean);
-    // Each neighbour is mirrored across the target so the bounds stay symmetric around it: the
-    // fly always centers on the clicked stop exactly, while still zooming out enough to keep the
-    // real neighbours in view. maxZoom caps how far a click zooms in; manual zoom is unaffected.
-    map.flyToBounds(
-      framed.flatMap((stop): [number, number][] => [
-        [stop.latitude, stop.longitude],
-        [2 * target.latitude - stop.latitude, 2 * target.longitude - stop.longitude],
-      ]),
-      { padding: [60, 60], maxZoom: 8, duration: 0.8 },
-    );
+    // A fixed zoom keeps every click consistent: neighbour-derived framing either dove into
+    // tight clusters or panned out to world scale when the next stop was a flight away.
+    // Manual zoom is unaffected.
+    map.flyTo([target.latitude, target.longitude], 7, { duration: 0.8 });
   }, [focusId, mapped]);
 
   // The panel layout resizes the map's box (breakpoint changes, panel collapse), and Leaflet
