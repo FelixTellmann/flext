@@ -55,7 +55,7 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-25T07:41",
     kind: "stay",
     arriveBy: "flight",
-    note: "Ten nights with friends. Doveras retreat held for 21–22 September. Leaving from Penn Station.",
+    note: "Ten nights with friends. Leaving from Penn Station.",
   },
   {
     id: "boston",
