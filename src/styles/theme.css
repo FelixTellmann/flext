@@ -78,5 +78,6 @@ button {
 
 .leaflet-container {
   @apply font-sans;
-  @apply bg-gray-200 dark:bg-dark-card;
+  /* Stays light in dark mode: the basemap tiles are light in both themes. */
+  @apply bg-gray-200;
 }

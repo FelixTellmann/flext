@@ -1,15 +1,12 @@
 import "leaflet/dist/leaflet.css";
 import type { TravelStop } from "content/travel";
 import { DRIVING_ROUTES } from "content/travel-routes";
-import type { CircleMarker, Map as LeafletMap, Polyline, TileLayer } from "leaflet";
+import type { CircleMarker, Map as LeafletMap, Polyline } from "leaflet";
 import { type FC, useEffect, useMemo, useRef } from "react";
-import { useTheme } from "~/components/theme-provider";
 
-// CARTO raster basemaps: OSM data, open with attribution, no key or token.
-const TILES = {
-  light: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  dark: "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png",
-};
+// CARTO Voyager raster basemap: OSM data, open with attribution, no key or token. Used in both
+// themes — dark mode deliberately keeps the light tiles for the native Google/Apple maps look.
+const TILE_URL = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 const ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
@@ -56,12 +53,10 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
   const map_ref = useRef<LeafletMap | null>(null);
   const markers_ref = useRef<Map<string, CircleMarker>>(new Map());
   const legs_ref = useRef<Polyline[]>([]);
-  const tiles_ref = useRef<TileLayer | null>(null);
   // onSelect is read from a ref so re-renders never force the map to be rebuilt.
   const select_ref = useRef(onSelect);
   select_ref.current = onSelect;
 
-  const { resolvedTheme } = useTheme();
   // Stable across renders, so the build effect below never tears the map down and rebuilds it.
   const mapped = useMemo(() => [...stops], [stops]);
 
@@ -77,7 +72,7 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
       const map = L.map(container_ref.current, { scrollWheelZoom: true, attributionControl: true });
       map_ref.current = map;
 
-      tiles_ref.current = L.tileLayer(TILES.light, { attribution: ATTRIBUTION, subdomains: "abcd", maxZoom: 19 }).addTo(map);
+      L.tileLayer(TILE_URL, { attribution: ATTRIBUTION, subdomains: "abcd", maxZoom: 19 }).addTo(map);
 
       for (let index = 0; index < mapped.length - 1; index++) {
         const from = mapped[index];
@@ -124,13 +119,8 @@ export const TripMap: FC<TripMapProps> = ({ stops, activeId, focusId, onSelect }
       map_ref.current = null;
       markers_ref.current.clear();
       legs_ref.current = [];
-      tiles_ref.current = null;
     };
   }, [mapped]);
-
-  useEffect(() => {
-    tiles_ref.current?.setUrl(resolvedTheme === "dark" ? TILES.dark : TILES.light);
-  }, [resolvedTheme]);
 
   useEffect(() => {
     for (const [id, marker] of markers_ref.current) {
