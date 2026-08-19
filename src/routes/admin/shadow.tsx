@@ -3,6 +3,8 @@ import clsx from "clsx";
 import { type FC, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import type { KindCategory } from "./-shadow-kinds";
+import { classifyKind } from "./-shadow-kinds";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 const shadow_search_schema = z.object({
@@ -18,8 +20,9 @@ type PolicyRow = Awaited<ReturnType<typeof orpc.mail.listPolicies>>[number];
 type MailboxRow = Awaited<ReturnType<typeof orpc.mail.listMailboxes>>[number];
 type ApprovableRow = Awaited<ReturnType<typeof orpc.mail.listActionJournal>>["rows"][number];
 
-// Approval names one action or one policy, never a run: the journal holds 14,689 shadow decisions and a
-// control that promoted "everything on screen" would be one click away from all of them.
+// Approval names one action or one policy, never a run: a single shadow pass journals a decision for
+// almost every message in a mailbox, and a control that promoted "everything on screen" would be one
+// click away from all of them.
 const APPROVAL_LIST_LIMIT = 25;
 
 // The decisions this policy left in shadow for one mailbox — the only rows the per-decision approval on
@@ -89,23 +92,6 @@ const source_label: Record<string, string> = {
   derived: "Derived default, no policy",
   fallback: "No rule matched",
 };
-
-type KindCategory = "destructive" | "organisational" | "retained";
-
-// Mirrors DESTRUCTIVE_KINDS / ORGANISATIONAL_KINDS in server/mail/query/shadow.ts — kept as plain string
-// arrays here since this file can't import that server module's values into the client bundle.
-const DESTRUCTIVE_KINDS = ["auto_trash", "purge"];
-const ORGANISATIONAL_KINDS = ["archive", "file"];
-
-function classifyKind(kind: string): KindCategory {
-  if (DESTRUCTIVE_KINDS.includes(kind)) {
-    return "destructive";
-  }
-  if (ORGANISATIONAL_KINDS.includes(kind)) {
-    return "organisational";
-  }
-  return "retained";
-}
 
 const kind_category_style: Record<KindCategory, string> = {
   destructive: "bg-danger/10 text-danger",

@@ -12,8 +12,11 @@ const SAMPLE_LIMIT = 20;
 // §8's promotion gates ask "what would this rule have destroyed?", not merely "how many rows matched" —
 // auto_trash is the one PolicyAction that destroys, so it alone carries the destructive weight. purge is
 // listed for completeness even though decide() (rules.ts) can never emit it.
-const DESTRUCTIVE_KINDS = ["auto_trash", "purge"] as const;
-const ORGANISATIONAL_KINDS = ["archive", "file"] as const;
+// Exported so src/routes/admin/-shadow-kinds.test.ts can pin the admin routes' copy against them. The
+// routes cannot import this module itself — it holds the db handle — and their copy decides how much
+// ceremony an approval demands, so a kind added here and missed there would under-gate a deletion.
+export const DESTRUCTIVE_KINDS = ["auto_trash", "purge"] as const;
+export const ORGANISATIONAL_KINDS = ["archive", "file"] as const;
 
 type ShadowCountRow = { kind: string; source: string; count: number };
 
