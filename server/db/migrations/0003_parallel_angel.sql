@@ -8,7 +8,7 @@ CREATE TABLE `Action` (
 	`status` varchar(191) NOT NULL DEFAULT 'shadow',
 	`fromStateJson` text,
 	`toStateJson` text,
-	`runId` varchar(191),
+	`runId` varchar(191) NOT NULL,
 	`decidedAt` datetime(3),
 	`appliedAt` datetime(3),
 	`error` text,

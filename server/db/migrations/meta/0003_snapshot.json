@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "de03b17d-f72a-44c1-94fb-764843126c66",
+  "id": "f441ab3e-a1f6-4b4a-923d-c3c6a74ab811",
   "prevId": "dcf00ed4-4afc-4e1b-95c9-1778e467bfc5",
   "tables": {
     "Account": {
@@ -209,7 +209,7 @@
           "name": "runId",
           "type": "varchar(191)",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "decidedAt": {

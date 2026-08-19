@@ -345,7 +345,7 @@ export const action = mysqlTable(
     // restore it exactly rather than reconstruct it from later, possibly-incomplete sync data.
     from_state_json: text("fromStateJson"),
     to_state_json: text("toStateJson"),
-    run_id: varchar("runId", { length: 191 }),
+    run_id: varchar("runId", { length: 191 }).notNull(),
     decided_at: datetime("decidedAt", { fsp: 3 }),
     applied_at: datetime("appliedAt", { fsp: 3 }),
     error: text("error"),
