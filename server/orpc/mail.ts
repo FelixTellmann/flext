@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
 import { mailbox, mailboxObservedAddress, syncRun } from "@server/db/schema";
 import { executeActions } from "@server/mail/actions/executor";
@@ -60,17 +61,23 @@ const MAX_ACTION_BATCH_SIZE = 200;
 
 // A mutation must not run against a mailbox whose connection is not trusted: `enabled` is cleared by
 // classifyMailboxError's disable_mailbox path after an auth failure or an SPKI change, and the sync
-// runner skips those mailboxes for the same reason (§11).
+// runner skips those mailboxes for the same reason (§11). One definition, because the refusal reaches the
+// operator two different ways — thrown when a mailbox is named, reported as an entry when undoByPolicy
+// sweeps every mailbox — and the two must not drift into saying different things.
+function disabledMailboxMessage(label: string): string {
+  return `mailbox ${label} is disabled after a connection failure, so nothing was sent to it; re-test its connection before applying or undoing anything.`;
+}
+
+// ORPCError, not Error: RPCHandler turns any other throw into a bare INTERNAL_SERVER_ERROR, which would
+// replace this guidance with a blank server error on the very screen written to explain it.
 async function requireEnabledMailbox(mailbox_id: string): Promise<MailboxRow> {
   const rows = await db.select().from(mailbox).where(eq(mailbox.id, mailbox_id)).limit(1);
   const row = rows[0];
   if (row === undefined) {
-    throw new Error(`unknown mailbox ${mailbox_id}`);
+    throw new ORPCError("NOT_FOUND", { message: `unknown mailbox ${mailbox_id}` });
   }
   if (!row.enabled) {
-    throw new Error(
-      `mailbox ${row.label} is disabled after a connection failure; re-test its connection before applying or undoing anything.`,
-    );
+    throw new ORPCError("FORBIDDEN", { message: disabledMailboxMessage(row.label) });
   }
   return row;
 }
@@ -171,7 +178,7 @@ export const mailProcedures = {
     const rows = await db.select().from(mailbox).where(eq(mailbox.id, input.id)).limit(1);
     const row = rows[0];
     if (row === undefined) {
-      throw new Error(`unknown mailbox ${input.id}`);
+      throw new ORPCError("NOT_FOUND", { message: `unknown mailbox ${input.id}` });
     }
 
     const provider = await createImapProvider(mailboxConnection(row));
@@ -221,7 +228,7 @@ export const mailProcedures = {
       const rows = await db.select().from(mailbox).where(eq(mailbox.id, input.id)).limit(1);
       const row = rows[0];
       if (row === undefined) {
-        throw new Error(`unknown mailbox ${input.id}`);
+        throw new ORPCError("NOT_FOUND", { message: `unknown mailbox ${input.id}` });
       }
       const current = parseStringList(row.pinned_spki);
       // The set is additive by default so a planned key rotation can be staged; replacing is the explicit
@@ -482,15 +489,31 @@ export const mailProcedures = {
       }),
     )
     .handler(async ({ input }) => {
+      // Every mailbox, not only the enabled ones: a disabled mailbox is REPORTED below rather than
+      // filtered out here. Silently omitting it returns a result covering three of four mailboxes with
+      // nothing saying so, which reads as a reversal that covered everything.
       const rows =
         input.mailbox_id === null
-          ? await db.select().from(mailbox).where(eq(mailbox.enabled, true)).orderBy(mailbox.label)
+          ? await db.select().from(mailbox).orderBy(mailbox.label)
           : [await requireEnabledMailbox(input.mailbox_id)];
 
       const journal = createDatabaseJournal();
       const mailboxes: UndoByPolicyMailboxSummary[] = [];
 
       for (const row of rows) {
+        if (!row.enabled) {
+          mailboxes.push({
+            mailbox_id: row.id,
+            label: row.label,
+            examined: 0,
+            undone: 0,
+            failed: 0,
+            skipped: 0,
+            error: disabledMailboxMessage(row.label),
+          });
+          continue;
+        }
+
         try {
           const result = await withMailboxProvider(row, ({ provider, flavor }) =>
             undoPolicyActions({
