@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ActionClass, GuardInput, GuardVerdict } from "@server/mail/classify/guards";
-import { evaluateGuards, isBlocked } from "@server/mail/classify/guards";
+import { evaluateGuards, evaluateSenderGuards, isBlocked } from "@server/mail/classify/guards";
 import type { MessageSignals } from "@server/mail/classify/signals";
 import { deriveSignals } from "@server/mail/classify/signals";
 
@@ -222,5 +222,41 @@ describe("isBlocked", () => {
   test("an absolute guard blocks regardless of address-level policy", () => {
     const verdicts: GuardVerdict[] = [{ name: "too_recent", blocks: ALL_ACTIONS, absolute: true }];
     expect(isBlocked(verdicts, "keep_inbox", true)).toBe("too_recent");
+  });
+});
+
+// The Sender Policy surface (src/routes/admin/senders.tsx) has only these two guards' inputs, and it must
+// reach the same verdict isBlocked gives the engine — it rendered "suppressed by guard: derived_allowlist"
+// over an address-scoped auto_trash policy the engine would have executed until 2026-08-19.
+describe("evaluateSenderGuards", () => {
+  const sender_input = {
+    from_address: "person@example.com",
+    from_domain: "example.com",
+    subject: null,
+    sender_known: true,
+    never_touch_rules: [],
+  };
+
+  test("derived_allowlist suppresses a domain-scoped auto_trash policy", () => {
+    expect(isBlocked(evaluateSenderGuards(sender_input), "auto_trash", false)).toBe("derived_allowlist");
+  });
+
+  test("derived_allowlist does not suppress an address-scoped auto_trash policy", () => {
+    expect(isBlocked(evaluateSenderGuards(sender_input), "auto_trash", true)).toBeNull();
+  });
+
+  test("never_touch suppresses an address-scoped policy, because it is absolute", () => {
+    const verdicts = evaluateSenderGuards({ ...sender_input, never_touch_rules: [{ kind: "address", value: "person@example.com" }] });
+    expect(isBlocked(verdicts, "auto_trash", true)).toBe("never_touch");
+  });
+
+  test("a subject_pattern rule cannot fire without a subject", () => {
+    const verdicts = evaluateSenderGuards({ ...sender_input, never_touch_rules: [{ kind: "subject_pattern", value: "legal notice" }] });
+    expect(verdicts.map((verdict) => verdict.name)).not.toContain("never_touch");
+  });
+
+  test("the same two guards are what evaluateGuards derives from a full message", () => {
+    const verdicts = evaluateGuards({ ...base_input, signals: { ...base_signals, sender_known: true } });
+    expect(verdicts.map((verdict) => verdict.name)).toEqual(["derived_allowlist"]);
   });
 });

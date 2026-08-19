@@ -1,3 +1,4 @@
+import { evaluateSenderGuards, isBlocked } from "@server/mail/classify/guards";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import clsx from "clsx";
 import { type FC, useRef, useState } from "react";
@@ -109,38 +110,27 @@ function resolvePolicy(index: PolicyIndex, row: SenderRow): PolicyRow | null {
   return index.by_address.get(row.address.toLowerCase()) ?? index.by_domain.get(row.domain.toLowerCase()) ?? null;
 }
 
-function matchesNeverTouch(rules: NeverTouchRow[], row: SenderRow): boolean {
-  const address = row.address.toLowerCase();
-  const domain = row.domain.toLowerCase();
-  return rules.some((rule) => {
-    if (rule.kind === "address") {
-      return rule.value.toLowerCase() === address;
-    }
-    if (rule.kind === "domain") {
-      const rule_domain = rule.value.toLowerCase();
-      return domain === rule_domain || domain.endsWith(`.${rule_domain}`);
-    }
-    return false;
-  });
-}
-
-// Every other guard in classify/guards.ts reads per-message signals (flags, thread history, arrival
-// time) this list never has. These two are the only ones whose definition IS sender-level rather than
-// message-level — never_touch is a static address/domain match, and derived_allowlist is exactly
-// `my_reply_count > 0` (deriveSignals' sender_known, verbatim) — so they're the only ones shown here.
-// Approximating the rest from aggregates risks the exact failure §5.3 warns against, just inverted: an
-// active policy rendered as falsely suppressed.
+// Every other guard in classify/guards.ts reads per-message signals (flags, thread history, arrival time)
+// this list never has. never_touch and derived_allowlist are the only two whose definition IS sender-level,
+// so evaluateSenderGuards is exactly what this page can evaluate, and isBlocked then applies §5.3's
+// scoping — including the explicit-address override, which a hand-written `action === "auto_trash" &&
+// my_reply_count > 0` test used to miss, rendering an address-scoped auto_trash policy as suppressed while
+// the engine would have trashed the mail. Importing the real predicate rather than paraphrasing it costs
+// one pure module in the client bundle: guards.ts has no runtime import of its own, so nothing server-side
+// comes with it. Approximating the remaining guards from aggregates would risk the failure §5.3 warns
+// against, just inverted — an active policy rendered as falsely suppressed.
 function resolveSuppression(row: SenderRow, policy: PolicyRow | null, never_touch_rules: NeverTouchRow[]): string | null {
   if (policy === null || policy.suspended_at !== null) {
     return null;
   }
-  if (matchesNeverTouch(never_touch_rules, row)) {
-    return "never_touch";
-  }
-  if (policy.action === "auto_trash" && row.my_reply_count > 0) {
-    return "derived_allowlist";
-  }
-  return null;
+  const verdicts = evaluateSenderGuards({
+    from_address: row.address,
+    from_domain: row.domain,
+    subject: null,
+    sender_known: row.my_reply_count > 0,
+    never_touch_rules,
+  });
+  return isBlocked(verdicts, policy.action, policy.scope === "address");
 }
 
 const MailboxHealth: FC<{ mailboxes: Awaited<ReturnType<typeof orpc.mail.getDashboardSummary>>["mailboxes"] }> = ({ mailboxes }) => (
