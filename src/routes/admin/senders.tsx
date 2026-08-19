@@ -229,6 +229,10 @@ const PolicyCell: FC<{ policy: PolicyRow | null; suppressed_by: string | null }>
   if (policy === null) {
     return <span className="text-gray-400 dark:text-dark-border">No policy</span>;
   }
+  // Not-suppressed and can't-tell-from-here must never render the same way (§5.3): flagged, too_recent,
+  // replied_in_thread and human_attachment are real guards this list cannot evaluate (see
+  // resolveSuppression), so a policy that clears the two checks we CAN make still isn't provably active.
+  const guard_status_unknown = policy.suspended_at === null && suppressed_by === null;
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-gray-900 dark:text-dark-headings">
@@ -237,6 +241,14 @@ const PolicyCell: FC<{ policy: PolicyRow | null; suppressed_by: string | null }>
       </span>
       {policy.suspended_at !== null && <span className="text-warning text-xs">suspended</span>}
       {suppressed_by !== null && <span className="text-danger text-xs">suppressed by guard: {suppressed_by}</span>}
+      {guard_status_unknown && (
+        <span
+          className="text-gray-400 text-xs dark:text-dark-border"
+          title="flagged, too-recent, replied-in-thread and attachment guards read per-message signals this list doesn't have — this row could still be suppressed by one of them, not confirmed clear."
+        >
+          other guards unchecked here
+        </span>
+      )}
     </div>
   );
 };
