@@ -45,6 +45,42 @@ function locate(trip: TravelTrip, hours: number) {
   return { stop: trip.stops[trip.stops.length - 1], inTransit: false };
 }
 
+const StopCard: FC<{ stop: TravelStop; framed: boolean }> = ({ stop, framed }) => (
+  <div
+    className={clsx(
+      "overflow-hidden",
+      framed
+        ? "w-80 rounded-md border border-gray-200 d:border-dark-border bg-white/95 d:bg-card-dark/95 shadow-lg backdrop-blur"
+        : "border-gray-200 d:border-dark-border border-b",
+    )}
+  >
+    {stop.image ? (
+      <div className="relative">
+        <img src={stop.image.src} alt={stop.image.alt} loading="lazy" className="aspect-[3/1] w-full object-cover" />
+        <span className="absolute right-1.5 bottom-1 text-[9px] text-white/70 drop-shadow">{stop.image.credit}</span>
+      </div>
+    ) : null}
+    <div className="p-4">
+      <div className="heading-pre">{KIND_LABEL[stop.kind]}</div>
+      <h2 className="heading-sm">{stop.name}</h2>
+      <p className="d:text-gray-400 text-gray-600 text-sm">{stop.region}</p>
+      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Arrive</dt>
+        <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(stop.arriveAt))}</dd>
+        <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Leave</dt>
+        <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(stop.departAt))}</dd>
+        {stop.lodging ? (
+          <>
+            <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Lodging</dt>
+            <dd className="d:text-gray-200 text-gray-800">{stop.lodging.name}</dd>
+          </>
+        ) : null}
+      </dl>
+      {stop.note ? <p className="mt-3 d:text-gray-400 text-gray-600 text-sm">{stop.note}</p> : null}
+    </div>
+  </div>
+);
+
 export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
   const [hours, setHours] = useState(0);
 
@@ -142,23 +178,8 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
             </div>
           </div>
 
-          <div className="border-gray-200 d:border-dark-border border-b p-5">
-            <div className="heading-pre">{KIND_LABEL[active.kind]}</div>
-            <h2 className="heading-sm">{active.name}</h2>
-            <p className="d:text-gray-400 text-gray-600 text-sm">{active.region}</p>
-            <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-              <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Arrive</dt>
-              <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(active.arriveAt))}</dd>
-              <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Leave</dt>
-              <dd className="d:text-gray-200 text-gray-800">{formatDate(asTime(active.departAt))}</dd>
-              {active.lodging ? (
-                <>
-                  <dt className="d:text-gray-500 text-gray-500 text-xs uppercase tracking-wide">Lodging</dt>
-                  <dd className="d:text-gray-200 text-gray-800">{active.lodging.name}</dd>
-                </>
-              ) : null}
-            </dl>
-            {active.note ? <p className="mt-3 d:text-gray-400 text-gray-600 text-sm">{active.note}</p> : null}
+          <div className="md:hidden">
+            <StopCard stop={active} framed={false} />
           </div>
 
           <div className="p-5">
@@ -202,10 +223,14 @@ export const TripView: FC<{ trip: TravelTrip }> = ({ trip }) => {
         </div>
       </aside>
 
-      <div className="order-1 h-[45vh] min-h-0 md:order-2 md:h-auto md:flex-1">
+      <div className="relative order-1 h-[45vh] min-h-0 md:order-2 md:h-auto md:flex-1">
         <ClientOnly fallback={<div className="h-full w-full bg-card d:bg-card-dark" />}>
           <TripMap stops={trip.stops} activeId={active.id} focusId={selectedId} onSelect={setSelectedId} />
         </ClientOnly>
+        {/* Above Leaflet's panes (z-index ~1000) and clear of the zoom control in the corner. */}
+        <div className="absolute top-3 left-14 z-[1050] hidden md:block">
+          <StopCard stop={active} framed />
+        </div>
       </div>
     </div>
   );

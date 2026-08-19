@@ -15,6 +15,8 @@ export type TravelStop = {
   arriveBy: TravelArrival;
   /** Public detail only. Confirmation numbers and tickets stay behind admin auth, never in this module. */
   lodging?: { name: string; bookedOn?: string };
+  /** Banner image under public/images/travel/, center-cropped to 3:1. Credit names the Commons author and license. */
+  image?: { src: string; alt: string; credit: string };
   note?: string;
 };
 
@@ -43,6 +45,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-14T19:50",
     kind: "transit",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/cape-town.jpg",
+      alt: "Table Mountain across the bay",
+      credit: "Photo: South African Tourism (CC BY 2.0)",
+    },
     note: "Flight UA2222 to Newark, departing 19:50.",
   },
   {
@@ -55,6 +62,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-25T07:41",
     kind: "stay",
     arriveBy: "flight",
+    image: {
+      src: "/images/travel/new-york.jpg",
+      alt: "Lower Manhattan skyline",
+      credit: "Photo: King of Hearts (CC BY-SA 4.0)",
+    },
     note: "Ten nights with friends. Leaving from Penn Station.",
   },
   {
@@ -67,6 +79,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-29T07:55",
     kind: "stay",
     arriveBy: "rail",
+    image: {
+      src: "/images/travel/boston.jpg",
+      alt: "Boston skyline from the Charles River",
+      credit: "Photo: King of Hearts (CC BY-SA 4.0)",
+    },
     note: "Four nights with friends, then Delta 499 west to Denver.",
   },
   {
@@ -79,6 +96,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-09-29T11:40",
     kind: "transit",
     arriveBy: "flight",
+    image: {
+      src: "/images/travel/denver.jpg",
+      alt: "Denver skyline with Mount Evans behind",
+      credit: "Photo: David Herrera (CC BY 2.0)",
+    },
     lodging: { name: "Avis one-way rental, drop-off in Las Vegas" },
     note: "Land at 10:40, collect the car, and drive south-west into the Rockies.",
   },
@@ -92,6 +114,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-04T09:00",
     kind: "stay",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/telluride.jpg",
+      alt: "Telluride in its box canyon",
+      credit: "Photo: Daniel Ribar (CC0)",
+    },
     note: "Five nights with friends. Buy the America the Beautiful annual pass before reaching Arches.",
   },
   {
@@ -104,6 +131,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-04T18:00",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/arches.jpg",
+      alt: "Red rock arches at Arches National Park",
+      credit: "Photo: Luca Galuzzi (CC BY-SA 2.5)",
+    },
     note: "Afternoon in the park after the drive from Telluride.",
   },
   {
@@ -116,6 +148,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-05T09:30",
     kind: "stay",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/moab.jpg",
+      alt: "La Sal Mountains behind Moab's red rock",
+      credit: "Photo: RichieB_pics (CC BY 2.0)",
+    },
     lodging: { name: "La Quinta by Wyndham Moab", bookedOn: "2026-06-20" },
   },
   {
@@ -128,6 +165,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-05T13:30",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/canyonlands.jpg",
+      alt: "Mesa Arch at sunrise",
+      credit: "Photo: Thomas Wolf (CC BY-SA 3.0)",
+    },
     note: "Morning on the Island in the Sky mesa before heading west.",
   },
   {
@@ -140,6 +182,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-05T17:30",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/capitol-reef.jpg",
+      alt: "Waterpocket Fold cliffs",
+      credit: "Photo: Murray Foubister (CC BY-SA 2.0)",
+    },
   },
   {
     id: "torrey",
@@ -151,6 +198,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-06T11:00",
     kind: "stay",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/torrey.jpg",
+      alt: "Red cliffs near Torrey",
+      credit: "Photo: Tracy Zhang (CC0)",
+    },
     lodging: { name: "Red Sands Hotel & Spa", bookedOn: "2026-06-20" },
   },
   {
@@ -163,6 +215,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-06T18:00",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/bryce-canyon.jpg",
+      alt: "Bryce Canyon amphitheater hoodoos",
+      credit: "Photo: Jon Zander (CC BY-SA 3.0)",
+    },
     note: "Scenic Byway 12 over Boulder Mountain on the way in.",
   },
   {
@@ -175,6 +232,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-07T09:00",
     kind: "stay",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/bryce-canyon-city.jpg",
+      alt: "Hoodoos in Red Canyon on Scenic Byway 12",
+      credit: "Photo: US National Archives (Public domain)",
+    },
     lodging: { name: "Bryce View Lodge, Ruby's Inn Resort", bookedOn: "2026-06-20" },
   },
   {
@@ -187,6 +249,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-07T18:00",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/zion.jpg",
+      alt: "First sun on the Watchman in Zion",
+      credit: "Photo: Don Graham (CC BY-SA 2.0)",
+    },
   },
   {
     id: "springdale",
@@ -198,6 +265,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-09T09:00",
     kind: "stay",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/springdale.jpg",
+      alt: "Springdale beneath Zion's cliffs",
+      credit: "Photo: Jared (CC BY 2.0)",
+    },
     lodging: { name: "SpringHill Suites by Marriott", bookedOn: "2026-06-20" },
     note: "Both nights here, with the full day of 8 October back in Zion.",
   },
@@ -211,6 +283,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-09T13:30",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/valley-of-fire.jpg",
+      alt: "Aztec sandstone in Valley of Fire",
+      credit: "Photo: Bernard Spragg (CC0)",
+    },
     note: "Red-rock detour off I-15, then the Northshore Road along Lake Mead towards Hoover Dam.",
   },
   {
@@ -223,6 +300,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-09T16:00",
     kind: "activity",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/hoover-dam.jpg",
+      alt: "Hoover Dam in Black Canyon",
+      credit: "Photo: Christian David (CC BY-SA 4.0)",
+    },
   },
   {
     id: "las-vegas",
@@ -234,6 +316,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-11T23:55",
     kind: "stay",
     arriveBy: "road",
+    image: {
+      src: "/images/travel/las-vegas.jpg",
+      alt: "Aerial view of the Las Vegas Strip",
+      credit: "Photo: Carol M. Highsmith (Public domain)",
+    },
     lodging: { name: "MGM Grand", bookedOn: "2026-06-20" },
     note: "Drop the one-way rental, then two nights before flight UA284 east at 23:55.",
   },
@@ -247,6 +334,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-15T18:45",
     kind: "stay",
     arriveBy: "flight",
+    image: {
+      src: "/images/travel/washington.jpg",
+      alt: "Aerial view of the National Mall",
+      credit: "Photo: Mario Roberto Durán Ortiz (CC BY-SA 4.0)",
+    },
     note: "Three nights with friends before flight UA1011 home.",
   },
   {
@@ -259,6 +351,11 @@ const UNITED_STATES_2026_STOPS: TravelStop[] = [
     departAt: "2026-10-18T00:00",
     kind: "transit",
     arriveBy: "flight",
+    image: {
+      src: "/images/travel/cape-town.jpg",
+      alt: "Table Mountain across the bay",
+      credit: "Photo: South African Tourism (CC BY 2.0)",
+    },
   },
 ];
 
