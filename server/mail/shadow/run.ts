@@ -218,7 +218,8 @@ export function buildShadowActionRow(input: {
 // applied or undone. Writing `shadow` back over one of those would leave from_state_json, to_state_json
 // and applied_at intact while the journal reported that nothing had been sent to the mailbox, and undo
 // requires `applied`: the mutation would stand on the server with no way left to reverse it. A row that
-// is genuinely new still gets `shadow` from the column default.
+// is genuinely new is unaffected — buildShadowActionRow supplies `status` in the inserted values, so the
+// INSERT sets it and the column default is never what this depends on.
 async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
   if (rows.length === 0) {
     return;
