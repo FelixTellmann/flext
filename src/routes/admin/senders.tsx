@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { type FC, useRef, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import { ApplyPendingPanel, loadPendingCounts } from "./-apply-pending";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 const senders_search_schema = z.object({
@@ -61,7 +62,8 @@ export const Route = createFileRoute("/admin/senders")({
       orpc.mail.listPolicies({ scope: "all", suspended: "all", search: null }),
       orpc.mail.listNeverTouchRules(),
     ]);
-    return { summary, senders, policies, never_touch_rules };
+    const pending_counts = await loadPendingCounts(summary.mailboxes);
+    return { summary, senders, policies, never_touch_rules, pending_counts };
   },
   component: AdminSendersPage,
 });
@@ -291,7 +293,7 @@ const AssignmentCell: FC<{
 };
 
 function AdminSendersPage() {
-  const { summary, senders, policies, never_touch_rules } = Route.useLoaderData();
+  const { summary, senders, policies, never_touch_rules, pending_counts } = Route.useLoaderData();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -446,6 +448,8 @@ function AdminSendersPage() {
         </dl>
         <MailboxHealth mailboxes={summary.mailboxes} />
       </Panel>
+
+      <ApplyPendingPanel counts={pending_counts} mailboxes={summary.mailboxes} onApplied={() => router.invalidate()} />
 
       <Panel title="Filters">
         <div className="flex flex-wrap items-end gap-3">

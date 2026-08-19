@@ -1,4 +1,3 @@
-import { ORPCError } from "@orpc/client";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import clsx from "clsx";
 import { type FC, type ReactNode, useState } from "react";
@@ -14,6 +13,8 @@ import {
   status_meaning,
   status_style,
 } from "./-action-journal";
+import type { OutcomeBanner } from "./-outcome-banner";
+import { Banner, toFailureBanner } from "./-outcome-banner";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 // Mirrors ACTION_JOURNAL_STATUS_FILTERS in server/mail/query/actions.ts — an admin route can't import a
@@ -91,34 +92,6 @@ const accent_button_focus = clsx(accent_button, focus_ring);
 const secondary_button_focus = clsx(secondary_button, focus_ring);
 const muted_text = "text-gray-400 text-xs dark:text-dark-border";
 const neutral_chip = "rounded bg-gray-100 px-1 py-0.5 text-gray-600 text-xs dark:bg-dark-bg dark:text-dark-text";
-
-// The banner reports the outcome of a mutation, so on a screen whose whole discipline is meaning-keyed
-// colour it cannot be one tone for everything: "reversed" and "the reversal did not land" are not the same
-// news. `info` is for outcomes where nothing was changed and nothing broke — a refusal, or work in flight.
-type BannerTone = "success" | "info" | "warning" | "danger";
-
-const banner_style: Record<BannerTone, string> = {
-  success: "border-success/40 bg-success/10 text-success",
-  info: "border-info/40 bg-info/10 text-info",
-  warning: "border-warning/40 bg-warning/10 text-warning",
-  danger: "border-danger/40 bg-danger/10 text-danger",
-};
-
-type OutcomeBanner = { text: string; tone: BannerTone };
-
-// A refusal is not a crash. requireEnabledMailbox throws FORBIDDEN for a disabled mailbox and NOT_FOUND
-// for an unknown one, each with a worded explanation and nothing sent to the mailbox — amber, and the
-// message shown as written. Anything else reached us as a real failure and stays red.
-function toFailureBanner(prefix: string, error: unknown): OutcomeBanner {
-  if (error instanceof ORPCError && (error.code === "FORBIDDEN" || error.code === "NOT_FOUND")) {
-    return { text: error.message, tone: "warning" };
-  }
-  return { text: `${prefix}: ${error instanceof Error ? error.message : String(error)}`, tone: "danger" };
-}
-
-const Banner: FC<{ banner: OutcomeBanner; className: string }> = ({ banner, className }) => (
-  <p className={clsx("rounded border p-2 text-sm", banner_style[banner.tone], className)}>{banner.text}</p>
-);
 
 // Mirrors action.kind (server/mail/classify/rules.ts's ActionClass plus "needs_action"), display only.
 const kind_label: Record<string, string> = {
