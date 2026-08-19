@@ -6,7 +6,6 @@ import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, serializeActionState } from "@server/mail/actions/state";
 import type {
   CopyUidResult,
-  ExpungeResult,
   FetchedMessage,
   FlagChangeResult,
   FolderInfo,
@@ -121,8 +120,6 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
       return { folder, uids, added_labels: change.add_labels, removed_labels: change.remove_labels };
     },
 
-    copyMessages: async (): Promise<CopyUidResult> => unsupported("copyMessages"),
-    expungeUids: async (): Promise<ExpungeResult> => unsupported("expungeUids"),
     fetchIdentities: async (): Promise<MessageIdentity[]> => unsupported("fetchIdentities"),
     fetchFlagChanges: async (): Promise<FlagChangeResult> => unsupported("fetchFlagChanges"),
     listUids: async (): Promise<number[]> => unsupported("listUids"),

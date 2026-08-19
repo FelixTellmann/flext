@@ -148,27 +148,12 @@ function createFake(options: FakeOptions = {}) {
 const INBOX_UIDS = [101, 102];
 
 describe("UID EXPUNGE is never allowed to become a bare EXPUNGE", () => {
-  test("expungeUids hard-fails when the server does not advertise UIDPLUS", async () => {
-    const { provider, commands, locks } = createFake({ uidplus: false });
-
-    await expect(provider.expungeUids("INBOX", INBOX_UIDS)).rejects.toThrow(/UIDPLUS/);
-    expect(commands).toEqual([]);
-    expect(locks).toEqual([]);
-  });
-
-  test("the refusal happens before the folder is even selected, so no EXPUNGE can reach the server", async () => {
-    const { provider, commands } = createFake({ uidplus: false });
-
-    await expect(provider.expungeUids("INBOX", INBOX_UIDS)).rejects.toThrow();
-    expect(commands).not.toContain("EXPUNGE");
-    expect(commands.some((command) => command.includes("EXPUNGE"))).toBe(false);
-  });
-
-  test("a move that would fall back to COPY + EXPUNGE also hard-fails without UIDPLUS", async () => {
-    const { provider, commands } = createFake({ uidplus: false, move: false });
+  test("a move that would fall back to COPY + EXPUNGE hard-fails without UIDPLUS, before the folder is even selected", async () => {
+    const { provider, commands, locks } = createFake({ uidplus: false, move: false });
 
     await expect(provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UIDPLUS/);
     expect(commands).toEqual([]);
+    expect(locks).toEqual([]);
   });
 
   test("a move over a server that does advertise MOVE still refuses without UIDPLUS, because COPYUID would be unknowable", async () => {
@@ -178,40 +163,26 @@ describe("UID EXPUNGE is never allowed to become a bare EXPUNGE", () => {
     expect(commands).toEqual([]);
   });
 
-  test("copyMessages refuses without UIDPLUS as well", async () => {
-    const { provider, commands } = createFake({ uidplus: false });
-
-    await expect(provider.copyMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow(/UIDPLUS/);
-    expect(commands).toEqual([]);
-  });
-
-  test("expungeUids always names an explicit UID set", async () => {
-    const { provider, commands } = createFake();
-
-    const result = await provider.expungeUids("INBOX", INBOX_UIDS);
-
-    expect(commands).toEqual(["SELECT INBOX (readwrite)", "STORE 101,102 +FLAGS (\\Deleted)", "UID EXPUNGE 101,102"]);
-    expect(result).toEqual({ folder: "INBOX", expunged_uids: [101, 102] });
-  });
-
   test("an empty UID set is refused rather than issued as a set-less expunge", async () => {
-    const { provider, commands } = createFake();
+    const { provider, commands } = createFake({ move: false });
 
-    await expect(provider.expungeUids("INBOX", [])).rejects.toThrow(/empty UID set/);
+    await expect(provider.moveMessages("INBOX", [], "Archives/2026")).rejects.toThrow(/empty UID set/);
     expect(commands).toEqual([]);
   });
 
   test("a UID set carrying a non-UID is refused before any command is issued", async () => {
     const zero = createFake();
-    await expect(zero.provider.expungeUids("INBOX", [0])).rejects.toThrow(/positive integers/);
+    await expect(zero.provider.moveMessages("INBOX", [0], "Archives/2026")).rejects.toThrow(/positive integers/);
     expect(zero.commands).toEqual([]);
 
     const fractional = createFake();
     await expect(fractional.provider.moveMessages("INBOX", [101.5], "Archives/2026")).rejects.toThrow(/positive integers/);
     expect(fractional.commands).toEqual([]);
 
-    const not_a_number = createFake();
-    await expect(not_a_number.provider.copyMessages("INBOX", [Number.NaN], "Archives/2026")).rejects.toThrow(/positive integers/);
+    const not_a_number = createFake({ gmail: true });
+    await expect(not_a_number.provider.setLabels("INBOX", [Number.NaN], { add_labels: ["\\Inbox"], remove_labels: [] })).rejects.toThrow(
+      /positive integers/,
+    );
     expect(not_a_number.commands).toEqual([]);
   });
 });
@@ -353,19 +324,6 @@ describe("COPYUID accounts for every requested UID", () => {
   });
 });
 
-describe("copyMessages", () => {
-  test("issues UID COPY and touches nothing in the source folder", async () => {
-    const { provider, commands } = createFake();
-
-    const result = await provider.copyMessages("INBOX", [101], "Archives/2026");
-
-    expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID COPY 101 Archives/2026"]);
-    expect(commands.some((command) => command.includes("EXPUNGE") || command.includes("\\Deleted"))).toBe(false);
-    expect(result.pairs).toEqual([{ source_uid: 101, destination_uid: 9001 }]);
-    expect(result.unconfirmed_uids).toEqual([]);
-  });
-});
-
 describe("setLabels", () => {
   test("an add issues STORE +X-GM-LABELS", async () => {
     const { provider, commands } = createFake({ gmail: true });
@@ -438,20 +396,18 @@ describe("locking", () => {
     expect(locks.every((lock) => lock.released)).toBe(true);
   });
 
-  test("every mutation method takes a write lock", async () => {
+  test("every mutation method takes exactly one write lock, fallback included", async () => {
     const move = createFake({ move: true });
     await move.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
 
-    const copy = createFake();
-    await copy.provider.copyMessages("INBOX", INBOX_UIDS, "Archives/2026");
+    // The COPY + EXPUNGE fallback runs inside the same single lock rather than taking one of its own.
+    const fallback = createFake({ move: false });
+    await fallback.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
 
     const labels = createFake({ gmail: true });
     await labels.provider.setLabels("INBOX", [101], { add_labels: ["\\Inbox"], remove_labels: [] });
 
-    const expunge = createFake();
-    await expunge.provider.expungeUids("INBOX", INBOX_UIDS);
-
-    for (const { locks } of [move, copy, labels, expunge]) {
+    for (const { locks } of [move, fallback, labels]) {
       expect(locks).toHaveLength(1);
       expect(locks[0].read_only).toBe(false);
       expect(locks[0].released).toBe(true);
@@ -463,16 +419,16 @@ describe("locking", () => {
     await expect(move.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow();
     expect(move.locks[0].released).toBe(true);
 
-    const copy = createFake({ fail: "copy" });
-    await expect(copy.provider.copyMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow();
+    const copy = createFake({ move: false, fail: "copy" });
+    await expect(copy.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow();
     expect(copy.locks[0].released).toBe(true);
 
     const labels = createFake({ gmail: true, fail: "remove_labels" });
     await expect(labels.provider.setLabels("INBOX", [101], { add_labels: [], remove_labels: ["\\Inbox"] })).rejects.toThrow();
     expect(labels.locks[0].released).toBe(true);
 
-    const expunge = createFake({ fail: "expunge" });
-    await expect(expunge.provider.expungeUids("INBOX", INBOX_UIDS)).rejects.toThrow();
+    const expunge = createFake({ move: false, fail: "expunge" });
+    await expect(expunge.provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026")).rejects.toThrow();
     expect(expunge.locks[0].released).toBe(true);
   });
 
@@ -486,15 +442,17 @@ describe("locking", () => {
   });
 });
 
-test("the provider exposes exactly four mutating methods and no purge", () => {
+// The interface enumerates what can happen to a mailbox, so an unreachable member is a lie about the
+// blast radius rather than dead weight: `copyMessages` and `expungeUids` sat here through Phase 4 with no
+// caller, and a public expunge was the only way this contract could delete mail. Adding either back needs
+// a caller and this list edited on purpose.
+test("the provider exposes exactly two mutating methods, and neither deletes", () => {
   const { provider } = createFake();
 
   const members = Object.keys(provider).sort();
   expect(members).toEqual([
     "capabilities",
-    "copyMessages",
     "disconnect",
-    "expungeUids",
     "fetchFlagChanges",
     "fetchHeaders",
     "fetchIdentities",
@@ -505,4 +463,6 @@ test("the provider exposes exactly four mutating methods and no purge", () => {
     "setLabels",
   ]);
   expect(members.some((member) => member.toLowerCase().includes("purge"))).toBe(false);
+  expect(members).not.toContain("expungeUids");
+  expect(members).not.toContain("copyMessages");
 });

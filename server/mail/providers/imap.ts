@@ -3,7 +3,6 @@ import { HEADER_FIELDS, parseHeaderBlock } from "@server/mail/providers/headers"
 import { buildTlsOptions } from "@server/mail/providers/tls";
 import type {
   CopyUidResult,
-  ExpungeResult,
   FetchedEnvelope,
   FetchedMessage,
   FlagChange,
@@ -167,7 +166,7 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
   }
 
   // The one write lock in `server/mail`. Every read path keeps `{ readOnly: true }`; this helper is
-  // reached only from `moveMessages`, `copyMessages`, `setLabels` and `expungeUids`.
+  // reached only from `moveMessages` and `setLabels`, the interface's two mutating members.
   async function withWriteLock<T>(folder: string, run: () => Promise<T>): Promise<T> {
     const lock = await client.getMailboxLock(folder, { readOnly: false });
     try {
@@ -324,12 +323,6 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
       });
     },
 
-    copyMessages: async (folder: string, uids: number[], target_folder: string): Promise<CopyUidResult> => {
-      requireUidSet(uids, "copyMessages");
-      requireUidplus("copyMessages");
-      return withWriteLock(folder, () => copyWithinLock(uids, target_folder));
-    },
-
     setLabels: async (folder: string, uids: number[], change: LabelChange): Promise<LabelResult> => {
       requireUidSet(uids, "setLabels");
       if (!gmail) {
@@ -358,12 +351,6 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
         }
         return { folder, uids, added_labels: add_labels, removed_labels: remove_labels };
       });
-    },
-
-    expungeUids: async (folder: string, uids: number[]): Promise<ExpungeResult> => {
-      requireUidSet(uids, "expungeUids");
-      requireUidplus("expungeUids");
-      return withWriteLock(folder, async () => ({ folder, expunged_uids: await expungeWithinLock(uids, folder) }));
     },
 
     disconnect: async () => {

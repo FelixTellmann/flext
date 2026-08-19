@@ -7,7 +7,6 @@ import type { UndoActionResult, UndoResult } from "@server/mail/actions/undo";
 import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import type {
   CopyUidResult,
-  ExpungeResult,
   FetchedMessage,
   FlagChangeResult,
   FolderInfo,
@@ -185,8 +184,6 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
     },
 
     fetchHeaders: async (): Promise<FetchedMessage[]> => unsupported("fetchHeaders"),
-    copyMessages: async (): Promise<CopyUidResult> => unsupported("copyMessages"),
-    expungeUids: async (): Promise<ExpungeResult> => unsupported("expungeUids"),
     fetchIdentities: async (): Promise<MessageIdentity[]> => unsupported("fetchIdentities"),
     fetchFlagChanges: async (): Promise<FlagChangeResult> => unsupported("fetchFlagChanges"),
     listUids: async (): Promise<number[]> => unsupported("listUids"),

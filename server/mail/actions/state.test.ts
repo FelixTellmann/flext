@@ -49,9 +49,7 @@ function createStubProvider(input: { messages?: StubMessage[]; folders?: FolderI
     fetchFlagChanges: async () => unsupported("fetchFlagChanges"),
     listUids: async () => unsupported("listUids"),
     moveMessages: async () => unsupported("moveMessages"),
-    copyMessages: async () => unsupported("copyMessages"),
     setLabels: async () => unsupported("setLabels"),
-    expungeUids: async () => unsupported("expungeUids"),
     disconnect: async () => undefined,
   };
 }
