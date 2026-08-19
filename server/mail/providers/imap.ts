@@ -1,4 +1,3 @@
-import { zipCopyUid } from "@server/mail/actions/copyuid";
 import type { MailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FIELDS, parseHeaderBlock } from "@server/mail/providers/headers";
 import { buildTlsOptions } from "@server/mail/providers/tls";
@@ -17,6 +16,7 @@ import type {
   MailboxProvider,
   MessageAddress,
   MessageIdentity,
+  UidPair,
 } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
 import type { CopyResponseObject, ExpungeEvent, FetchMessageObject, FetchQueryObject, MessageAddressObject } from "imapflow";
@@ -85,7 +85,12 @@ function requireApplied(applied: boolean | undefined, command: string, folder: s
   throw new Error(`${command} in ${folder} did not complete; the mailbox is unchanged for that step and the sequence must stop here.`);
 }
 
-function toCopyUidResult(response: CopyResponseObject | false | undefined, command: string, target_folder: string): CopyUidResult {
+function toCopyUidResult(
+  response: CopyResponseObject | false | undefined,
+  command: string,
+  target_folder: string,
+  requested_uids: number[],
+): CopyUidResult {
   if (response === undefined || response === false) {
     throw new Error(`${command} into ${target_folder} did not complete; no message was relocated and nothing may be journalled for it.`);
   }
@@ -94,14 +99,29 @@ function toCopyUidResult(response: CopyResponseObject | false | undefined, comma
   const uid_validity = response.uidValidity;
   if (uid_map === undefined || uid_validity === undefined) {
     throw new Error(
-      `${command} into ${target_folder} returned no usable COPYUID (RFC 4315). imapflow drops the mapping silently when the source and destination sets disagree, so an absent map means either the server sent no COPYUID or it sent an inconsistent one — in both cases the destination UIDs are unknowable and undo would have no address to write to.`,
+      `${command} into ${target_folder} returned no usable COPYUID (RFC 4315). imapflow drops the mapping silently when the source and destination sets disagree, so an absent map means either the server sent no COPYUID or it sent an inconsistent one — in both cases nothing is knowable and every UID in the batch is unaddressable.`,
     );
+  }
+
+  // Walking the requested set rather than the map is what makes the result honest in both directions:
+  // a UID the server never reported lands in `unconfirmed_uids` instead of silently vanishing, and a
+  // destination the caller never asked for cannot be journalled.
+  const pairs: UidPair[] = [];
+  const unconfirmed_uids: number[] = [];
+  for (const source_uid of requested_uids) {
+    const destination_uid = uid_map.get(source_uid);
+    if (destination_uid === undefined) {
+      unconfirmed_uids.push(source_uid);
+      continue;
+    }
+    pairs.push({ source_uid, destination_uid });
   }
 
   return {
     target_folder: response.destination,
     destination_uid_validity: uid_validity.toString(),
-    pairs: zipCopyUid([...uid_map.keys()], [...uid_map.values()]),
+    pairs,
+    unconfirmed_uids,
   };
 }
 
@@ -161,7 +181,7 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
   }
 
   async function copyWithinLock(uids: number[], target_folder: string): Promise<CopyUidResult> {
-    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder);
+    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
   }
 
   // imapflow's expunge command is STORE +FLAGS (\Deleted) followed by `UID EXPUNGE <set>` — but only
@@ -288,11 +308,18 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
         // silently emulates a move with COPY + messageDelete when the server lacks MOVE, and that
         // messageDelete is the call that degrades to a bare EXPUNGE. The emulation stays ours.
         if (capabilities.move) {
-          return toCopyUidResult(await client.messageMove(uids, target_folder, { uid: true }), "UID MOVE", target_folder);
+          return toCopyUidResult(await client.messageMove(uids, target_folder, { uid: true }), "UID MOVE", target_folder, uids);
         }
 
         const copied = await copyWithinLock(uids, target_folder);
-        await expungeWithinLock(uids, folder);
+
+        // Only what COPYUID confirmed may be expunged. A UID the server did not report has no copy at
+        // the destination as far as anyone can prove, and expunging it here would delete the only
+        // remaining instance of that message.
+        const confirmed_uids = copied.pairs.map((pair) => pair.source_uid);
+        if (confirmed_uids.length > 0) {
+          await expungeWithinLock(confirmed_uids, folder);
+        }
         return copied;
       });
     },

@@ -12,6 +12,7 @@ type FakeOptions = {
   flavor?: "gmail" | "generic";
   copyuid_destination?: number[] | null;
   copyuid_uid_validity?: number | null;
+  copyuid_omit?: number[];
   fail?: FailurePoint;
 };
 
@@ -40,7 +41,15 @@ function createFake(options: FakeOptions = {}) {
     const destination_uids =
       options.copyuid_destination === undefined ? uids.map((_uid, index) => 9001 + index) : options.copyuid_destination;
     if (destination_uids !== null) {
-      response.uidMap = new Map(uids.map((uid, index) => [uid, destination_uids[index]]));
+      const omitted = options.copyuid_omit ?? [];
+      const entries: [number, number][] = [];
+      uids.forEach((uid, index) => {
+        if (omitted.includes(uid)) {
+          return;
+        }
+        entries.push([uid, destination_uids[index]]);
+      });
+      response.uidMap = new Map(entries);
     }
 
     return response;
@@ -221,6 +230,7 @@ describe("moveMessages", () => {
         { source_uid: 101, destination_uid: 9001 },
         { source_uid: 102, destination_uid: 9002 },
       ],
+      unconfirmed_uids: [],
     });
   });
 
@@ -277,6 +287,72 @@ describe("moveMessages", () => {
   });
 });
 
+describe("COPYUID accounts for every requested UID", () => {
+  test("a fully confirmed UID MOVE reports nothing unconfirmed", async () => {
+    const { provider } = createFake({ move: true });
+
+    const result = await provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
+
+    expect(result.pairs.map((pair) => pair.source_uid)).toEqual(INBOX_UIDS);
+    expect(result.unconfirmed_uids).toEqual([]);
+  });
+
+  test("a UID the server left out of COPYUID is returned as unconfirmed, not thrown and not invented", async () => {
+    const { provider } = createFake({ move: true, copyuid_omit: [102] });
+
+    const result = await provider.moveMessages("INBOX", [101, 102, 103], "Archives/2026");
+
+    expect(result.pairs).toEqual([
+      { source_uid: 101, destination_uid: 9001 },
+      { source_uid: 103, destination_uid: 9003 },
+    ]);
+    expect(result.unconfirmed_uids).toEqual([102]);
+  });
+
+  test("the confirmed destination addresses survive a partial batch — throwing would orphan them too", async () => {
+    const { provider } = createFake({ move: true, copyuid_omit: [101] });
+
+    const result = await provider.moveMessages("INBOX", [101, 102], "Archives/2026");
+
+    expect(result.pairs).toEqual([{ source_uid: 102, destination_uid: 9002 }]);
+    expect(result.unconfirmed_uids).toEqual([101]);
+    expect(result.destination_uid_validity).toBe("38505");
+  });
+
+  test("the COPY fallback reports the same partial accounting", async () => {
+    const { provider } = createFake({ move: false, copyuid_omit: [102] });
+
+    const result = await provider.moveMessages("INBOX", [101, 102], "Archives/2026");
+
+    expect(result.pairs).toEqual([{ source_uid: 101, destination_uid: 9001 }]);
+    expect(result.unconfirmed_uids).toEqual([102]);
+  });
+
+  test("the COPY fallback expunges only the UIDs COPYUID confirmed", async () => {
+    const { provider, commands } = createFake({ move: false, copyuid_omit: [102] });
+
+    await provider.moveMessages("INBOX", [101, 102], "Archives/2026");
+
+    expect(commands).toEqual([
+      "SELECT INBOX (readwrite)",
+      "UID COPY 101,102 Archives/2026",
+      "STORE 101 +FLAGS (\\Deleted)",
+      "UID EXPUNGE 101",
+    ]);
+  });
+
+  test("a COPY fallback that confirmed nothing expunges nothing at all", async () => {
+    const { provider, commands } = createFake({ move: false, copyuid_omit: INBOX_UIDS });
+
+    const result = await provider.moveMessages("INBOX", INBOX_UIDS, "Archives/2026");
+
+    expect(result.pairs).toEqual([]);
+    expect(result.unconfirmed_uids).toEqual(INBOX_UIDS);
+    expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID COPY 101,102 Archives/2026"]);
+    expect(commands.some((command) => command.includes("EXPUNGE"))).toBe(false);
+  });
+});
+
 describe("copyMessages", () => {
   test("issues UID COPY and touches nothing in the source folder", async () => {
     const { provider, commands } = createFake();
@@ -286,6 +362,7 @@ describe("copyMessages", () => {
     expect(commands).toEqual(["SELECT INBOX (readwrite)", "UID COPY 101 Archives/2026"]);
     expect(commands.some((command) => command.includes("EXPUNGE") || command.includes("\\Deleted"))).toBe(false);
     expect(result.pairs).toEqual([{ source_uid: 101, destination_uid: 9001 }]);
+    expect(result.unconfirmed_uids).toEqual([]);
   });
 });
 

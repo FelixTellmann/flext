@@ -1,5 +1,3 @@
-import type { UidPair } from "@server/mail/actions/copyuid";
-
 export type MailboxCapabilities = {
   condstore: boolean;
   qresync: boolean;
@@ -72,10 +70,25 @@ export type FlagChangeResult = {
   qresync_used: boolean;
 };
 
+// RFC 4315 §3: a batched UID MOVE or UID COPY returns one COPYUID response code carrying the source
+// set and the destination set as they arrived on the wire, pairing element N of one with element N of
+// the other. imapflow parses that into a Map before we ever see it; a pair here is one entry of it.
+export type UidPair = {
+  source_uid: number;
+  destination_uid: number;
+};
+
+// `pairs` and `unconfirmed_uids` together account for every UID the caller asked for, and never for
+// any it did not. A server that relocates 399 of 400 messages reports 399 in COPYUID, and the 400th
+// has no destination address — journalling it as relocated would orphan it until the next full sync
+// and leave undo with nowhere to write (§7.2). It is returned rather than thrown because throwing
+// would discard the 399 destination addresses that *are* known, turning a partial success into total
+// loss; §11 marks only the unconfirmed UIDs failed.
 export type CopyUidResult = {
   target_folder: string;
   destination_uid_validity: string;
   pairs: UidPair[];
+  unconfirmed_uids: number[];
 };
 
 export type LabelResult = {
