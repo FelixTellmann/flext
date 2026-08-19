@@ -248,6 +248,13 @@ describe("a missing target folder is rejected, never guessed", () => {
       );
     });
   }
+
+  test("an inverse is refused the same blank folder the forward plan refuses", () => {
+    const from_state = state("INBOX", ["\\Seen"], null);
+    const plan = plannedFor("auto_trash", "generic", from_state);
+
+    expect(() => inverseOf(plan, { ...from_state, folder: "" })).toThrow(/no address to be restored to/);
+  });
 });
 
 describe("keep_inbox and needs_action are not actions", () => {

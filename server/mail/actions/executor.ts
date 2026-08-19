@@ -1,0 +1,313 @@
+import type { ActionPlan, ExecutableActionKind, MailboxMutation, MailboxState } from "@server/mail/actions/kinds";
+import { applyToState, planFor } from "@server/mail/actions/kinds";
+import type { ActionStateSnapshot } from "@server/mail/actions/state";
+import { captureFolderStates, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
+import { classifyMailboxError } from "@server/mail/errors";
+import type { MailboxProvider } from "@server/mail/providers/types";
+import type { MailboxFlavor } from "@server/mail/types";
+
+// §7.1's ordering is the whole module:
+//
+//   1. read the current state from the server
+//   2. write the Action row with from_state_json, status "pending"
+//   3. perform the IMAP mutation
+//   4. record to_state_json and mark "applied" — or "failed" with the error
+//
+// Mutate-then-journal loses the pre-state on any crash and makes undo permanently impossible for those
+// messages. A crash between 3 and 4 leaves a "pending" row still holding the exact pre-state, which is
+// what lets the next run reconcile by comparing real server state against from_state / to_state. Nothing
+// below may reorder those four steps, and executor.test.ts asserts the order by killing the run between
+// them.
+
+export const PENDING_STATUS = "pending" as const;
+export const APPLIED_STATUS = "applied" as const;
+export const FAILED_STATUS = "failed" as const;
+export const DEFERRED_STATUS = "deferred" as const;
+
+export type PendingActionRow = {
+  action_id: string;
+  message_id: string;
+  kind: ExecutableActionKind;
+  run_id: string;
+  folder: string;
+  uid: number;
+};
+
+export type FromStateEntry = { action_id: string; from_state_json: string };
+export type AppliedEntry = { action_id: string; to_state_json: string };
+export type FailedEntry = { action_id: string; error: string };
+export type DeferredEntry = { action_id: string; reason: string };
+
+// The database sits behind a port so the executor can be exercised over a fake: every DATABASE_URL variant
+// points at the same production MySQL, so a test that reached a real implementation would mutate ~29,000
+// live Action rows. server/mail/actions/journal.ts holds the only drizzle-backed implementation.
+export type ActionJournal = {
+  loadPendingActions: (input: { mailbox_id: string; batch_size: number }) => Promise<PendingActionRow[]>;
+  recordFromState: (entries: FromStateEntry[]) => Promise<void>;
+  markApplied: (entries: AppliedEntry[]) => Promise<void>;
+  markFailed: (entries: FailedEntry[]) => Promise<void>;
+  markDeferred: (entries: DeferredEntry[]) => Promise<void>;
+};
+
+export type ExecuteActionsInput = {
+  mailbox_id: string;
+  flavor: MailboxFlavor;
+  provider: MailboxProvider;
+  journal: ActionJournal;
+  batch_size: number;
+};
+
+export type ExecuteActionsResult = {
+  examined: number;
+  applied: number;
+  failed: number;
+  deferred: number;
+};
+
+type ExecutionGroup = {
+  folder: string;
+  mutation: MailboxMutation;
+  rows: PendingActionRow[];
+};
+
+// The destination address a mutation confirmed for one source UID. `uid_validity` is null when the
+// mutation cannot have changed it — a label write leaves the message exactly where it was.
+type ConfirmedAddress = { uid: number; uid_validity: string | null };
+
+type MutationOutcome = { confirmed: Map<number, ConfirmedAddress> };
+
+type GroupOutcome = { applied: number; failed: number };
+
+// Records the reason, not drizzle's query dump: classifyMailboxError unwraps DrizzleQueryError and reads
+// sqlMessage, so `Action.error` gets ER_DATA_TOO_LONG rather than 53KB of SQL and bound parameters.
+function toRecordedError(error: unknown): string {
+  return classifyMailboxError(error).message;
+}
+
+// §7.3's grouping key. Rows sharing a folder and a target become one command over a UID set, so archiving
+// 400 newsletters is one UID MOVE rather than 400 round trips. Label writes join the key on their exact
+// add/remove sets, because two different label edits cannot ride one STORE.
+function groupKeyFor(folder: string, mutation: MailboxMutation): string {
+  if (mutation.verb === "move") {
+    return ["move", folder, mutation.target_folder].join(" | ");
+  }
+  return ["set_labels", folder, [...mutation.add_labels].sort().join(","), [...mutation.remove_labels].sort().join(",")].join(" | ");
+}
+
+function requireState(states: Map<string, ActionStateSnapshot>, action_id: string): ActionStateSnapshot {
+  const state = states.get(action_id);
+  if (state === undefined) {
+    throw new Error(`no captured state for action ${action_id}; a row reaches the mutation only after its state is captured.`);
+  }
+  return state;
+}
+
+async function performMutation(
+  provider: MailboxProvider,
+  folder: string,
+  uids: number[],
+  mutation: MailboxMutation,
+): Promise<MutationOutcome> {
+  if (mutation.verb === "move") {
+    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    // A confirmed pair proves the destination copy exists at that UID. It does not prove the source copy
+    // is gone: on a server without MOVE the provider finishes a COPY with UID EXPUNGE, and imapflow does
+    // not check the result of the STORE (\Deleted) that precedes it, so a rejected flag store still
+    // reports success. The failure direction is a duplicate left behind, never a deletion, and the next
+    // sync resolves it against real server state — nothing here may assert the source UID is gone.
+    //
+    // What failed is derived from the absence of a pair rather than read out of `unconfirmed_uids`, so a
+    // UID the server never addressed fails even if the two ever disagreed. The field stays the provider's
+    // way of saying this is not an error, which is why nothing below throws on it.
+    const confirmed = new Map<number, ConfirmedAddress>();
+    for (const pair of result.pairs) {
+      confirmed.set(pair.source_uid, { uid: pair.destination_uid, uid_validity: result.destination_uid_validity });
+    }
+    return { confirmed };
+  }
+
+  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+  return { confirmed: new Map(result.uids.map((uid) => [uid, { uid, uid_validity: null }])) };
+}
+
+async function executeGroup(input: { group: ExecutionGroup; provider: MailboxProvider; journal: ActionJournal }): Promise<GroupOutcome> {
+  const { group, provider, journal } = input;
+
+  // Step 1: read the current state from the server.
+  let captured: Map<number, ActionStateSnapshot>;
+  try {
+    captured = await captureFolderStates({ provider, folder: group.folder, uids: group.rows.map((row) => row.uid) });
+  } catch (error) {
+    const message = toRecordedError(error);
+    await journal.markFailed(group.rows.map((row) => ({ action_id: row.action_id, error: message })));
+    return { applied: 0, failed: group.rows.length };
+  }
+
+  const live_rows: PendingActionRow[] = [];
+  const from_states = new Map<string, ActionStateSnapshot>();
+  const projected_states = new Map<string, MailboxState>();
+  const pre_mutation_failures: FailedEntry[] = [];
+
+  for (const row of group.rows) {
+    const from_state = captured.get(row.uid);
+    if (from_state === undefined) {
+      pre_mutation_failures.push({
+        action_id: row.action_id,
+        error: `UID ${row.uid} is no longer in ${group.folder}. The mailbox is the source of truth, so the message was moved or removed after this row was journalled and nothing was mutated; the next sync re-reads it.`,
+      });
+      continue;
+    }
+
+    // Projected here rather than after the mutation on purpose: applyToState refuses a label write against
+    // a state with no label set, and finding that out afterwards would mean a mutated mailbox with a row
+    // marked failed. Everything predictable fails before step 3.
+    try {
+      projected_states.set(row.action_id, applyToState(group.mutation, from_state));
+    } catch (error) {
+      pre_mutation_failures.push({ action_id: row.action_id, error: toRecordedError(error) });
+      continue;
+    }
+
+    live_rows.push(row);
+    from_states.set(row.action_id, from_state);
+  }
+
+  if (pre_mutation_failures.length > 0) {
+    await journal.markFailed(pre_mutation_failures);
+  }
+  if (live_rows.length === 0) {
+    return { applied: 0, failed: pre_mutation_failures.length };
+  }
+
+  // Step 2: journal from_state at status "pending", before anything is mutated.
+  // A throw here aborts the run with the mailbox untouched, and is deliberately not caught: marking these
+  // rows failed would be another write to the journal that just refused one, and leaving them pending
+  // without a pre-state is the one outcome undo cannot recover from.
+  await journal.recordFromState(
+    live_rows.map((row) => ({
+      action_id: row.action_id,
+      from_state_json: serializeActionState(requireState(from_states, row.action_id)),
+    })),
+  );
+
+  // Step 3: one command over the whole UID set.
+  const uids = live_rows.map((row) => row.uid);
+  let outcome: MutationOutcome;
+  try {
+    outcome = await performMutation(provider, group.folder, uids, group.mutation);
+  } catch (error) {
+    // Every row keeps its pre-state and becomes failed rather than applied, so a retry can finish from
+    // from_state_json. A move that succeeded server-side and threw on the way back lands here too, which
+    // is why the next run reconciles against real state instead of trusting this status.
+    const message = toRecordedError(error);
+    await journal.markFailed(live_rows.map((row) => ({ action_id: row.action_id, error: message })));
+    return { applied: 0, failed: pre_mutation_failures.length + live_rows.length };
+  }
+
+  // Step 4: record to_state and mark applied, or failed.
+  const applied_entries: AppliedEntry[] = [];
+  const unconfirmed_failures: FailedEntry[] = [];
+
+  for (const row of live_rows) {
+    const address = outcome.confirmed.get(row.uid);
+    if (address === undefined) {
+      // §11: mark only the unconfirmed UIDs failed. After a partial UID MOVE this message's state is
+      // genuinely unknown — moved but unreported, or not moved — and a blind retry would move an already
+      // moved message a second time. Nothing is retried and nothing is guessed; the next sync resolves it.
+      unconfirmed_failures.push({
+        action_id: row.action_id,
+        error: `the server confirmed no destination for UID ${row.uid} in ${group.folder}, so its state is unknown: it may have been relocated without being reported, or not relocated at all. Not retried — the next sync re-reads the mailbox and reconciles against from_state.`,
+      });
+      continue;
+    }
+
+    const from_state = requireState(from_states, row.action_id);
+    const projected = projected_states.get(row.action_id);
+    if (projected === undefined) {
+      throw new Error(`no projected state for action ${row.action_id}; every live row is projected before the mutation is issued.`);
+    }
+
+    applied_entries.push({
+      action_id: row.action_id,
+      to_state_json: serializeActionState({
+        ...projected,
+        uid: address.uid,
+        uid_validity: address.uid_validity ?? from_state.uid_validity,
+      }),
+    });
+  }
+
+  if (unconfirmed_failures.length > 0) {
+    await journal.markFailed(unconfirmed_failures);
+  }
+  if (applied_entries.length > 0) {
+    await journal.markApplied(applied_entries);
+  }
+
+  return {
+    applied: applied_entries.length,
+    failed: pre_mutation_failures.length + unconfirmed_failures.length,
+  };
+}
+
+export async function executeActions(input: ExecuteActionsInput): Promise<ExecuteActionsResult> {
+  const rows = await input.journal.loadPendingActions({ mailbox_id: input.mailbox_id, batch_size: input.batch_size });
+  const result: ExecuteActionsResult = { examined: rows.length, applied: 0, failed: 0, deferred: 0 };
+  if (rows.length === 0) {
+    return result;
+  }
+
+  const folders = await resolveActionFolders(input.provider);
+
+  const groups = new Map<string, ExecutionGroup>();
+  const deferred: DeferredEntry[] = [];
+  const unplannable: FailedEntry[] = [];
+
+  for (const row of rows) {
+    let plan: ActionPlan;
+    try {
+      plan = planFor(row.kind, input.flavor, {
+        source_folder: row.folder,
+        archive_folder: folders.archive_folder,
+        trash_folder: folders.trash_folder,
+      });
+    } catch (error) {
+      // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a
+      // name, and the refusal is recorded against the row instead of being turned into a default target.
+      unplannable.push({ action_id: row.action_id, error: toRecordedError(error) });
+      continue;
+    }
+
+    if (plan.outcome === "deferred") {
+      deferred.push({ action_id: row.action_id, reason: plan.reason });
+      continue;
+    }
+
+    const key = groupKeyFor(row.folder, plan.mutation);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { folder: row.folder, mutation: plan.mutation, rows: [row] });
+      continue;
+    }
+    group.rows.push(row);
+  }
+
+  // Both are settled before a single command is issued, so a run that dies mid-sweep has already parked
+  // the rows it was never going to touch.
+  if (deferred.length > 0) {
+    await input.journal.markDeferred(deferred);
+  }
+  if (unplannable.length > 0) {
+    await input.journal.markFailed(unplannable);
+  }
+  result.deferred = deferred.length;
+  result.failed = unplannable.length;
+
+  for (const group of groups.values()) {
+    const outcome = await executeGroup({ group, provider: input.provider, journal: input.journal });
+    result.applied += outcome.applied;
+    result.failed += outcome.failed;
+  }
+
+  return result;
+}

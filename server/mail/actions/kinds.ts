@@ -174,6 +174,15 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
 export function inverseOf(plan: PlannedAction, from_state: MailboxState): MailboxMutation[] {
   const { mutation } = plan;
 
+  // Symmetric to requireTargetFolder: planFor refuses to move a message to a folder the caller could not
+  // name, so undo must refuse to move it back to one either. A blank folder here would issue a move to ""
+  // — a mutation this module would have rejected in the forward direction.
+  if (from_state.folder.length === 0) {
+    throw new Error(
+      "inverseOf was given a state with an empty folder, so the message has no address to be restored to. from_state_json is written by server/mail/actions/state.ts, which refuses to record a blank folder; an empty one here means the snapshot was built somewhere else or damaged in storage.",
+    );
+  }
+
   if (mutation.verb === "move") {
     const move_back: MailboxMutation = { verb: "move", source_folder: mutation.target_folder, target_folder: from_state.folder };
 
