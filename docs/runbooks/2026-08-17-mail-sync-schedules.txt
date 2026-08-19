@@ -252,3 +252,111 @@ SELECT kind, status, startedAt, messagesNew, messagesVanished, LEFT(IFNULL(error
 Healthy incremental runs show status=ok with small messagesNew. A mailbox that goes wrong also records Mailbox.lastError, and an auth failure or a pinned-SPKI mismatch sets Mailbox.enabled=0 deliberately, so it stops retrying until you look at it:
 
 SELECT label, enabled, LEFT(IFNULL(lastError,'-'),60), lastErrorAt FROM Mailbox;
+
+
+=============================================================================
+PHASE 3 — RULES ENGINE AND SHADOW MODE (added 2026-08-19)
+=============================================================================
+
+Phase 3 adds a rules engine, per-sender policies, and a shadow pass that
+journals what the rules WOULD do without touching any mailbox. This
+section is the operator sequence for turning it on. Do the steps in this
+exact order — the order is not obvious and getting it wrong loses data.
+
+
+-----------------------------------------------------------------------------
+THE ORDER
+-----------------------------------------------------------------------------
+
+  1. Apply migration 0004:
+
+         bun run db:migrate
+
+     This adds Action.source.
+
+  2. Seed the sender policies:
+
+         bun --env-file=.env scripts/seed-sender-policies.ts --apply
+
+     Without --apply this is a dry run and writes nothing. The flag is
+     required, not a safety default you can leave off by habit.
+
+  3. Run a shadow pass, per mailbox, via the trigger on /admin/shadow or
+     the runShadowPass procedure. It requires an explicit mailbox id —
+     there is no "run for everything" trigger.
+
+  4. Read the shadow report at /admin/shadow and decide what has earned
+     promotion out of shadow.
+
+
+-----------------------------------------------------------------------------
+THE ORDERING HAZARD: 0004 BEFORE ANY SHADOW PASS, ALWAYS
+-----------------------------------------------------------------------------
+
+Migration 0004 adds Action.source as NOT NULL with NO DEFAULT. Action is
+empty today and MySQL strict mode is on, so applying 0004 right now is
+completely clean.
+
+But if a shadow pass runs FIRST, Action gains rows before the column
+exists. The ALTER then either backfills those rows with a meaningless
+empty string or fails outright — and source is exactly the field that
+makes a promotion decision sound: it is what lets the shadow report tell
+"this policy would have fired" apart from "a guard suppressed it" apart
+from "a suspended policy sat there inert, doing nothing". Losing it on
+rows that already exist defeats the reason this column exists.
+
+0004 before any shadow pass. Always.
+
+
+-----------------------------------------------------------------------------
+WHAT THE SEED WILL DO
+-----------------------------------------------------------------------------
+
+scripts/seed-sender-policies.ts --apply writes 86 policies:
+
+    55 archive
+    27 file
+     4 keep_inbox
+
+All 85 address-scoped values were confirmed present in the Sender table
+before this was written. Every policy enters at autonomy: shadow — this
+phase's spec permits nothing else yet, so nothing seeded here can act on
+its own.
+
+JUDGEMENT CALL WORTH YOUR REVIEW: no-reply@lunalemon.dev was deliberately
+NOT seeded. The triage document describes those as Listify support
+tickets that "should probably stay in the inbox while tickets are live" —
+a softer hedge than the flat non-decisions given to alerts@logalert.app
+and noreply@github.com, which were also excluded outright. A reasonable
+person could have seeded it keep_inbox instead. It was left out on purpose
+so you can decide, rather than have it resolved silently either way and
+found later.
+
+
+-----------------------------------------------------------------------------
+WHAT A SHADOW PASS DOES AND DOES NOT DO
+-----------------------------------------------------------------------------
+
+A shadow pass reads stored metadata, runs it through the rules engine, and
+journals one decision row per message.
+
+It opens NO mailbox and moves NO mail. Nothing is deleted, flagged,
+moved, copied, or appended anywhere. That is exactly what makes it safe to
+run repeatedly — a bad rule can be fixed and re-run with no cleanup
+required, and it is why the report can be trusted enough to promote a
+rule: running it changed nothing real.
+
+
+-----------------------------------------------------------------------------
+THE QUEUE NUMBERS WILL NOT MOVE ON THEIR OWN
+-----------------------------------------------------------------------------
+
+As of this write-up the Needs Action queue stands at roughly 7,535 threads
+unfiltered and 617 at the 30-day default. ThreadState and SenderSuppression
+are both empty tables right now, so the two new filter clauses that read
+them have nothing to filter yet.
+
+Those numbers only fall as YOU snooze and dismiss threads through the
+UI — each of those actions is what populates the two tables. If you turn
+Phase 3 on and the queue does not shrink immediately, that is expected;
+it is not a sign the filters are broken.
