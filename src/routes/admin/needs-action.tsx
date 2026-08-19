@@ -114,17 +114,13 @@ const LocationCell: FC<{ location: MessageLocation }> = ({ location }) => {
 
 const RowActions: FC<{
   busy_key: string | null;
+  group_key: string;
   onDismiss: () => void;
   onMarkDone: () => void;
   onSnooze: () => void;
   onSnoozeHoursChange: (hours: SnoozePresetHours) => void;
   snooze_hours: SnoozePresetHours;
-  thread_key: string | null;
-}> = ({ busy_key, onDismiss, onMarkDone, onSnooze, onSnoozeHoursChange, snooze_hours, thread_key }) => {
-  if (thread_key === null) {
-    return <span className="text-gray-400 text-xs dark:text-dark-border">No thread key on this row — can't act on it yet.</span>;
-  }
-
+}> = ({ busy_key, group_key, onDismiss, onMarkDone, onSnooze, onSnoozeHoursChange, snooze_hours }) => {
   const any_busy = busy_key !== null;
 
   return (
@@ -146,7 +142,7 @@ const RowActions: FC<{
           </select>
         </label>
         <ActionButton
-          busy={busy_key === `snooze:${thread_key}`}
+          busy={busy_key === `snooze:${group_key}`}
           disabled={any_busy}
           label="Snooze"
           onClick={onSnooze}
@@ -154,7 +150,7 @@ const RowActions: FC<{
         />
       </div>
       <ActionButton
-        busy={busy_key === `done:${thread_key}`}
+        busy={busy_key === `done:${group_key}`}
         disabled={any_busy}
         label="Mark done"
         onClick={onMarkDone}
@@ -162,7 +158,7 @@ const RowActions: FC<{
       />
       <div className="flex flex-col gap-0.5">
         <ActionButton
-          busy={busy_key === `dismiss:${thread_key}`}
+          busy={busy_key === `dismiss:${group_key}`}
           disabled={any_busy}
           label="Shouldn't be here"
           onClick={onDismiss}
@@ -190,15 +186,16 @@ function AdminNeedsActionPage() {
   };
 
   const snoozeRow = async (row: NeedsActionRow) => {
-    if (row.thread_key === null) {
-      return;
-    }
-    const thread_key = row.thread_key;
-    const hours = snooze_drafts[thread_key] ?? snooze_preset_hours[0];
-    setBusyKey(`snooze:${thread_key}`);
+    const { group_key } = row;
+    const hours = snooze_drafts[group_key] ?? snooze_preset_hours[0];
+    setBusyKey(`snooze:${group_key}`);
     setActionStatus(null);
     try {
-      await orpc.mail.snoozeThread({ mailbox_id: row.mailbox_id, thread_key, until: new Date(Date.now() + hours * 3_600_000) });
+      await orpc.mail.snoozeThread({
+        mailbox_id: row.mailbox_id,
+        thread_key: group_key,
+        until: new Date(Date.now() + hours * 3_600_000),
+      });
       await router.invalidate();
     } catch (error) {
       setActionStatus(`Snooze failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -208,14 +205,11 @@ function AdminNeedsActionPage() {
   };
 
   const markDoneRow = async (row: NeedsActionRow) => {
-    if (row.thread_key === null) {
-      return;
-    }
-    const thread_key = row.thread_key;
-    setBusyKey(`done:${thread_key}`);
+    const { group_key } = row;
+    setBusyKey(`done:${group_key}`);
     setActionStatus(null);
     try {
-      await orpc.mail.markThreadDone({ mailbox_id: row.mailbox_id, thread_key });
+      await orpc.mail.markThreadDone({ mailbox_id: row.mailbox_id, thread_key: group_key });
       await router.invalidate();
     } catch (error) {
       setActionStatus(`Mark done failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -225,16 +219,13 @@ function AdminNeedsActionPage() {
   };
 
   const dismissRow = async (row: NeedsActionRow) => {
-    if (row.thread_key === null) {
-      return;
-    }
-    const thread_key = row.thread_key;
-    setBusyKey(`dismiss:${thread_key}`);
+    const { group_key } = row;
+    setBusyKey(`dismiss:${group_key}`);
     setActionStatus(null);
     try {
       await orpc.mail.dismissThread({
         mailbox_id: row.mailbox_id,
-        thread_key,
+        thread_key: group_key,
         sender_address: row.from_address,
         reason: `Dismissed from Needs Action: "${row.subject ?? "(no subject)"}"`,
       });
@@ -323,10 +314,7 @@ function AdminNeedsActionPage() {
             </thead>
             <tbody>
               {queue.rows.map((row) => (
-                <tr
-                  className="border-gray-100 border-b dark:border-dark-border"
-                  key={row.thread_key ?? `${row.mailbox_id}-${row.internal_date}`}
-                >
+                <tr className="border-gray-100 border-b dark:border-dark-border" key={row.group_key}>
                   <td className="max-w-56 truncate py-2 pr-3">
                     <p className="truncate font-medium text-gray-900 dark:text-dark-headings">
                       {row.from_name ?? row.from_address ?? "Unknown sender"}
@@ -353,19 +341,12 @@ function AdminNeedsActionPage() {
                   <td className="py-2 pr-3">
                     <RowActions
                       busy_key={busy_key}
+                      group_key={row.group_key}
                       onDismiss={() => void dismissRow(row)}
                       onMarkDone={() => void markDoneRow(row)}
                       onSnooze={() => void snoozeRow(row)}
-                      onSnoozeHoursChange={(hours) => {
-                        const thread_key = row.thread_key;
-                        if (thread_key !== null) {
-                          setSnoozeDrafts((prev) => ({ ...prev, [thread_key]: hours }));
-                        }
-                      }}
-                      snooze_hours={
-                        row.thread_key !== null ? (snooze_drafts[row.thread_key] ?? snooze_preset_hours[0]) : snooze_preset_hours[0]
-                      }
-                      thread_key={row.thread_key}
+                      onSnoozeHoursChange={(hours) => setSnoozeDrafts((prev) => ({ ...prev, [row.group_key]: hours }))}
+                      snooze_hours={snooze_drafts[row.group_key] ?? snooze_preset_hours[0]}
                     />
                   </td>
                 </tr>

@@ -16,7 +16,10 @@ import type { SQL } from "drizzle-orm";
 import { and, asc, eq, gte, isNull, not, sql } from "drizzle-orm";
 
 export type NeedsActionRow = {
-  thread_key: string | null;
+  // COALESCE(threadKey, id) — the same group key isThreadOpenSql and ThreadState key on, so a write
+  // action fed this value always lands on the row the queue actually filtered against. Never null:
+  // id is a non-null primary key.
+  group_key: string;
   subject: string | null;
   from_address: string | null;
   from_name: string | null;
@@ -31,7 +34,7 @@ export type NeedsActionRow = {
 };
 
 type NeedsActionQueryRow = {
-  thread_key: string | null;
+  group_key: string;
   subject: string | null;
   from_address: string | null;
   from_name: string | null;
@@ -138,7 +141,7 @@ function toNeedsActionRow(row: NeedsActionQueryRow, now: Date): NeedsActionRow {
   });
 
   return {
-    thread_key: row.thread_key,
+    group_key: row.group_key,
     subject: row.subject,
     from_address: row.from_address,
     from_name: row.from_name,
@@ -205,7 +208,6 @@ export async function listNeedsAction(input: {
       .select({
         id: message.id,
         group_key: group_key.as("group_key"),
-        thread_key: message.thread_key,
         subject: message.subject,
         from_address: message.from_address,
         from_name: message.from_name,
@@ -248,7 +250,7 @@ export async function listNeedsAction(input: {
   const rows_promise = db
     .with(thread_head, ranked)
     .select({
-      thread_key: ranked.thread_key,
+      group_key: ranked.group_key,
       subject: ranked.subject,
       from_address: ranked.from_address,
       from_name: ranked.from_name,
