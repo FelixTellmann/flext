@@ -5,15 +5,11 @@ import { decide } from "@server/mail/classify/rules";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex } from "@server/mail/query/policies";
+import { isSentByMeSql } from "@server/mail/query/signal-sql";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-
-// The JSON-encoded token Phase 1 stores in Message.labels for a Gmail-flagged sent message (§4.1's
-// X-GM-LABELS capture), not a folder — [Gmail]/Sent Mail is never synced for flavor "gmail", only the
-// canonical [Gmail]/All Mail, so no Gmail row ever has a Sent folder to test against.
-const GMAIL_SENT_LABEL = "\\Sent";
+import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 
 export type RunShadowPassInput = { mailbox_id: string; batch_size: number };
 
@@ -58,26 +54,9 @@ function threadGroupKey(): SQL<string> {
   return sql<string>`COALESCE(${message.thread_key}, ${message.id})`;
 }
 
-// "Sent by the mailbox owner" is tested differently per flavor: generic IMAP mirrors sent mail into a
-// real folder, but Gmail syncs only [Gmail]/All Mail (§4.1), so a Gmail row's Sent-ness lives in the
-// \Sent label instead. JSON_CONTAINS on the exact token (not `labels LIKE '%Sent%'`) so an operator label
-// like "Clients/Sent-Invoices" cannot false-positive. Either branch falls back to `0` — an unconfigured
-// generic mailbox (no sent_folders) or a labels column with no usable data both yield `0` for every row,
-// so replied_in_thread and last_in_thread_is_mine come out false, the same conservative default
-// `decide()` already falls back to when it has no evidence.
-function isMineSql(flavor: MailboxFlavor, sent_folders: string[]): SQL<boolean> {
-  if (flavor === "gmail") {
-    return sql<boolean>`JSON_CONTAINS(COALESCE(${message.labels}, '[]'), JSON_QUOTE(${GMAIL_SENT_LABEL}))`;
-  }
-  if (sent_folders.length === 0) {
-    return sql<boolean>`0`;
-  }
-  return sql<boolean>`${inArray(message.folder, sent_folders)}`;
-}
-
 async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_folders: string[]): Promise<Map<string, ThreadFacts>> {
   const group_key = threadGroupKey();
-  const is_mine = isMineSql(flavor, sent_folders);
+  const is_mine = isSentByMeSql(flavor, sent_folders);
 
   const ranked = db.$with("ranked").as(
     db

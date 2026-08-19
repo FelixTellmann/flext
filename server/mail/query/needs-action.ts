@@ -4,10 +4,10 @@ import type { MessageSignals } from "@server/mail/classify/signals";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
-import { isBulkPrecedenceSql } from "@server/mail/query/signal-sql";
-import { parseStringList } from "@server/mail/types";
+import { isBulkPrecedenceSql, isSenderNotSuppressedSql, isSentByMeSql, isThreadOpenSql } from "@server/mail/query/signal-sql";
+import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, gte, inArray, isNull, not, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, not, sql } from "drizzle-orm";
 
 export type NeedsActionRow = {
   thread_key: string | null;
@@ -45,27 +45,40 @@ type NeedsActionQueryRow = {
   message_id: string | null;
 };
 
+type MailboxSentConfig = { id: string; flavor: string; sent_folders: string | null };
+
 // A null threadKey cannot be grouped against other messages, so each one stands as its own
-// single-message thread rather than being dropped or collapsed together.
+// single-message thread rather than being dropped or collapsed together. It is also the key
+// server/mail/query/threads.ts writes into ThreadState, so a queue row with no threadKey is still
+// snoozable, done-able and dismissable.
 function threadGroupKey(): SQL<string> {
   return sql<string>`COALESCE(${message.thread_key}, ${message.id})`;
 }
 
-async function sentFolderExclusion(mailbox_id: string | null): Promise<SQL | undefined> {
-  const mailboxes = await db
-    .select({ id: mailbox.id, sent_folders: mailbox.sent_folders })
+async function loadMailboxSentConfigs(mailbox_id: string | null): Promise<MailboxSentConfig[]> {
+  return db
+    .select({ id: mailbox.id, flavor: mailbox.flavor, sent_folders: mailbox.sent_folders })
     .from(mailbox)
     .where(mailbox_id === null ? undefined : eq(mailbox.id, mailbox_id));
-
-  const exclusions = mailboxes
-    .map((row) => ({ id: row.id, folders: parseStringList(row.sent_folders) }))
-    .filter((row) => row.folders.length > 0)
-    .map((row) => not(and(eq(message.mailbox_id, row.id), inArray(message.folder, row.folders)) as SQL));
-
-  return exclusions.length > 0 ? and(...exclusions) : undefined;
 }
 
-function buildWhere(mailbox_id: string | null, sent_folder_exclusion: SQL | undefined): SQL {
+// "Sent by the mailbox owner" for every mailbox in scope at once, each branch fenced by its own mailboxId
+// so a Gmail label test never runs against a generic mailbox's rows. The per-flavour test itself is
+// isSentByMeSql, shared with the shadow runner, because a folder-only test is permanently false on Gmail.
+function sentByMeSql(configs: MailboxSentConfig[]): SQL<boolean> {
+  if (configs.length === 0) {
+    return sql<boolean>`0`;
+  }
+
+  const branches = configs.map(
+    (config) =>
+      sql`(${eq(message.mailbox_id, config.id)} AND ${isSentByMeSql(parseMailboxFlavor(config.flavor), parseStringList(config.sent_folders))})`,
+  );
+
+  return sql<boolean>`(${sql.join(branches, sql` OR `)})`;
+}
+
+function buildWhere(mailbox_id: string | null, sent_by_me: SQL<boolean>): SQL {
   const conditions: SQL[] = [
     isNull(message.list_id),
     isNull(message.list_unsubscribe),
@@ -73,16 +86,14 @@ function buildWhere(mailbox_id: string | null, sent_folder_exclusion: SQL | unde
     not(isBulkPrecedenceSql()),
     eq(message.to_me, true),
     isNull(message.disappeared_at),
+    // Keeps the operator's own messages out of the candidate pool, so a queue row is always headed by an
+    // inbound message. This is not §1.9's last_in_thread_is_mine — that term is about the newest message
+    // in the whole thread and is tested at thread level in listNeedsAction, over a pool that deliberately
+    // still contains the operator's own replies.
+    not(sent_by_me),
   ];
   if (mailbox_id !== null) {
     conditions.push(eq(message.mailbox_id, mailbox_id));
-  }
-  // Keeps the operator's own messages out of the candidate pool, so a thread is always headed by an
-  // inbound message. It is NOT §1.9's last_in_thread_is_mine: that term needs to know who sent the
-  // newest message in the thread, and a thread the operator has already answered still surfaces here
-  // under its newest inbound message. It waits for Phase 3's thread_state.
-  if (sent_folder_exclusion !== undefined) {
-    conditions.push(sent_folder_exclusion);
   }
 
   return and(...conditions) as SQL;
@@ -156,10 +167,33 @@ export async function listNeedsAction(input: {
   offset: number;
   max_age_days: number | null;
 }): Promise<{ rows: NeedsActionRow[]; total: number }> {
-  const sent_folder_exclusion = await sentFolderExclusion(input.mailbox_id);
-  const where = buildWhere(input.mailbox_id, sent_folder_exclusion);
+  const sent_by_me = sentByMeSql(await loadMailboxSentConfigs(input.mailbox_id));
+  const where = buildWhere(input.mailbox_id, sent_by_me);
   const now = new Date();
   const group_key = threadGroupKey();
+  const mailbox_scope = input.mailbox_id === null ? undefined : eq(message.mailbox_id, input.mailbox_id);
+
+  // §1.9's last_in_thread_is_mine, ranked over every live message in the thread rather than over the
+  // candidate pool: the newest message in a thread is frequently one buildWhere excludes — the operator's
+  // own reply above all — and it is exactly that message whose sender decides whether the thread still
+  // needs an answer. Same pool, same ordering and same is_mine test as the shadow runner's
+  // loadThreadFacts, so the two readings of the rule cannot drift apart.
+  // The head_ prefixes are load-bearing: Drizzle renders a CTE's aliased columns unqualified, so two
+  // CTEs in one statement that both expose `group_key` or `row_number` make every reference to either
+  // ambiguous and MySQL rejects the query at runtime.
+  const thread_head = db.$with("thread_head").as(
+    db
+      .select({
+        head_group_key: group_key.as("head_group_key"),
+        head_is_mine: sent_by_me.as("head_is_mine"),
+        head_row_number:
+          sql<number>`ROW_NUMBER() OVER (PARTITION BY ${group_key} ORDER BY ${message.internal_date} DESC, ${message.id} DESC)`.as(
+            "head_row_number",
+          ),
+      })
+      .from(message)
+      .where(and(isNull(message.disappeared_at), mailbox_scope)),
+  );
 
   // MySQL's only_full_group_by forbids grouping by threadKey (not a primary key) while selecting
   // other raw columns alongside it, so every displayed column must come from one real row.
@@ -172,6 +206,7 @@ export async function listNeedsAction(input: {
     db
       .select({
         id: message.id,
+        group_key: group_key.as("group_key"),
         thread_key: message.thread_key,
         subject: message.subject,
         from_address: message.from_address,
@@ -194,17 +229,26 @@ export async function listNeedsAction(input: {
       .where(where),
   );
 
-  // Filtering on ranked.internal_date (the newest message per thread) rather than on the base where
-  // clause keeps message_count whole-thread and applies the cutoff to the thread as a whole, not to
-  // individual older messages inside a thread that's otherwise still current.
-  const newest_row = eq(ranked.row_number, 1);
-  const where_ranked =
-    input.max_age_days === null
-      ? newest_row
-      : (and(newest_row, gte(ranked.internal_date, new Date(now.getTime() - input.max_age_days * 86_400_000))) as SQL);
+  // Every clause here is applied to the rows query and to the total identically, and all of it before
+  // LIMIT — a predicate applied after the fetch makes pagination skip threads, which is the bug Phase 2
+  // shipped in this file. Filtering on ranked.internal_date (the newest message per thread) rather than on
+  // the base where clause keeps message_count whole-thread and applies the age cutoff to the thread as a
+  // whole, not to individual older messages inside a thread that's otherwise still current.
+  const conditions: SQL[] = [
+    eq(ranked.row_number, 1),
+    sql`COALESCE(${thread_head.head_is_mine}, 0) = 0`,
+    isThreadOpenSql({ mailbox_id: ranked.mailbox_id, thread_key: ranked.group_key, now }),
+    isSenderNotSuppressedSql(ranked.from_address),
+  ];
+  if (input.max_age_days !== null) {
+    conditions.push(gte(ranked.internal_date, new Date(now.getTime() - input.max_age_days * 86_400_000)));
+  }
+  const where_ranked = and(...conditions) as SQL;
+
+  const thread_head_join = and(eq(thread_head.head_group_key, ranked.group_key), eq(thread_head.head_row_number, 1)) as SQL;
 
   const rows_promise = db
-    .with(ranked)
+    .with(thread_head, ranked)
     .select({
       thread_key: ranked.thread_key,
       subject: ranked.subject,
@@ -228,12 +272,18 @@ export async function listNeedsAction(input: {
     .from(ranked)
     .innerJoin(mailbox, eq(mailbox.id, ranked.mailbox_id))
     .leftJoin(sender, eq(sender.address, ranked.from_address))
+    .leftJoin(thread_head, thread_head_join)
     .where(where_ranked)
     .orderBy(asc(ranked.internal_date), asc(ranked.id))
     .limit(input.limit)
     .offset(input.offset);
 
-  const total_promise = db.with(ranked).select({ total: sql<number>`COUNT(*)` }).from(ranked).where(where_ranked);
+  const total_promise = db
+    .with(thread_head, ranked)
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(ranked)
+    .leftJoin(thread_head, thread_head_join)
+    .where(where_ranked);
 
   const [rows, total_rows] = await Promise.all([rows_promise, total_promise]);
 
