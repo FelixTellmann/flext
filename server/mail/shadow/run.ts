@@ -43,9 +43,10 @@ type ShadowMessageRow = {
   thread_snoozed_until: Date | null;
 };
 
-type ShadowActionRow = {
+export type ShadowActionRow = {
   message_id: string;
   sender_policy_id: string | null;
+  mailbox_id: string;
   kind: string;
   source: Decision["source"];
   status: "shadow";
@@ -192,10 +193,17 @@ function buildDecisionInput(
 
 // status takes no parameter: every row this module can build is hardcoded to "shadow", so there is no
 // code path here that could produce "pending" or "applied" — Phase 4 owns writing those.
-function buildShadowActionRow(input: { message_id: string; decision: Decision; run_id: string; now: Date }): ShadowActionRow {
+export function buildShadowActionRow(input: {
+  message_id: string;
+  mailbox_id: string;
+  decision: Decision;
+  run_id: string;
+  now: Date;
+}): ShadowActionRow {
   return {
     message_id: input.message_id,
     sender_policy_id: input.decision.policy_id,
+    mailbox_id: input.mailbox_id,
     kind: input.decision.action,
     source: input.decision.source,
     status: SHADOW_STATUS,
@@ -215,6 +223,7 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
     .onDuplicateKeyUpdate({
       set: {
         sender_policy_id: sql`VALUES(\`senderPolicyId\`)`,
+        mailbox_id: sql`VALUES(\`mailboxId\`)`,
         source: sql`VALUES(\`source\`)`,
         status: SHADOW_STATUS,
         decided_at: sql`VALUES(\`decidedAt\`)`,
@@ -257,7 +266,7 @@ export async function runShadowPass(input: RunShadowPassInput): Promise<RunShado
       examined += 1;
       const decision = decide(buildDecisionInput(row, { policy_index, thread_facts, now }));
       by_decision[decision.action] = (by_decision[decision.action] ?? 0) + 1;
-      rows.push(buildShadowActionRow({ message_id: row.id, decision, run_id, now }));
+      rows.push(buildShadowActionRow({ message_id: row.id, mailbox_id: input.mailbox_id, decision, run_id, now }));
     }
 
     await writeShadowBatch(rows);
