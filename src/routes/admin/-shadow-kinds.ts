@@ -24,3 +24,14 @@ export function classifyKind(kind: string): KindCategory {
   }
   return "retained";
 }
+
+// Which ceremony a bulk approval has to demand. Keyed on what the run recorded rather than on the policy's
+// current action, because promotion takes every shadow decision the policy ever left behind whatever its
+// kind: edit a policy from auto_trash to archive after a shadow pass and classifyKind(policy.action) would
+// hand back "organisational" for a batch that still deletes.
+export function selectApprovalCategory(input: { destructive_count: number; policy_action: string }): KindCategory {
+  if (input.destructive_count > 0) {
+    return "destructive";
+  }
+  return classifyKind(input.policy_action);
+}

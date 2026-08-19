@@ -4,7 +4,7 @@ import { type FC, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
 import type { KindCategory } from "./-shadow-kinds";
-import { classifyKind } from "./-shadow-kinds";
+import { classifyKind, selectApprovalCategory } from "./-shadow-kinds";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 const shadow_search_schema = z.object({
@@ -439,7 +439,7 @@ const ApprovePolicyPanel: FC<{
   report: ShadowReport;
   selected_mailbox_id: string | undefined;
 }> = ({ approvable, mailboxes, onApproved, onSelectMailbox, policy, report, selected_mailbox_id }) => {
-  const category = classifyKind(policy.action);
+  const category = selectApprovalCategory({ destructive_count: report.destructive_count, policy_action: policy.action });
   const ceremony = approval_ceremony[category];
   // Bulk approval promotes every shadow decision this policy recorded whatever its kind, so a single
   // `file` row anywhere in the run is enough to make the whole batch unapprovable — one deferred row is

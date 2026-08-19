@@ -3,7 +3,7 @@ import {
   DESTRUCTIVE_KINDS as SERVER_DESTRUCTIVE_KINDS,
   ORGANISATIONAL_KINDS as SERVER_ORGANISATIONAL_KINDS,
 } from "@server/mail/query/shadow";
-import { classifyKind, DESTRUCTIVE_KINDS, ORGANISATIONAL_KINDS } from "./-shadow-kinds";
+import { classifyKind, DESTRUCTIVE_KINDS, ORGANISATIONAL_KINDS, selectApprovalCategory } from "./-shadow-kinds";
 
 // The admin routes carry their own copy of the split because query/shadow.ts holds the db handle (see
 // -shadow-kinds.ts). This is the only thing keeping the two spellings honest, and what it protects is the
@@ -45,5 +45,23 @@ describe("the destructive/organisational split the routes classify with", () => 
     expect(classifyKind("keep_inbox")).toBe("retained");
     expect(classifyKind("needs_action")).toBe("retained");
     expect(classifyKind("something_a_later_phase_adds")).toBe("retained");
+  });
+});
+
+// A policy's action is editable after the shadow pass that used it, but its decisions are not rewritten —
+// so the two can disagree, and the batch the button promotes is described by the run, not by the policy.
+describe("the ceremony a bulk approval demands", () => {
+  test("a run that recorded deletions demands the destructive ceremony even after the policy was edited to archive", () => {
+    expect(selectApprovalCategory({ destructive_count: 412, policy_action: "archive" })).toBe("destructive");
+    expect(selectApprovalCategory({ destructive_count: 1, policy_action: "keep_inbox" })).toBe("destructive");
+  });
+
+  test("a run with no deletions falls back to what the policy would do next", () => {
+    expect(selectApprovalCategory({ destructive_count: 0, policy_action: "archive" })).toBe("organisational");
+    expect(selectApprovalCategory({ destructive_count: 0, policy_action: "keep_inbox" })).toBe("retained");
+  });
+
+  test("a policy that deletes keeps the destructive ceremony before it has decided anything", () => {
+    expect(selectApprovalCategory({ destructive_count: 0, policy_action: "auto_trash" })).toBe("destructive");
   });
 });
