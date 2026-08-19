@@ -266,3 +266,93 @@ export const syncRun = mysqlTable(
     mailboxStartedIndex: index("SyncRun_mailboxId_startedAt_idx").on(table.mailbox_id, table.started_at),
   }),
 );
+
+// ─── SenderPolicy ────────────────────────────────────────────────────────────
+export const senderPolicy = mysqlTable(
+  "SenderPolicy",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    scope: varchar("scope", { length: 191 }).notNull(),
+    value: varchar("value", { length: 320 }).notNull(),
+    // Never "purge": a derived/proposed policy must never be able to name the destructive
+    // sweep action (design spec §5.4, §8) — purge only ever runs from the separate Phase 8 sweep (§1.7).
+    action: varchar("action", { length: 191 }).notNull(),
+    client: varchar("client", { length: 191 }),
+    topic: varchar("topic", { length: 191 }),
+    autonomy: varchar("autonomy", { length: 191 }).default("shadow").notNull(),
+    source: varchar("source", { length: 191 }).notNull(),
+    suspended_at: datetime("suspendedAt", { fsp: 3 }),
+    suspension_reason: text("suspensionReason"),
+  },
+  (table) => ({
+    scopeValueUnique: uniqueIndex("SenderPolicy_scope_value_key").on(table.scope, table.value),
+  }),
+);
+
+// ─── NeverTouchRule ──────────────────────────────────────────────────────────
+export const neverTouchRule = mysqlTable("NeverTouchRule", {
+  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+  kind: varchar("kind", { length: 191 }).notNull(),
+  value: varchar("value", { length: 512 }).notNull(),
+  note: text("note"),
+});
+
+// ─── SenderSuppression ───────────────────────────────────────────────────────
+export const senderSuppression = mysqlTable("SenderSuppression", {
+  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+  sender_address: varchar("senderAddress", { length: 320 }).notNull(),
+  reason: text("reason").notNull(),
+});
+
+// ─── ThreadState ─────────────────────────────────────────────────────────────
+export const threadState = mysqlTable(
+  "ThreadState",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    thread_key: varchar("threadKey", { length: 512 }).notNull(),
+    mailbox_id: varchar("mailboxId", { length: 191 }).notNull(),
+    state: varchar("state", { length: 191 }).default("open").notNull(),
+    snoozed_until: datetime("snoozedUntil", { fsp: 3 }),
+  },
+  (table) => ({
+    mailboxThreadKeyUnique: uniqueIndex("ThreadState_mailboxId_threadKey_key").on(table.mailbox_id, table.thread_key),
+    stateSnoozedUntilIndex: index("ThreadState_state_snoozedUntil_idx").on(table.state, table.snoozed_until),
+  }),
+);
+
+// ─── Action ──────────────────────────────────────────────────────────────────
+export const action = mysqlTable(
+  "Action",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    message_id: varchar("messageId", { length: 191 }).notNull(),
+    // Carried on every row, including shadow-only ones written by Phase 3, so that §7's bulk-undo-by-rule
+    // and §10's get_shadow_report(policy_id) can be built later without a backfill.
+    sender_policy_id: varchar("senderPolicyId", { length: 191 }),
+    kind: varchar("kind", { length: 191 }).notNull(),
+    status: varchar("status", { length: 191 }).default("shadow").notNull(),
+    // Snapshot of the mutable state (folder, flags, labels) before this action, so Phase 4's undo can
+    // restore it exactly rather than reconstruct it from later, possibly-incomplete sync data.
+    from_state_json: text("fromStateJson"),
+    to_state_json: text("toStateJson"),
+    run_id: varchar("runId", { length: 191 }),
+    decided_at: datetime("decidedAt", { fsp: 3 }),
+    applied_at: datetime("appliedAt", { fsp: 3 }),
+    error: text("error"),
+  },
+  (table) => ({
+    statusDecidedAtIndex: index("Action_status_decidedAt_idx").on(table.status, table.decided_at),
+    senderPolicyIdIndex: index("Action_senderPolicyId_idx").on(table.sender_policy_id),
+    messageIdKindRunIdUnique: uniqueIndex("Action_messageId_kind_runId_key").on(table.message_id, table.kind, table.run_id),
+  }),
+);
