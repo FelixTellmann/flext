@@ -26,6 +26,13 @@ export type LiveMessageFacts = {
   last_reply_at: Date | null;
 };
 
+// The one spelling of "which address is this?", shared by the pass, the drizzle implementation and the
+// fake, so a Map built by one is readable by the others. Two shapes, two prefixes: a row id and a
+// folder/uid pair can never collide.
+export function messageAddressKey(address: MessageAddress): string {
+  return address.by === "row" ? `row:${address.message_id}` : `addr:${address.folder}:${address.uid_validity}:${address.uid}`;
+}
+
 export type RescueStampEntry = { action_id: string; rescued_at: Date };
 export type PolicySuspensionEntry = { sender_policy_id: string; suspended_at: Date; reason: string };
 
@@ -41,16 +48,30 @@ export type PolicySuspensionEntry = { sender_policy_id: string; suspended_at: Da
 //     keeps its original reason, because the first rescue is the one that explains it.
 export type RescuePort = {
   loadRescueCandidates: (input: { mailbox_id: string; batch_size: number }) => Promise<RescueCandidateRow[]>;
-  // Null for an address that resolves to no row at all — a message the operator deleted outright, or a
-  // move whose destination the sync has not fetched yet. Neither is an error: the next pass judges it.
-  loadLiveMessage: (input: { mailbox_id: string; address: MessageAddress }) => Promise<LiveMessageFacts | null>;
+  // Set-based, and that is a property of the INTERFACE rather than an implementation detail: "the newest
+  // sent-by-me message in this thread" cannot be answered per address without scanning the mailbox once
+  // per candidate — `COALESCE(threadKey, id) = ?` is non-sargable and no (mailboxId, threadKey) index
+  // exists, so a per-address port would be ~7,900 × 30,000 rows every sync on felix@tellmann.co.za. One
+  // call per batch lets the implementation build thread facts once, the way loadThreadFacts in
+  // server/mail/shadow/run.ts and server/mail/query/needs-action.ts already do.
+  //
+  // Keyed by messageAddressKey. An address simply absent from the Map resolves to no row at all — a
+  // message the operator deleted outright, or a move whose destination the sync has not fetched yet.
+  // Neither is an error: the next pass judges it.
+  loadLiveMessages: (input: { mailbox_id: string; addresses: MessageAddress[] }) => Promise<Map<string, LiveMessageFacts>>;
   markRescued: (entries: RescueStampEntry[]) => Promise<void>;
-  suspendPolicy: (entry: PolicySuspensionEntry) => Promise<void>;
+  // Returns whether the guarded UPDATE actually suspended anything: false means the policy was already
+  // suspended and kept its original reason. The caller cannot infer this — the guard lives in SQL — so a
+  // void return would make `suspended` in the result a count of ATTEMPTS, reporting suspensions the
+  // database correctly refused to make.
+  suspendPolicy: (entry: PolicySuspensionEntry) => Promise<boolean>;
 };
 
 export type DetectRescuesResult = {
   examined: number;
   rescued: number;
+  // Policies this run actually suspended, never the number of attempts: a rescue against a policy that
+  // was already suspended is a real rescue (it is stamped) but not a new suspension.
   suspended: number;
   // Candidates whose address resolved to no live row. Counted rather than swallowed: a run where this
   // climbs means addresses are going stale, which is the failure Task 1 exists to prevent.
@@ -73,8 +94,13 @@ const SIGNAL_PHRASES: Record<RescueSignal, string> = {
   replied: "you replied to",
 };
 
-function asDay(at: Date): string {
-  return at.toISOString().slice(0, 10);
+// Date AND time, and the zone named. A date alone contradicts itself on the common case: the sync runs
+// hourly, so an archive at 09:00 and an open at 16:00 the same day printed "you opened X on 2026-08-20
+// after this rule archived it on 2026-08-20", which reads as nonsense and makes the operator distrust the
+// whole sentence. Naming UTC is the other half — the operator reads this at UTC+2, where a bare UTC date
+// is wrong by a day for anything that happened after 22:00 local.
+function asMoment(at: Date): string {
+  return `${at.toISOString().slice(0, 10)} ${at.toISOString().slice(11, 16)} UTC`;
 }
 
 // What the operator reads before deciding whether to clear the suspension. A reason they cannot act on is
@@ -90,7 +116,7 @@ export function rescueSuspensionReason(input: {
   const subject = input.subject === null || input.subject.length === 0 ? NO_SUBJECT : input.subject;
   const kind_phrase = KIND_PHRASES[input.kind] ?? `applied "${input.kind}" to it`;
 
-  return `rescued: ${SIGNAL_PHRASES[input.signal]} "${subject}" on ${asDay(input.at)} after this rule ${kind_phrase} on ${asDay(
+  return `rescued: ${SIGNAL_PHRASES[input.signal]} "${subject}" on ${asMoment(input.at)} after this rule ${kind_phrase} on ${asMoment(
     input.applied_at,
   )}. The rule is suspended until you clear it; the action is in the journal and can be undone.`;
 }
@@ -110,18 +136,26 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
 
   const candidates = await input.port.loadRescueCandidates({ mailbox_id: input.mailbox_id, batch_size: input.batch_size });
 
+  // Where each message lives NOW, which on generic IMAP is a different row from the one the action names.
+  // Joining on Action.messageId would read a dead row whose openedAt can never change again.
+  const addresses = candidates.map((candidate) =>
+    messageAddressForAction({ message_id: candidate.message_id, to_state_json: candidate.to_state_json }),
+  );
+  // One call for the whole batch, not one per candidate: the thread half of these facts costs a scan of
+  // the mailbox, and paying it per row is what turned this pass into a full cross product.
+  const live_by_key: Map<string, LiveMessageFacts> =
+    candidates.length === 0 ? new Map() : await input.port.loadLiveMessages({ mailbox_id: input.mailbox_id, addresses });
+
   const stamps: RescueStampEntry[] = [];
   const suspended_in_this_run = new Set<string>();
   let unresolved = 0;
   let suspended = 0;
 
-  for (const candidate of candidates) {
-    // Where the message lives NOW, which on generic IMAP is a different row from the one the action
-    // names. Joining on Action.messageId would read a dead row whose openedAt can never change again.
-    const address = messageAddressForAction({ message_id: candidate.message_id, to_state_json: candidate.to_state_json });
-    const live = await input.port.loadLiveMessage({ mailbox_id: input.mailbox_id, address });
+  for (const [index, candidate] of candidates.entries()) {
+    const address = addresses[index];
+    const live = address === undefined ? undefined : live_by_key.get(messageAddressKey(address));
 
-    if (live === null) {
+    if (live === undefined) {
       unresolved += 1;
       continue;
     }
@@ -143,7 +177,7 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
     // Suspend BEFORE stamping. A crash between the two re-detects the same rescue on the next pass and
     // re-suspends harmlessly; the reverse order would stamp the action, hide it from every future pass,
     // and leave the wrong rule running forever.
-    await input.port.suspendPolicy({
+    const newly_suspended = await input.port.suspendPolicy({
       sender_policy_id: candidate.sender_policy_id,
       suspended_at: new Date(),
       reason: rescueSuspensionReason({
@@ -155,7 +189,10 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
       }),
     });
     suspended_in_this_run.add(candidate.sender_policy_id);
-    suspended += 1;
+
+    if (newly_suspended) {
+      suspended += 1;
+    }
   }
 
   if (stamps.length > 0) {
