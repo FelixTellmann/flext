@@ -46,6 +46,24 @@ describe("judgeRescue", () => {
     expect(verdict).toEqual({ rescued: true, signal: "replied", at: last_reply_at });
   });
 
+  // Pins the precedence rather than leaving it to branch order. Both signals qualify here, so the verdict
+  // is a rescue either way — what is under test is WHICH signal gets reported, because that is the
+  // sentence the operator reads on the suspension. Swap the branches in judgeRescue and this fails.
+  test("a reply outranks an open when both land after applied_at", () => {
+    const opened_at = new Date(APPLIED_AT.getTime() + 1000);
+    const last_reply_at = new Date(APPLIED_AT.getTime() + 2000);
+    const verdict = judgeRescue(baseInput({ opened_at, last_reply_at }));
+    expect(verdict).toEqual({ rescued: true, signal: "replied", at: last_reply_at });
+  });
+
+  // The same, with the reply EARLIER than the open, so the result cannot be explained by "latest wins".
+  test("a reply outranks an open even when the open came later", () => {
+    const opened_at = new Date(APPLIED_AT.getTime() + 5000);
+    const last_reply_at = new Date(APPLIED_AT.getTime() + 1000);
+    const verdict = judgeRescue(baseInput({ opened_at, last_reply_at }));
+    expect(verdict).toEqual({ rescued: true, signal: "replied", at: last_reply_at });
+  });
+
   test("applied_at in the future relative to both signals is not a rescue", () => {
     const opened_at = new Date(APPLIED_AT.getTime() - 2000);
     const last_reply_at = new Date(APPLIED_AT.getTime() - 1000);

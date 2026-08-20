@@ -32,12 +32,17 @@ function isAfter(candidate: Date | null, applied_at: Date): candidate is Date {
   return candidate !== null && candidate.getTime() > applied_at.getTime();
 }
 
+// Order is deliberate: a reply outranks an open when both qualify. Either way the verdict is the same —
+// this was a rescue — but the SIGNAL is what ends up in the suspension reason the operator reads before
+// deciding whether to clear it, and the two are not equally persuasive. An open can be accidental, or a
+// glance while triaging; answering a message is unambiguous evidence that the rule hid something the
+// operator wanted. Report the stronger of the two.
 export function judgeRescue(input: RescueInput): RescueVerdict {
-  if (isAfter(input.opened_at, input.applied_at)) {
-    return { rescued: true, signal: "opened", at: input.opened_at };
-  }
   if (isAfter(input.last_reply_at, input.applied_at)) {
     return { rescued: true, signal: "replied", at: input.last_reply_at };
+  }
+  if (isAfter(input.opened_at, input.applied_at)) {
+    return { rescued: true, signal: "opened", at: input.opened_at };
   }
   return { rescued: false };
 }
