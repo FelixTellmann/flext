@@ -22,7 +22,7 @@ import type {
 } from "@server/mail/providers/types";
 import type { RescuePort } from "@server/mail/rescue/detect";
 import type { RunShadowPassInput, RunShadowPassResult } from "@server/mail/shadow/run";
-import { runClassifyAndExecutePassForMailbox, runRescuePassForMailbox } from "@server/mail/sync/run";
+import { promoteAutoActions, runClassifyAndExecutePassForMailbox, runRescuePassForMailbox } from "@server/mail/sync/run";
 
 function okPort(): RescuePort {
   return {
@@ -57,7 +57,9 @@ type RecordingProvider = MailboxProvider & {
   created_folders: string[];
 };
 
-function createRecordingProvider(): RecordingProvider {
+// `uids` are the messages the fake INBOX holds; the executor captures their state before it plans, so a
+// test that expects a mutation must seed the uid it names.
+function createRecordingProvider(uids: number[] = []): RecordingProvider {
   const calls: string[] = [];
   const moves: string[] = [];
   const label_writes: string[] = [];
@@ -71,7 +73,11 @@ function createRecordingProvider(): RecordingProvider {
     capabilities: { condstore: true, qresync: true, uidplus: true, move: true, gmail: false },
     listFolders: async (): Promise<FolderInfo[]> => {
       calls.push("listFolders");
-      return [{ path: "INBOX", delimiter: "/", special_use: "\\Inbox", subscribed: true, selectable: true }];
+      return [
+        { path: "INBOX", delimiter: "/", special_use: "\\Inbox", subscribed: true, selectable: true },
+        { path: "Archives", delimiter: "/", special_use: "\\Archive", subscribed: true, selectable: true },
+        { path: "Deleted Items", delimiter: "/", special_use: "\\Trash", subscribed: true, selectable: true },
+      ];
     },
     openFolder: async (folder: string): Promise<FolderStatus> => {
       calls.push(`openFolder ${folder}`);
@@ -79,7 +85,18 @@ function createRecordingProvider(): RecordingProvider {
     },
     fetchHeaders: async (folder: string): Promise<FetchedMessage[]> => {
       calls.push(`fetchHeaders ${folder}`);
-      return [];
+      return uids.map((uid) => ({
+        uid,
+        flags: ["\\Seen"],
+        modseq: null,
+        internal_date: new Date("2026-08-20T10:00:00.000Z"),
+        size: 1024,
+        gm_msgid: null,
+        gm_thrid: null,
+        labels: null,
+        envelope: { subject: null, message_id: null, in_reply_to: null, date: null, from: [], to: [], cc: [] },
+        headers: {},
+      }));
     },
     fetchIdentities: async (folder: string): Promise<MessageIdentity[]> => {
       calls.push(`fetchIdentities ${folder}`);
@@ -96,7 +113,12 @@ function createRecordingProvider(): RecordingProvider {
     moveMessages: async (folder: string, uids: number[], target_folder: string): Promise<CopyUidResult> => {
       calls.push(`moveMessages ${folder}`);
       moves.push(`${folder} ${uids.join(",")} -> ${target_folder}`);
-      return { target_folder, destination_uid_validity: "1", pairs: [], unconfirmed_uids: uids };
+      return {
+        target_folder,
+        destination_uid_validity: "2",
+        pairs: uids.map((uid) => ({ source_uid: uid, destination_uid: uid + 1000 })),
+        unconfirmed_uids: [],
+      };
     },
     setLabels: async (folder: string, uids: number[], change: LabelChange): Promise<LabelResult> => {
       calls.push(`setLabels ${folder}`);
@@ -117,15 +139,31 @@ type FakeActionRow = { action_id: string; status: string; kind: ExecutableAction
 
 // Backed by an in-memory Action table so the emptiness of the pending batch is DERIVED from the rows'
 // status rather than hardcoded: with no promotion, every row the shadow pass wrote is still `shadow`, and
-// loadPendingActions selects `pending` only — exactly what journal.ts's query does.
-function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: string[] } {
+// loadPendingActions selects `pending` only — exactly what journal.ts's query does, including its
+// `action_ids` narrowing.
+function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: string[]; batches: (string[] | undefined)[] } {
   const writes: string[] = [];
+  const batches: (string[] | undefined)[] = [];
+
+  function setStatus(action_ids: string[], status: string): void {
+    for (const row of rows) {
+      if (action_ids.includes(row.action_id)) {
+        row.status = status;
+      }
+    }
+  }
 
   return {
     writes,
-    loadPendingActions: async (input: { mailbox_id: string; batch_size: number }): Promise<PendingActionRow[]> =>
-      rows
+    batches,
+    loadPendingActions: async (input: { mailbox_id: string; batch_size: number; action_ids?: string[] }): Promise<PendingActionRow[]> => {
+      batches.push(input.action_ids);
+      if (input.action_ids !== undefined && input.action_ids.length === 0) {
+        return [];
+      }
+      return rows
         .filter((row) => row.status === "pending")
+        .filter((row) => input.action_ids === undefined || input.action_ids.includes(row.action_id))
         .slice(0, input.batch_size)
         .map((row) => ({
           action_id: row.action_id,
@@ -138,19 +176,32 @@ function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: str
           policy_scope: "address" as const,
           dkim_aligned: true,
           filing_confirmed_at: null,
-        })),
+        }));
+    },
     recordFromState: async () => {
       writes.push("recordFromState");
     },
     loadFilingBindings: async (): Promise<FilingBindingRow[]> => [],
-    markApplied: async () => {
+    markApplied: async (entries) => {
       writes.push("markApplied");
+      setStatus(
+        entries.map((entry) => entry.action_id),
+        "applied",
+      );
     },
-    markFailed: async () => {
+    markFailed: async (entries) => {
       writes.push("markFailed");
+      setStatus(
+        entries.map((entry) => entry.action_id),
+        "failed",
+      );
     },
-    markDeferred: async () => {
+    markDeferred: async (entries) => {
       writes.push("markDeferred");
+      setStatus(
+        entries.map((entry) => entry.action_id),
+        "deferred",
+      );
     },
     loadActionForUndo: async (): Promise<ActionUndoLookup | null> => null,
     loadUndoableActionsByPolicy: async (): Promise<UndoableActionRow[]> => [],
@@ -196,6 +247,7 @@ test("a sync with no auto policies reaches the executor and issues zero mailbox 
     journal,
     run_id: "sweep-run-1",
     shadowPass: async () => shadowResult(3),
+    promoteAutoActions,
     executePendingActions: executeActions,
   });
 
@@ -224,6 +276,7 @@ test("the shadow pass is given the sweep's run id, not one of its own", async ()
       received.push(input);
       return shadowResult(0);
     },
+    promoteAutoActions: async () => [],
     executePendingActions: async () => ({ examined: 0, applied: 0, failed: 0, deferred: 0 }),
   });
 
@@ -241,13 +294,14 @@ test("a shadow pass failure is recorded as a note and the executor still runs", 
     journal: createFakeJournal([]),
     run_id: "sweep-run-1",
     shadowPass: () => Promise.reject(new Error("boom")),
+    promoteAutoActions: async () => ["action-1"],
     executePendingActions: async () => {
       executed = true;
       return { examined: 0, applied: 0, failed: 0, deferred: 0 };
     },
   });
 
-  expect(note).toBe("shadow pass failed: unknown: boom");
+  expect(note).toBe("shadow pass failed: unknown: boom; execute: promoted 1, examined 0, applied 0, failed 0, deferred 0");
   expect(executed).toBe(true);
 });
 
@@ -260,6 +314,7 @@ test("an executor failure is recorded as a note, not thrown", async () => {
     journal: createFakeJournal([]),
     run_id: "sweep-run-1",
     shadowPass: async () => shadowResult(2),
+    promoteAutoActions: async () => ["action-1"],
     executePendingActions: () => Promise.reject(new Error("mailbox went away")),
   });
 
@@ -275,10 +330,11 @@ test("an executed batch is reported on the run summary", async () => {
     journal: createFakeJournal([]),
     run_id: "sweep-run-1",
     shadowPass: async () => shadowResult(4),
+    promoteAutoActions: async () => ["action-1", "action-2", "action-3"],
     executePendingActions: async () => ({ examined: 3, applied: 2, failed: 1, deferred: 0 }),
   });
 
-  expect(note).toBe("shadow: examined 4, journaled 4; execute: examined 3, applied 2, failed 1, deferred 0");
+  expect(note).toBe("shadow: examined 4, journaled 4; execute: promoted 3, examined 3, applied 2, failed 1, deferred 0");
 });
 
 // The batch the scheduled run hands the executor is a constant, not something a caller can widen: the
@@ -294,6 +350,7 @@ test("the executor is given the bounded scheduled batch size", async () => {
     journal: createFakeJournal([]),
     run_id: "sweep-run-1",
     shadowPass: async () => shadowResult(0),
+    promoteAutoActions: async () => ["action-1"],
     executePendingActions: async (input) => {
       sizes.push(input.batch_size);
       return { examined: 0, applied: 0, failed: 0, deferred: 0 };
@@ -301,4 +358,92 @@ test("the executor is given the bounded scheduled batch size", async () => {
   });
 
   expect(sizes).toEqual([200]);
+});
+
+// THE SAFETY REGRESSION THIS ROUND EXISTS TO CLOSE. `pending` is what operator approval produces as well
+// as what promotion produces, so an executor that loaded the whole pending set would apply, within
+// fifteen minutes and without being asked, the ~7,900 decisions the operator approves intending to review
+// before pressing Apply. The scheduled run executes only rows it promoted itself; it promoted none here.
+test("an operator-approved pending row is never executed by the scheduled sync", async () => {
+  const provider = createRecordingProvider();
+  const approved: FakeActionRow[] = [
+    { action_id: "approved-1", status: "pending", kind: "auto_trash", folder: "INBOX", uid: 21 },
+    { action_id: "approved-2", status: "pending", kind: "archive", folder: "INBOX", uid: 22 },
+  ];
+  const journal = createFakeJournal(approved);
+
+  const note = await runClassifyAndExecutePassForMailbox({
+    mailbox_id: "mailbox-1",
+    flavor: "generic",
+    hierarchy_delimiter: "/",
+    provider,
+    journal,
+    run_id: "sweep-run-1",
+    shadowPass: async () => shadowResult(2),
+    // The real seam: with no policy at `auto` it promotes nothing, so this run has nothing of its own to
+    // execute and the approved rows are none of its business.
+    promoteAutoActions,
+    executePendingActions: executeActions,
+  });
+
+  expect(provider.calls).toEqual([]);
+  expect(provider.moves).toEqual([]);
+  expect(provider.label_writes).toEqual([]);
+  expect(provider.created_folders).toEqual([]);
+  expect(approved.map((row) => row.status)).toEqual(["pending", "pending"]);
+  expect(journal.writes).toEqual([]);
+  // Not even a load: an empty promotion returns before the executor rather than calling it with an empty
+  // filter, so nothing ever asked the journal for the pending set.
+  expect(journal.batches).toEqual([]);
+  expect(note).toBe("shadow: examined 2, journaled 2");
+});
+
+test("an empty promotion list short-circuits before the executor", async () => {
+  let executor_called = false;
+
+  await runClassifyAndExecutePassForMailbox({
+    mailbox_id: "mailbox-1",
+    flavor: "generic",
+    hierarchy_delimiter: "/",
+    provider: createRecordingProvider(),
+    journal: createFakeJournal([]),
+    run_id: "sweep-run-1",
+    shadowPass: async () => shadowResult(0),
+    promoteAutoActions: async () => [],
+    executePendingActions: async () => {
+      executor_called = true;
+      return { examined: 0, applied: 0, failed: 0, deferred: 0 };
+    },
+  });
+
+  expect(executor_called).toBe(false);
+});
+
+// The other half of the same invariant: when this run DID promote something, the operator's approved rows
+// sitting in the same pending set still go untouched. The real executeActions runs, against the real
+// journal narrowing, so the filter is what is under test rather than the fake.
+test("only the rows this run promoted are executed, not the rest of the pending set", async () => {
+  const provider = createRecordingProvider([31, 32]);
+  const rows: FakeActionRow[] = [
+    { action_id: "promoted-1", status: "pending", kind: "auto_trash", folder: "INBOX", uid: 31 },
+    { action_id: "approved-1", status: "pending", kind: "auto_trash", folder: "INBOX", uid: 32 },
+  ];
+  const journal = createFakeJournal(rows);
+
+  await runClassifyAndExecutePassForMailbox({
+    mailbox_id: "mailbox-1",
+    flavor: "generic",
+    hierarchy_delimiter: "/",
+    provider,
+    journal,
+    run_id: "sweep-run-1",
+    shadowPass: async () => shadowResult(2),
+    promoteAutoActions: async () => ["promoted-1"],
+    executePendingActions: executeActions,
+  });
+
+  expect(journal.batches).toEqual([["promoted-1"]]);
+  // UID 31 moved; UID 32, the operator's, was never named in a mutation.
+  expect(provider.moves).toEqual(["INBOX 31 -> Deleted Items"]);
+  expect(rows.find((row) => row.action_id === "approved-1")?.status).toBe("pending");
 });
