@@ -94,6 +94,12 @@ message end up" is the two-spellings failure this project has now paid for seven
 | replied | a sent-by-me message in the same thread dated after `appliedAt` | yes |
 | starred | — | **no**, see below |
 
+**A message moved a second time becomes undetectable.** `to_state_json` records where the action put a
+message; if the operator then finds it and files it somewhere else themselves, that address points at a
+row the sync has since marked vanished, and the rescue cannot be seen. This is the same family as the
+starred gap below and is stated for the same reason: the detector's blind spots belong on the record,
+because a safety net whose holes are undocumented is worse than a smaller net whose holes are known.
+
 **Starred is deliberately out of scope.** `isFlagged` records that a message *is* starred, never *when*
 it became starred, so "you starred it after the rule hid it" is not expressible. Adding it means a
 `flaggedAt` column mirroring `openedAt` — a first-transition timestamp set in the same place in the
