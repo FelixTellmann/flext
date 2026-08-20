@@ -465,6 +465,10 @@ export const mailProcedures = {
           provider,
           journal: createDatabaseJournal(),
           batch_size: input.batch_size,
+          // From the same mailbox row the flavour came from. An empty one fails inside renderFolderPath
+          // when a `file` row needs a folder rendered, which is the correct place: it means this mailbox
+          // was never synced.
+          hierarchy_delimiter: row.hierarchy_delimiter ?? "",
         }),
       );
       return { mailbox_id: row.id, label: row.label, ...result };
@@ -473,7 +477,14 @@ export const mailProcedures = {
   undoAction: authed.input(z.object({ action_id: z.string().min(1), mailbox_id: z.string().min(1) })).handler(async ({ input }) => {
     const row = await requireEnabledMailbox(input.mailbox_id);
     return withMailboxProvider(row, ({ provider, flavor }) =>
-      undoAction({ action_id: input.action_id, mailbox_id: row.id, flavor, provider, journal: createDatabaseJournal() }),
+      undoAction({
+        action_id: input.action_id,
+        mailbox_id: row.id,
+        flavor,
+        provider,
+        journal: createDatabaseJournal(),
+        hierarchy_delimiter: row.hierarchy_delimiter ?? "",
+      }),
     );
   }),
 
@@ -524,6 +535,7 @@ export const mailProcedures = {
               provider,
               journal,
               batch_size: input.batch_size,
+              hierarchy_delimiter: row.hierarchy_delimiter ?? "",
             }),
           );
           mailboxes.push({ mailbox_id: row.id, label: row.label, ...result, error: null });

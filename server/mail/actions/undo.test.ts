@@ -5,6 +5,7 @@ import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { serializeActionState } from "@server/mail/actions/state";
 import type { UndoActionResult, UndoResult } from "@server/mail/actions/undo";
 import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
+import type { FilingBindingRow } from "@server/mail/filing/bindings";
 import type {
   CopyUidResult,
   FetchedMessage,
@@ -28,6 +29,7 @@ const ARCHIVE_VALIDITY = "2000";
 const TRASH_VALIDITY = "3000";
 const GMAIL_ALL_VALIDITY = "4000";
 const GMAIL_TRASH_VALIDITY = "5000";
+const CLIENT_VALIDITY = "6500";
 
 const MAILBOX_ID = "mailbox-1";
 const MESSAGE_ID = "message-1";
@@ -58,11 +60,14 @@ type FakeProviderOptions = {
   fail?: ProviderFailure;
 };
 
-function genericMailbox(input: { folder: string; uid: number; labels?: string[] | null }): FakeMailbox {
+function genericMailbox(input: { folder: string; uid: number; labels?: string[] | null; extra_folders?: string[] }): FakeMailbox {
   const folders: FakeFolder[] = [
     { path: INBOX, uid_validity: INBOX_VALIDITY, special_use: null, messages: new Map() },
     { path: ARCHIVE_FOLDER, uid_validity: ARCHIVE_VALIDITY, special_use: "\\Archive", messages: new Map() },
     { path: TRASH_FOLDER, uid_validity: TRASH_VALIDITY, special_use: "\\Trash", messages: new Map() },
+    ...(input.extra_folders ?? []).map(
+      (path): FakeFolder => ({ path, uid_validity: CLIENT_VALIDITY, special_use: null, messages: new Map<number, string>() }),
+    ),
   ];
   const home = folders.find((folder) => folder.path === input.folder);
   if (home === undefined) {
@@ -72,10 +77,15 @@ function genericMailbox(input: { folder: string; uid: number; labels?: string[] 
   return { folders, labels: new Map([[MESSAGE_ID, input.labels ?? null]]), next_uid: 6000 };
 }
 
-function gmailMailbox(input: { folder: string; uid: number; labels: string[] }): FakeMailbox {
+// `extra_folders` are Gmail's labels as IMAP LISTs them, which is how a filing destination already exists
+// on the server by the time undo resolves it.
+function gmailMailbox(input: { folder: string; uid: number; labels: string[]; extra_folders?: string[] }): FakeMailbox {
   const folders: FakeFolder[] = [
     { path: GMAIL_CANONICAL_FOLDER, uid_validity: GMAIL_ALL_VALIDITY, special_use: null, messages: new Map() },
     { path: GMAIL_TRASH_FOLDER, uid_validity: GMAIL_TRASH_VALIDITY, special_use: "\\Trash", messages: new Map() },
+    ...(input.extra_folders ?? []).map(
+      (path): FakeFolder => ({ path, uid_validity: CLIENT_VALIDITY, special_use: null, messages: new Map<number, string>() }),
+    ),
   ];
   const home = folders.find((folder) => folder.path === input.folder);
   if (home === undefined) {
@@ -198,6 +208,7 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
 type SeedRow = {
   action_id: string;
   kind: string;
+  target_path?: string | null;
   applied_at: string | null;
   from_state: ActionStateSnapshot;
   to_state: ActionStateSnapshot | null;
@@ -221,11 +232,12 @@ function seedLookup(row: SeedRow): ActionUndoLookup & { error: string | null } {
     from_state_json: row.from_state_json === undefined ? serializeActionState(row.from_state) : row.from_state_json,
     to_state_json: row.to_state === null ? null : serializeActionState(row.to_state),
     applied_at: row.applied_at === null ? null : new Date(row.applied_at),
+    target_path: row.target_path ?? null,
     error: null,
   };
 }
 
-function createFakeJournal(input: { events: string[]; seed: SeedRow[] }): FakeJournal {
+function createFakeJournal(input: { events: string[]; seed: SeedRow[]; bindings?: FilingBindingRow[] }): FakeJournal {
   const rows = new Map(input.seed.map((row) => [row.action_id, seedLookup(row)]));
 
   function requireRow(action_id: string): ActionUndoLookup & { error: string | null } {
@@ -268,6 +280,7 @@ function createFakeJournal(input: { events: string[]; seed: SeedRow[] }): FakeJo
           from_state_json: row.from_state_json,
           to_state_json: row.to_state_json,
           applied_at: row.applied_at,
+          target_path: row.target_path,
         });
       }
       return undoable.sort((left, right) => left.applied_at.getTime() - right.applied_at.getTime()).slice(0, query.batch_size);
@@ -293,6 +306,11 @@ function createFakeJournal(input: { events: string[]; seed: SeedRow[] }): FakeJo
           row.to_state_json = entry.to_state_json;
         }
       }
+    },
+
+    loadFilingBindings: async (query) => {
+      input.events.push(`load_filing_bindings ${query.mailbox_id}`);
+      return input.bindings ?? [];
     },
 
     loadPendingActions: async () => unsupported("loadPendingActions"),
@@ -352,7 +370,14 @@ describe("undoAction — single action (§7.3)", () => {
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([`move ${ARCHIVE_FOLDER} 9001 -> ${INBOX}`]);
@@ -376,7 +401,7 @@ describe("undoAction — single action (§7.3)", () => {
       ],
     });
 
-    await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, hierarchy_delimiter: "/", flavor: "generic", provider, journal });
 
     expect(journal.rows.has("action-1")).toBe(true);
     const row = journal.rows.get("action-1");
@@ -409,7 +434,14 @@ describe("undoAction — single action (§7.3)", () => {
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+    });
 
     expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([`set_labels ${GMAIL_CANONICAL_FOLDER} 40 +[${GMAIL_INBOX_LABEL}] -[]`]);
@@ -436,7 +468,14 @@ describe("undoAction — single action (§7.3)", () => {
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+    });
 
     expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([
@@ -463,7 +502,14 @@ describe("undoAction — single action (§7.3)", () => {
       seed: [{ action_id: "action-1", kind: "archive", applied_at: "2026-08-19T10:00:00.000Z", from_state: state, to_state: state }],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+    });
 
     expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(moveEvents(events)).toEqual([]);
@@ -487,7 +533,14 @@ describe("undoAction — why nothing happened is reportable", () => {
 
   test("an action that does not exist", async () => {
     const { events, provider, journal } = fixtures([]);
-    const result = await undoAction({ action_id: "action-missing", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-missing",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toEqual({ outcome: "not_undoable", reason: "missing", detail: "no action with that id exists." });
     expect(events).toEqual(["load_for_undo action-missing"]);
@@ -495,7 +548,14 @@ describe("undoAction — why nothing happened is reportable", () => {
 
   test("an action belonging to another mailbox", async () => {
     const { provider, journal } = fixtures([{ ...base, action_id: "action-1", mailbox_id: "mailbox-2" }]);
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result.outcome).toBe("not_undoable");
     expect(result).toMatchObject({ reason: "other_mailbox" });
@@ -504,7 +564,14 @@ describe("undoAction — why nothing happened is reportable", () => {
 
   test("an action that has already been undone", async () => {
     const { provider, journal } = fixtures([{ ...base, action_id: "action-1", status: "undone" }]);
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toEqual({
       outcome: "not_undoable",
@@ -515,7 +582,14 @@ describe("undoAction — why nothing happened is reportable", () => {
 
   test("an action that never mutated the mailbox", async () => {
     const { provider, journal } = fixtures([{ ...base, action_id: "action-1", status: "shadow" }]);
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toMatchObject({ outcome: "not_undoable", reason: "not_applied" });
     expect(result).toMatchObject({ detail: expect.stringContaining("shadow") });
@@ -523,7 +597,14 @@ describe("undoAction — why nothing happened is reportable", () => {
 
   test("an applied action with no applied_at cannot be ordered and is reported, not hidden", async () => {
     const { provider, journal } = fixtures([{ ...base, action_id: "action-1", applied_at: null }]);
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toMatchObject({ outcome: "not_undoable", reason: "unaddressable" });
   });
@@ -548,7 +629,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
       ],
     });
 
-    const first = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const first = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
     expect(first.outcome).toBe("failed");
 
     // The action is still applied — which is what is still true of the message — and the reason is on the
@@ -560,7 +648,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
     expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: ARCHIVE_FOLDER, uid: 9001 });
 
     options.unconfirmed_uids = [];
-    const second = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const second = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(second).toEqual({ outcome: "undone" } satisfies UndoActionResult);
     expect(journal.rows.get("action-1")?.status).toBe("undone");
@@ -587,7 +682,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
       ],
     });
 
-    const first = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "gmail", provider, journal });
+    const first = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+    });
 
     expect(first).toEqual({ outcome: "failed", error: "STORE X-GM-LABELS was rejected" } satisfies UndoActionResult);
     // Correctly filed, unlabelled — the exact partial state the row must stay applied for.
@@ -608,6 +710,7 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
     const second = await undoAction({
       action_id: "action-1",
       mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
       flavor: "gmail",
       provider: resumed_provider,
       journal,
@@ -637,7 +740,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
@@ -663,7 +773,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
@@ -687,7 +804,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
@@ -714,7 +838,14 @@ describe("undoAction — a failed reversal stays applied and stays reachable", (
       ],
     });
 
-    const result = await undoAction({ action_id: "action-1", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal });
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
 
     expect(result).toMatchObject({ outcome: "failed" });
     expect(moveEvents(events)).toEqual([]);
@@ -755,6 +886,7 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
     const result = await undoPolicyActions({
       sender_policy_id: "policy-1",
       mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
       flavor: "generic",
       provider,
       journal,
@@ -780,6 +912,7 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
     const result = await undoPolicyActions({
       sender_policy_id: "policy-1",
       mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
       flavor: "generic",
       provider,
       journal,
@@ -834,6 +967,7 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
     const result = await undoPolicyActions({
       sender_policy_id: "policy-1",
       mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
       flavor: "generic",
       provider,
       journal,
@@ -853,8 +987,187 @@ describe("undoPolicyActions — newest-first replay (§7.3)", () => {
     const journal = createFakeJournal({ events, seed: [] });
 
     await expect(
-      undoPolicyActions({ sender_policy_id: "", mailbox_id: MAILBOX_ID, flavor: "generic", provider, journal, batch_size: 50 }),
+      undoPolicyActions({
+        sender_policy_id: "",
+        mailbox_id: MAILBOX_ID,
+        hierarchy_delimiter: "/",
+        flavor: "generic",
+        provider,
+        journal,
+        batch_size: 50,
+      }),
     ).rejects.toThrow("needs a policy id");
     expect(events).toEqual([]);
+  });
+});
+
+describe("undoAction — a filed message (§6)", () => {
+  const CLIENT_PATH = "Clients/Acme";
+  const CLIENT_FOLDER = "Clients/Acme";
+
+  const GENERIC_FILE_FROM: ActionStateSnapshot = { folder: INBOX, uid: 12, uid_validity: INBOX_VALIDITY, flags: ["\\Seen"], labels: null };
+  const GENERIC_FILE_TO: ActionStateSnapshot = {
+    folder: CLIENT_FOLDER,
+    uid: 9002,
+    uid_validity: CLIENT_VALIDITY,
+    flags: ["\\Seen"],
+    labels: null,
+  };
+
+  test("moves a generic filing back to the folder from_state_json recorded", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: CLIENT_FOLDER, uid: 9002, extra_folders: [CLIENT_FOLDER] });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "file",
+          target_path: CLIENT_PATH,
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_FILE_FROM,
+          to_state: GENERIC_FILE_TO,
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    expect(moveEvents(events)).toEqual([`move ${CLIENT_FOLDER} 9002 -> ${INBOX}`]);
+    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: INBOX, uid: 6000 });
+    // The destination the executor filed into is already on the server, so resolving it creates nothing.
+    expect(events.some((event) => event.startsWith("create_folder"))).toBe(false);
+    expect(journal.rows.get("action-1")?.status).toBe("undone");
+  });
+
+  test("removes the destination label and restores \\Inbox on Gmail", async () => {
+    const events: string[] = [];
+    const mailbox = gmailMailbox({
+      folder: GMAIL_CANONICAL_FOLDER,
+      uid: 40,
+      labels: [CLIENT_FOLDER, "Receipts"],
+      extra_folders: [CLIENT_FOLDER],
+    });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "file",
+          target_path: CLIENT_PATH,
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: {
+            folder: GMAIL_CANONICAL_FOLDER,
+            uid: 40,
+            uid_validity: GMAIL_ALL_VALIDITY,
+            flags: ["\\Seen"],
+            labels: [GMAIL_INBOX_LABEL, "Receipts"],
+          },
+          to_state: {
+            folder: GMAIL_CANONICAL_FOLDER,
+            uid: 40,
+            uid_validity: GMAIL_ALL_VALIDITY,
+            flags: ["\\Seen"],
+            labels: [CLIENT_FOLDER, "Receipts"],
+          },
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+    });
+
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    expect(moveEvents(events)).toEqual([`set_labels ${GMAIL_CANONICAL_FOLDER} 40 +[${GMAIL_INBOX_LABEL}] -[${CLIENT_FOLDER}]`]);
+    expect(mailbox.labels.get(MESSAGE_ID)).toEqual(["Receipts", GMAIL_INBOX_LABEL]);
+    // The UID is stable across a label write, so the message never left [Gmail]/All Mail.
+    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: GMAIL_CANONICAL_FOLDER, uid: 40 });
+  });
+
+  test("refuses when the path now resolves somewhere the recorded to_state never named", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: CLIENT_FOLDER, uid: 9002, extra_folders: [CLIENT_FOLDER, "Clients/Renamed"] });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      // The operator re-bound the path since the action ran, so it resolves to a folder this message was
+      // never in. The rebuilt plan then matches no recorded state and undo refuses.
+      bindings: [{ logical_path: CLIENT_PATH, folder: "Clients/Renamed" }],
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "file",
+          target_path: CLIENT_PATH,
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_FILE_FROM,
+          to_state: GENERIC_FILE_TO,
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result.outcome).toBe("failed");
+    expect(moveEvents(events)).toEqual([]);
+    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: CLIENT_FOLDER, uid: 9002 });
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("applied");
+    expect(row?.error).toContain("matches no point");
+  });
+
+  test("an applied filing with no logical path is reported, not given an invented destination", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: CLIENT_FOLDER, uid: 9002, extra_folders: [CLIENT_FOLDER] });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "file",
+          target_path: null,
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_FILE_FROM,
+          to_state: GENERIC_FILE_TO,
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result.outcome).toBe("failed");
+    expect(moveEvents(events)).toEqual([]);
+    expect(journal.rows.get("action-1")?.status).toBe("applied");
+    expect(journal.rows.get("action-1")?.error).toContain("filing destination");
   });
 });

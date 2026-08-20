@@ -1,8 +1,14 @@
 import type { ActionPlan, ExecutableActionKind, MailboxMutation, MailboxState } from "@server/mail/actions/kinds";
-import { applyToState, planFor } from "@server/mail/actions/kinds";
+import { applyToState, FILE_KIND, planFor } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { captureFolderStates, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
+import type { PolicyScope } from "@server/mail/classify/rules";
 import { classifyMailboxError } from "@server/mail/errors";
+// Type-only, deliberately: bindings.ts opens the drizzle connection at import time, and the executor is
+// exercised over a fake journal. The rows arrive through the port instead.
+import type { FilingBindingRow } from "@server/mail/filing/bindings";
+import { filingDecisionFor } from "@server/mail/filing/paths";
+import { createFilingResolver } from "@server/mail/filing/resolver";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
 
@@ -31,6 +37,12 @@ export type PendingActionRow = {
   run_id: string;
   folder: string;
   uid: number;
+  // The three inputs §6's filing gate needs, carried on the row rather than fetched per message: the
+  // proposal (Action.targetPath), the scope of the policy that made it, and the message's DKIM state.
+  // Joined in loadPendingActions so the gate stays one pure function over data the executor already has.
+  target_path: string | null;
+  policy_scope: PolicyScope | null;
+  dkim_aligned: boolean | null;
 };
 
 // An applied row, read back so server/mail/actions/undo.ts can issue its inverse. `applied_at` rides
@@ -43,6 +55,10 @@ export type UndoableActionRow = {
   from_state_json: string | null;
   to_state_json: string | null;
   applied_at: Date;
+  // The logical path the `file` action was executed against. Undo re-resolves it rather than reading the
+  // destination out of to_state_json, so there is one definition of where a logical path lives; a binding
+  // edited since the action then produces a plan matching no recorded state, and undo refuses.
+  target_path: string | null;
 };
 
 // One `Action` row read by id alone, with nothing filtered away, so undo can tell "no such action" from
@@ -57,6 +73,7 @@ export type ActionUndoLookup = {
   from_state_json: string | null;
   to_state_json: string | null;
   applied_at: Date | null;
+  target_path: string | null;
 };
 
 export type FromStateEntry = { action_id: string; from_state_json: string };
@@ -83,6 +100,9 @@ export type ActionJournal = {
   // correct pre-state, and the next run re-captures a post-mutation one; the first capture is the truth,
   // and journal.ts enforces that in the UPDATE's WHERE clause rather than trusting a caller to check.
   recordFromState: (entries: FromStateEntry[]) => Promise<void>;
+  // Behind the port for the same reason every other read is: a test that reached a real implementation
+  // would open a connection to the production database.
+  loadFilingBindings: (input: { mailbox_id: string }) => Promise<FilingBindingRow[]>;
   markApplied: (entries: AppliedEntry[]) => Promise<void>;
   markFailed: (entries: FailedEntry[]) => Promise<void>;
   markDeferred: (entries: DeferredEntry[]) => Promise<void>;
@@ -119,6 +139,9 @@ export type ExecuteActionsInput = {
   provider: MailboxProvider;
   journal: ActionJournal;
   batch_size: number;
+  // Mailbox.hierarchyDelimiter, populated at sync time from the LIST response. An empty one fails inside
+  // renderFolderPath, which is the correct place: it means this mailbox was never synced.
+  hierarchy_delimiter: string;
 };
 
 export type ExecuteActionsResult = {
@@ -327,21 +350,79 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
 
   const folders = await resolveActionFolders(input.provider);
 
-  const groups = new Map<string, ExecutionGroup>();
   const deferred: DeferredEntry[] = [];
   const unplannable: FailedEntry[] = [];
 
+  // Pass one: classify, and collect the DISTINCT logical paths the batch wants. No resolution happens
+  // per row — filing 400 messages into one client folder must issue one CREATE, not 400 resolutions.
+  type ClassifiedRow = { row: PendingActionRow; logical_path: string | null };
+  const classified: ClassifiedRow[] = [];
+  const wanted_paths = new Set<string>();
+
   for (const row of rows) {
+    if (row.kind !== FILE_KIND) {
+      classified.push({ row, logical_path: null });
+      continue;
+    }
+
+    const decision = filingDecisionFor({
+      logical_path: row.target_path,
+      policy_scope: row.policy_scope,
+      dkim_aligned: row.dkim_aligned,
+    });
+    if (decision.outcome === "queue") {
+      // §6's filing queue: kind `file` at status `deferred`, with the reason in `error`. Nothing was sent
+      // to the mailbox, and a deferred row's `error` is an explanation rather than a failure. Resolution
+      // moves the row back to `pending` and it re-enters this function unchanged.
+      deferred.push({ action_id: row.action_id, reason: `${decision.reason}: ${decision.detail}` });
+      continue;
+    }
+
+    wanted_paths.add(decision.logical_path);
+    classified.push({ row, logical_path: decision.logical_path });
+  }
+
+  // One resolution round for the distinct paths, before any plan is built. A path that cannot be resolved
+  // QUEUES every row wanting it rather than failing them: nothing was mutated, the operator can bind the
+  // path to a folder that already exists, and the row is then retryable — which is what `deferred` means
+  // and `failed` does not.
+  const resolved_folders = new Map<string, string>();
+  if (wanted_paths.size > 0) {
+    const resolver = await createFilingResolver({
+      provider: input.provider,
+      bindings: await input.journal.loadFilingBindings({ mailbox_id: input.mailbox_id }),
+      delimiter: input.hierarchy_delimiter,
+    });
+    for (const logical_path of wanted_paths) {
+      try {
+        resolved_folders.set(logical_path, await resolver.resolve(logical_path));
+      } catch (error) {
+        const detail = toRecordedError(error);
+        for (const entry of classified) {
+          if (entry.logical_path === logical_path) {
+            deferred.push({ action_id: entry.row.action_id, reason: `unresolvable_folder: ${detail}` });
+          }
+        }
+      }
+    }
+  }
+
+  // Pass two: build the plans, now that every destination this batch needs is a real folder name.
+  const groups = new Map<string, ExecutionGroup>();
+
+  for (const entry of classified) {
+    const { row } = entry;
+    if (entry.logical_path !== null && !resolved_folders.has(entry.logical_path)) {
+      continue; // already queued by the resolution round above
+    }
+
     let plan: ActionPlan;
     try {
       plan = planFor(row.kind, input.flavor, {
         source_folder: row.folder,
         archive_folder: folders.archive_folder,
         trash_folder: folders.trash_folder,
-        // Stopgap: Task 8 resolves the real filing destination from a provider + database read and
-        // replaces this. Until then a `file` row throws in planFor's requireTargetFolder and is recorded
-        // as unplannable, same as a missing \Archive or \Trash folder.
-        file_folder: null,
+        file_folder: entry.logical_path === null ? null : (resolved_folders.get(entry.logical_path) ?? null),
       });
     } catch (error) {
       // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a

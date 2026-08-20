@@ -1,5 +1,5 @@
 import { db } from "@server/db/drizzle";
-import { action, message } from "@server/db/schema";
+import { action, message, senderPolicy } from "@server/db/schema";
 import type {
   ActionJournal,
   ActionPromotionLookup,
@@ -18,11 +18,21 @@ import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "
 import { isExecutableActionKind } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
+import type { PolicyScope } from "@server/mail/classify/rules";
+import { loadFilingBindings } from "@server/mail/filing/bindings";
 import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the executor's journal port, kept out of executor.ts so a test
 // importing the executor cannot reach a real connection: every DATABASE_URL variant points at the same
 // production MySQL.
+
+// SenderPolicy.scope is a varchar, so it narrows here rather than in a cast, and loadPendingActions' left
+// join makes it null for a row whose policy is gone. Anything else is null too: rules.ts matches a policy only
+// on "address" or "domain", so a policy carrying any other scope never fired and cannot be behind a
+// `file` row — and §6's gate reads null as "no policy chose this path".
+function toPolicyScope(raw: string | null): PolicyScope | null {
+  return raw === "address" || raw === "domain" ? raw : null;
+}
 
 async function loadPendingActions(input: { mailbox_id: string; batch_size: number }): Promise<PendingActionRow[]> {
   if (input.mailbox_id.length === 0) {
@@ -34,6 +44,9 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
     );
   }
 
+  // A LEFT join to SenderPolicy, not an inner one: a row whose policy was deleted must still load and
+  // still be reportable, and an inner join would silently drop it out of the pending set instead. The
+  // existing join to Message already supplies dkim_aligned.
   const rows = await db
     .select({
       action_id: action.id,
@@ -42,9 +55,13 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
       run_id: action.run_id,
       folder: message.folder,
       uid: message.uid,
+      target_path: action.target_path,
+      policy_scope: senderPolicy.scope,
+      dkim_aligned: message.dkim_aligned,
     })
     .from(action)
     .innerJoin(message, eq(message.id, action.message_id))
+    .leftJoin(senderPolicy, eq(senderPolicy.id, action.sender_policy_id))
     .where(and(eq(action.status, PENDING_STATUS), eq(action.mailbox_id, input.mailbox_id), isNull(message.disappeared_at)))
     .orderBy(asc(action.decided_at), asc(action.id))
     .limit(input.batch_size);
@@ -54,7 +71,19 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
   // leaves it pending and visible rather than turning it into a mutation.
   return rows.flatMap((row) =>
     isExecutableActionKind(row.kind)
-      ? [{ action_id: row.action_id, message_id: row.message_id, kind: row.kind, run_id: row.run_id, folder: row.folder, uid: row.uid }]
+      ? [
+          {
+            action_id: row.action_id,
+            message_id: row.message_id,
+            kind: row.kind,
+            run_id: row.run_id,
+            folder: row.folder,
+            uid: row.uid,
+            target_path: row.target_path,
+            policy_scope: toPolicyScope(row.policy_scope),
+            dkim_aligned: row.dkim_aligned,
+          },
+        ]
       : [],
   );
 }
@@ -126,6 +155,7 @@ type UndoableRowShape = {
   from_state_json: string | null;
   to_state_json: string | null;
   applied_at: Date | null;
+  target_path: string | null;
 };
 
 const undoable_columns = {
@@ -135,6 +165,9 @@ const undoable_columns = {
   from_state_json: action.from_state_json,
   to_state_json: action.to_state_json,
   applied_at: action.applied_at,
+  // Undo re-resolves this to a folder rather than reading the destination out of to_state_json, so
+  // there is one definition of where a logical path lives on this server.
+  target_path: action.target_path,
 };
 
 // `kind` is a varchar and `applied_at` is nullable, so both narrow here rather than in a cast. A row with
@@ -153,6 +186,7 @@ function toUndoableRow(row: UndoableRowShape): UndoableActionRow[] {
       from_state_json: row.from_state_json,
       to_state_json: row.to_state_json,
       applied_at: row.applied_at,
+      target_path: row.target_path,
     },
   ];
 }
@@ -176,6 +210,7 @@ async function loadActionForUndo(input: { action_id: string }): Promise<ActionUn
       from_state_json: action.from_state_json,
       to_state_json: action.to_state_json,
       applied_at: action.applied_at,
+      target_path: action.target_path,
     })
     .from(action)
     .where(eq(action.id, input.action_id))
@@ -311,6 +346,7 @@ export function createDatabaseJournal(): ActionJournal {
   return {
     loadPendingActions,
     recordFromState,
+    loadFilingBindings,
     markApplied,
     markFailed,
     markDeferred,

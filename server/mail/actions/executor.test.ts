@@ -4,6 +4,8 @@ import { executeActions } from "@server/mail/actions/executor";
 import { GMAIL_INBOX_LABEL, inverseOf, planFor } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, serializeActionState } from "@server/mail/actions/state";
+import type { PolicyScope } from "@server/mail/classify/rules";
+import type { FilingBindingRow } from "@server/mail/filing/bindings";
 import type {
   CopyUidResult,
   FetchedMessage,
@@ -36,6 +38,9 @@ type FakeProviderOptions = {
   trash_folder?: string | null;
   unconfirmed_uids?: number[];
   fail?: ProviderFailure;
+  // One folder path whose creation the server rejects, so a single logical path can be made unresolvable
+  // while the rest of the batch still resolves.
+  reject_created_folder?: string;
 };
 
 function fetchedMessage(entry: FakeMessage): FetchedMessage {
@@ -122,6 +127,9 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
 
     createFolder: async (folder: string): Promise<void> => {
       events.push(`create_folder ${folder}`);
+      if (options.reject_created_folder === folder) {
+        throw new Error(`CREATE ${folder} was rejected`);
+      }
     },
 
     fetchIdentities: async (): Promise<MessageIdentity[]> => unsupported("fetchIdentities"),
@@ -148,6 +156,7 @@ function createFakeJournal(input: {
   crash_at?: CrashPoint;
   // A pre-state already on the row, as a run that crashed after mutating would have left it.
   seeded_from_state?: Record<string, string>;
+  bindings?: FilingBindingRow[];
 }): FakeJournal {
   const rows = new Map<string, JournalRow>(
     input.pending.map((row) => [
@@ -170,6 +179,11 @@ function createFakeJournal(input: {
     loadPendingActions: async () => {
       input.events.push("load_pending");
       return input.pending;
+    },
+
+    loadFilingBindings: async () => {
+      input.events.push("load_filing_bindings");
+      return input.bindings ?? [];
     },
 
     recordFromState: async (entries) => {
@@ -250,7 +264,15 @@ function createFakeJournal(input: {
   };
 }
 
-function pendingRow(input: { uid: number; kind: PendingActionRow["kind"]; folder?: string; action_id?: string }): PendingActionRow {
+function pendingRow(input: {
+  uid: number;
+  kind: PendingActionRow["kind"];
+  folder?: string;
+  action_id?: string;
+  target_path?: string | null;
+  policy_scope?: PolicyScope | null;
+  dkim_aligned?: boolean | null;
+}): PendingActionRow {
   return {
     action_id: input.action_id ?? `action-${input.uid}`,
     message_id: `message-${input.uid}`,
@@ -258,6 +280,11 @@ function pendingRow(input: { uid: number; kind: PendingActionRow["kind"]; folder
     run_id: "run-1",
     folder: input.folder ?? "INBOX",
     uid: input.uid,
+    target_path: input.target_path ?? null,
+    // Address-scoped by default: §6's DKIM gate applies to domain-scoped policies only, so this is the
+    // shape that reaches a folder, and a test that wants the gate asks for "domain" explicitly.
+    policy_scope: input.policy_scope ?? "address",
+    dkim_aligned: input.dkim_aligned ?? null,
   };
 }
 
@@ -272,7 +299,14 @@ describe("executeActions ordering (§7.1)", () => {
     const journal = createFakeJournal({ events, pending });
     const provider = createFakeProvider({ events, messages: [{ uid: 11, flags: ["\\Seen"], labels: null }] });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
 
@@ -293,9 +327,9 @@ describe("executeActions ordering (§7.1)", () => {
     const journal = createFakeJournal({ events, pending, crash_at: "mark_applied" });
     const provider = createFakeProvider({ events, messages: [{ uid: 11, flags: ["\\Seen", "\\Flagged"], labels: null }] });
 
-    await expect(executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 })).rejects.toThrow(
-      "the process died between the mutation and the status update",
-    );
+    await expect(
+      executeActions({ mailbox_id: "mailbox-1", hierarchy_delimiter: "/", flavor: "generic", provider, journal, batch_size: 50 }),
+    ).rejects.toThrow("the process died between the mutation and the status update");
 
     // The mailbox really was mutated, so this is the exact window the ordering exists to survive.
     expect(events).toContain(`move INBOX 11 -> ${TRASH_FOLDER}`);
@@ -318,9 +352,9 @@ describe("executeActions ordering (§7.1)", () => {
     const journal = createFakeJournal({ events, pending, crash_at: "record_from_state" });
     const provider = createFakeProvider({ events, messages: [{ uid: 11, flags: [], labels: null }] });
 
-    await expect(executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 })).rejects.toThrow(
-      "the process died while journalling the pre-state",
-    );
+    await expect(
+      executeActions({ mailbox_id: "mailbox-1", hierarchy_delimiter: "/", flavor: "generic", provider, journal, batch_size: 50 }),
+    ).rejects.toThrow("the process died while journalling the pre-state");
 
     expect(events.some((event) => event.startsWith("move "))).toBe(false);
     expect(journal.rows.get("action-11")?.status).toBe("pending");
@@ -351,7 +385,14 @@ describe("executeActions ordering (§7.1)", () => {
       messages: [{ uid: 21, flags: ["\\Seen"], labels: ["Work"] }],
     });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "gmail", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     // Re-issuing the mutation is harmless — removing an absent label changes nothing — and finishes the row.
     expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
@@ -397,7 +438,14 @@ describe("executeActions ordering (§7.1)", () => {
       ],
     });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result).toEqual({ examined: 2, applied: 0, failed: 2, deferred: 0 } satisfies ExecuteActionsResult);
     for (const action_id of ["action-11", "action-12"]) {
@@ -417,7 +465,14 @@ describe("executeActions batching (§7.3)", () => {
     const journal = createFakeJournal({ events, pending });
     const provider = createFakeProvider({ events, messages: uids.map((uid) => ({ uid, flags: [], labels: null })) });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 400 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 400,
+    });
 
     expect(result.applied).toBe(400);
     const move_events = events.filter((event) => event.startsWith("move "));
@@ -442,7 +497,7 @@ describe("executeActions batching (§7.3)", () => {
       ],
     });
 
-    await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    await executeActions({ mailbox_id: "mailbox-1", hierarchy_delimiter: "/", flavor: "generic", provider, journal, batch_size: 50 });
 
     expect(events.filter((event) => event.startsWith("move "))).toEqual([
       `move INBOX 1,3 -> ${ARCHIVE_FOLDER}`,
@@ -464,7 +519,14 @@ describe("executeActions outcomes", () => {
       messages: [{ uid: 21, flags: ["\\Seen"], labels: [GMAIL_INBOX_LABEL, "Work"] }],
     });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "gmail", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result.applied).toBe(1);
     expect(events).toContain(`set_labels ${GMAIL_CANONICAL_FOLDER} 21 +[] -[${GMAIL_INBOX_LABEL}]`);
@@ -484,7 +546,7 @@ describe("executeActions outcomes", () => {
     const journal = createFakeJournal({ events, pending });
     const provider = createFakeProvider({ events, messages: [{ uid: 31, flags: ["\\Seen"], labels: null }] });
 
-    await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    await executeActions({ mailbox_id: "mailbox-1", hierarchy_delimiter: "/", flavor: "generic", provider, journal, batch_size: 50 });
 
     expect(parseActionState(journal.rows.get("action-31")?.to_state_json ?? null)).toEqual({
       folder: TRASH_FOLDER,
@@ -513,7 +575,14 @@ describe("executeActions outcomes", () => {
       ],
     });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result).toEqual({ examined: 3, applied: 2, failed: 1, deferred: 0 } satisfies ExecuteActionsResult);
     expect(events.filter((event) => event.startsWith("move ")).length).toBe(1);
@@ -533,32 +602,19 @@ describe("executeActions outcomes", () => {
     const journal = createFakeJournal({ events, pending });
     const provider = createFakeProvider({ events, messages: [{ uid: 51, flags: [], labels: null }] });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result).toEqual({ examined: 2, applied: 1, failed: 1, deferred: 0 } satisfies ExecuteActionsResult);
     expect(events).toContain(`move INBOX 51 -> ${ARCHIVE_FOLDER}`);
     expect(journal.rows.get("action-52")?.error).toContain("no longer in INBOX");
     expect(journal.rows.get("action-52")?.from_state_json).toBeNull();
-  });
-
-  // planFor("file") now produces a real plan (kinds.ts §6), but executeActions still passes a hardcoded
-  // `file_folder: null` — Task 8 resolves the destination from a provider + database read and replaces
-  // this stopgap. Until then a `file` row fails the same way a missing \Archive or \Trash folder does.
-  test("file fails under the stopgap file_folder, and issues no command", async () => {
-    const events: string[] = [];
-    const pending = [pendingRow({ uid: 61, kind: "file" })];
-    const journal = createFakeJournal({ events, pending });
-    const provider = createFakeProvider({ events, messages: [{ uid: 61, flags: [], labels: null }] });
-
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
-
-    expect(result).toEqual({ examined: 1, applied: 0, failed: 1, deferred: 0 } satisfies ExecuteActionsResult);
-    const row = journal.rows.get("action-61");
-    expect(row?.status).toBe("failed");
-    expect(row?.error).toContain("filing destination");
-    expect(row?.from_state_json).toBeNull();
-    expect(row?.to_state_json).toBeNull();
-    expect(events.some((event) => event.startsWith("move ") || event.startsWith("set_labels "))).toBe(false);
   });
 
   test("a missing SPECIAL-USE folder fails the row instead of guessing a folder name", async () => {
@@ -574,7 +630,14 @@ describe("executeActions outcomes", () => {
       ],
     });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result).toEqual({ examined: 2, applied: 1, failed: 1, deferred: 0 } satisfies ExecuteActionsResult);
     expect(journal.rows.get("action-71")?.status).toBe("failed");
@@ -588,7 +651,14 @@ describe("executeActions outcomes", () => {
     const journal = createFakeJournal({ events, pending });
     const provider = createFakeProvider({ events, fail: "fetch", messages: [{ uid: 81, flags: [], labels: null }] });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result.failed).toBe(1);
     expect(events.some((event) => event.startsWith("move "))).toBe(false);
@@ -600,9 +670,270 @@ describe("executeActions outcomes", () => {
     const journal = createFakeJournal({ events, pending: [] });
     const provider = createFakeProvider({ events, messages: [] });
 
-    const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
 
     expect(result).toEqual({ examined: 0, applied: 0, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
     expect(events).toEqual(["load_pending"]);
+  });
+});
+
+describe("executeActions filing (§6)", () => {
+  const CLIENT_PATH = "Clients/Acme";
+  const CLIENT_FOLDER = "Clients/Acme";
+
+  function mutationEvents(events: string[]): string[] {
+    return events.filter((event) => event.startsWith("move ") || event.startsWith("set_labels ") || event.startsWith("create_folder "));
+  }
+
+  test("a generic file row moves to the resolved folder and is applied", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 101, kind: "file", target_path: CLIENT_PATH })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 101, flags: ["\\Seen"], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
+    expect(mutationEvents(events)).toEqual([`create_folder ${CLIENT_FOLDER}`, `move INBOX 101 -> ${CLIENT_FOLDER}`]);
+    expect(journal.rows.get("action-101")?.status).toBe("applied");
+    expect(parseActionState(journal.rows.get("action-101")?.to_state_json ?? null)).toEqual({
+      folder: CLIENT_FOLDER,
+      uid: 9000,
+      uid_validity: DESTINATION_UID_VALIDITY,
+      flags: ["\\Seen"],
+      labels: null,
+    });
+  });
+
+  test("a bound logical path files into the folder the operator named, and creates nothing", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 102, kind: "file", target_path: "Finances" })];
+    const journal = createFakeJournal({ events, pending, bindings: [{ logical_path: "Finances", folder: "INBOX/Finances - Ref" }] });
+    const provider = createFakeProvider({ events, messages: [{ uid: 102, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+    expect(mutationEvents(events)).toEqual(["move INBOX 102 -> INBOX/Finances - Ref"]);
+  });
+
+  test("a Gmail file row is a label write and never a move", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 103, kind: "file", folder: GMAIL_CANONICAL_FOLDER, target_path: CLIENT_PATH })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      gmail: true,
+      folder: GMAIL_CANONICAL_FOLDER,
+      trash_folder: GMAIL_TRASH_FOLDER,
+      messages: [{ uid: 103, flags: ["\\Seen"], labels: [GMAIL_INBOX_LABEL, "Work"] }],
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+    expect(events).toContain(`set_labels ${GMAIL_CANONICAL_FOLDER} 103 +[${CLIENT_FOLDER}] -[${GMAIL_INBOX_LABEL}]`);
+    expect(events.some((event) => event.startsWith("move "))).toBe(false);
+    // The UID survives a label write, and the destination label is what the message is now filed under.
+    expect(parseActionState(journal.rows.get("action-103")?.to_state_json ?? null)).toEqual({
+      folder: GMAIL_CANONICAL_FOLDER,
+      uid: 103,
+      uid_validity: UID_VALIDITY,
+      flags: ["\\Seen"],
+      labels: [CLIENT_FOLDER, "Work"],
+    });
+  });
+
+  test("a domain-scoped row that is not DKIM-aligned is queued, and nothing reaches the mailbox", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 104, kind: "file", target_path: CLIENT_PATH, policy_scope: "domain", dkim_aligned: null })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 104, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 0, failed: 0, deferred: 1 } satisfies ExecuteActionsResult);
+    const row = journal.rows.get("action-104");
+    expect(row?.status).toBe("deferred");
+    expect(row?.error).toContain("dkim_unaligned");
+    // The gate's whole point: a spoofable From decided a permanent destination, so the run must not have
+    // touched the server at all — not a move, not a label write, not even the folder it would file into.
+    expect(mutationEvents(events)).toEqual([]);
+    expect(row?.from_state_json).toBeNull();
+  });
+
+  test("an address-scoped row files without DKIM alignment — the gate is domain-scoped only", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 105, kind: "file", target_path: CLIENT_PATH, policy_scope: "address", dkim_aligned: null })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 105, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
+    expect(events).toContain(`move INBOX 105 -> ${CLIENT_FOLDER}`);
+  });
+
+  test("a row with no logical path is queued as no_mapping rather than failed", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 106, kind: "file", target_path: null })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 106, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 0, failed: 0, deferred: 1 } satisfies ExecuteActionsResult);
+    const row = journal.rows.get("action-106");
+    expect(row?.status).toBe("deferred");
+    expect(row?.error).toContain("no_mapping");
+    expect(mutationEvents(events)).toEqual([]);
+  });
+
+  test("a path that cannot be resolved queues every row wanting it, and the rest still file", async () => {
+    const events: string[] = [];
+    const pending = [
+      pendingRow({ uid: 107, kind: "file", target_path: CLIENT_PATH }),
+      pendingRow({ uid: 108, kind: "file", target_path: CLIENT_PATH }),
+      pendingRow({ uid: 109, kind: "file", target_path: "Finances" }),
+      pendingRow({ uid: 110, kind: "archive" }),
+    ];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      reject_created_folder: CLIENT_FOLDER,
+      messages: [110, 109, 108, 107].map((uid) => ({ uid, flags: [], labels: null })),
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 4, applied: 2, failed: 0, deferred: 2 } satisfies ExecuteActionsResult);
+    for (const action_id of ["action-107", "action-108"]) {
+      const row = journal.rows.get(action_id);
+      // Deferred, not failed: nothing was mutated, so binding the path to an existing folder makes the
+      // row retryable — which `failed` would not.
+      expect(row?.status).toBe("deferred");
+      expect(row?.error).toContain("unresolvable_folder");
+      expect(row?.from_state_json).toBeNull();
+    }
+    expect(events.filter((event) => event.startsWith("move "))).toEqual([
+      "move INBOX 109 -> Finances",
+      `move INBOX 110 -> ${ARCHIVE_FOLDER}`,
+    ]);
+  });
+
+  test("two rows sharing a path are one command behind exactly one CREATE", async () => {
+    const events: string[] = [];
+    const pending = [
+      pendingRow({ uid: 111, kind: "file", target_path: CLIENT_PATH }),
+      pendingRow({ uid: 112, kind: "file", target_path: CLIENT_PATH }),
+    ];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      messages: [
+        { uid: 111, flags: [], labels: null },
+        { uid: 112, flags: [], labels: null },
+      ],
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(2);
+    expect(events.filter((event) => event.startsWith("create_folder "))).toEqual([`create_folder ${CLIENT_FOLDER}`]);
+    expect(events.filter((event) => event.startsWith("move "))).toEqual([`move INBOX 111,112 -> ${CLIENT_FOLDER}`]);
+    expect(events.filter((event) => event === "load_filing_bindings")).toHaveLength(1);
+  });
+
+  test("archive and trash rows are untouched by filing, and stay their own commands", async () => {
+    const events: string[] = [];
+    const pending = [
+      pendingRow({ uid: 113, kind: "archive" }),
+      pendingRow({ uid: 114, kind: "file", target_path: CLIENT_PATH }),
+      pendingRow({ uid: 115, kind: "auto_trash" }),
+    ];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      messages: [113, 114, 115].map((uid) => ({ uid, flags: [], labels: null })),
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 3, applied: 3, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
+    expect(events.filter((event) => event.startsWith("move "))).toEqual([
+      `move INBOX 113 -> ${ARCHIVE_FOLDER}`,
+      `move INBOX 114 -> ${CLIENT_FOLDER}`,
+      `move INBOX 115 -> ${TRASH_FOLDER}`,
+    ]);
   });
 });

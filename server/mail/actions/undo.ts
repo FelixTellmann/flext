@@ -1,10 +1,11 @@
 import type { ActionJournal, ActionUndoLookup, UndoableActionRow } from "@server/mail/actions/executor";
 import { APPLIED_STATUS } from "@server/mail/actions/executor";
 import type { MailboxMutation, MailboxState, PlannedAction } from "@server/mail/actions/kinds";
-import { applyToState, inverseOf, isExecutableActionKind, planFor } from "@server/mail/actions/kinds";
+import { applyToState, FILE_KIND, inverseOf, isExecutableActionKind, planFor } from "@server/mail/actions/kinds";
 import type { ActionFolders, ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
 import { classifyMailboxError } from "@server/mail/errors";
+import { createFilingResolver } from "@server/mail/filing/resolver";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
 
@@ -42,6 +43,9 @@ export type UndoActionInput = {
   flavor: MailboxFlavor;
   provider: MailboxProvider;
   journal: ActionJournal;
+  // Needed for the same reason the executor needs it: reversing a `file` action means rebuilding the plan
+  // that filed it, and that plan names a real folder rendered with this server's delimiter.
+  hierarchy_delimiter: string;
 };
 
 export type UndoPolicyActionsInput = {
@@ -51,6 +55,7 @@ export type UndoPolicyActionsInput = {
   provider: MailboxProvider;
   journal: ActionJournal;
   batch_size: number;
+  hierarchy_delimiter: string;
 };
 
 // Where the message is right now. Starts as the address the executor recorded in to_state_json and is
@@ -111,20 +116,21 @@ function canonicalState(state: MailboxState): string {
   });
 }
 
+// `file_folder` arrives as a parameter, already resolved by the caller: this function is pure and stays
+// that way, so the plan it rebuilds is the same computation the executor ran rather than a second one
+// that happens to do IO.
 function requirePlan(
   row: UndoableActionRow,
   flavor: MailboxFlavor,
   folders: ActionFolders,
   from_state: ActionStateSnapshot,
+  file_folder: string | null,
 ): PlannedAction {
   const plan = planFor(row.kind, flavor, {
     source_folder: from_state.folder,
     archive_folder: folders.archive_folder,
     trash_folder: folders.trash_folder,
-    // Stopgap: no `file` row can be `applied` yet (executor.ts's own planFor call refuses filing with the
-    // same null), so this branch is unreachable today. Task 8 resolves the real destination folder and
-    // replaces this.
-    file_folder: null,
+    file_folder,
   });
   if (plan.outcome === "deferred") {
     throw new Error(
@@ -147,9 +153,10 @@ function replayStates(plan: PlannedAction, from_state: MailboxState, inverse: Ma
 }
 
 // The resume point, and the check that the rebuilt plan agrees with what actually ran, in one step.
-// planFor resolves its targets from the server's SPECIAL-USE attributes live, so a mailbox that renamed
-// or re-flagged its Archive folder since the action would yield a plan whose inverse moves the message
-// out of a folder it was never in — and that plan produces no state matching the recorded one, so it
+// Every target the plan names is resolved live — \Archive and \Trash from the server's SPECIAL-USE
+// attributes, a filing destination from the logical path — so a mailbox that renamed or re-flagged its
+// Archive folder, or an operator who re-bound a filing path, would yield a plan whose inverse moves the
+// message out of a folder it was never in. That plan produces no state matching the recorded one, so it
 // refuses instead of mutating. Index 0 is the untouched case; the last index means the sequence already
 // finished and only the status write was lost.
 function resumeIndexFor(states: MailboxState[], to_state: ActionStateSnapshot): number {
@@ -258,6 +265,10 @@ async function undoRow(input: {
   flavor: MailboxFlavor;
   provider: MailboxProvider;
   folders: ActionFolders;
+  // The row's filing destination, already resolved by undoRows. Null for every other kind, and for a
+  // `file` row carrying no logical path — planFor then refuses it with the same "filing destination"
+  // error a missing \Archive folder produces, which is the report that row deserves.
+  file_folder: string | null;
   live_address: LiveAddress | undefined;
   validities: Map<string, string>;
 }): Promise<RowResult> {
@@ -285,7 +296,7 @@ async function undoRow(input: {
   let states: MailboxState[];
   let first_index: number;
   try {
-    const plan = requirePlan(row, input.flavor, input.folders, from_state);
+    const plan = requirePlan(row, input.flavor, input.folders, from_state, input.file_folder);
     inverse = inverseOf(plan, from_state);
     states = replayStates(plan, from_state, inverse);
     first_index = resumeIndexFor(states, to_state);
@@ -343,17 +354,83 @@ async function undoRow(input: {
   };
 }
 
+type FilingResolution = { outcome: "resolved"; folder: string } | { outcome: "failed"; error: string };
+
+// The destination is RE-RESOLVED rather than read back out of to_state_json, and that is deliberate:
+// deriving it from the recorded states would be a second piece of code that knows what the `file`
+// mutation does to a state, which is the duplication kinds.ts exists to prevent. It is safe because
+// resumeIndexFor compares every projected state against the recorded to_state and refuses when none
+// matches — so a binding edited since the action yields a refusal, never a move out of a folder the
+// message was never in.
+//
+// One round for the distinct paths, exactly as the executor does it, so a bulk undo of 400 filed messages
+// resolves once rather than per row, and a resolution that throws fails only the rows wanting that path.
+async function resolveFilingDestinations(input: {
+  rows: UndoableActionRow[];
+  provider: MailboxProvider;
+  journal: ActionJournal;
+  mailbox_id: string;
+  hierarchy_delimiter: string;
+}): Promise<Map<string, FilingResolution>> {
+  const wanted_paths = new Set<string>();
+  for (const row of input.rows) {
+    if (row.kind === FILE_KIND && row.target_path !== null) {
+      wanted_paths.add(row.target_path);
+    }
+  }
+
+  const resolutions = new Map<string, FilingResolution>();
+  if (wanted_paths.size === 0) {
+    return resolutions;
+  }
+
+  const resolver = await createFilingResolver({
+    provider: input.provider,
+    bindings: await input.journal.loadFilingBindings({ mailbox_id: input.mailbox_id }),
+    delimiter: input.hierarchy_delimiter,
+  });
+  for (const logical_path of wanted_paths) {
+    try {
+      resolutions.set(logical_path, { outcome: "resolved", folder: await resolver.resolve(logical_path) });
+    } catch (error) {
+      resolutions.set(logical_path, { outcome: "failed", error: toRecordedError(error) });
+    }
+  }
+  return resolutions;
+}
+
+// Null means "this row needs no filing destination", which is every kind but `file` and a `file` row with
+// no logical path. The `?? failed` arm cannot fire — resolveFilingDestinations covers every path this
+// returns for — and exists so a future caller cannot turn a missing entry into a silent null destination.
+function filingResolutionFor(row: UndoableActionRow, resolutions: Map<string, FilingResolution>): FilingResolution | null {
+  if (row.kind !== FILE_KIND || row.target_path === null) {
+    return null;
+  }
+  return (
+    resolutions.get(row.target_path) ?? { outcome: "failed", error: `no resolution was attempted for the logical path ${row.target_path}.` }
+  );
+}
+
 async function undoRows(input: {
   rows: UndoableActionRow[];
   flavor: MailboxFlavor;
   provider: MailboxProvider;
   journal: ActionJournal;
+  mailbox_id: string;
+  hierarchy_delimiter: string;
 }): Promise<RowResult[]> {
   if (input.rows.length === 0) {
     return [];
   }
 
   const folders = await resolveActionFolders(input.provider);
+  const resolutions = await resolveFilingDestinations({
+    rows: input.rows,
+    provider: input.provider,
+    journal: input.journal,
+    mailbox_id: input.mailbox_id,
+    hierarchy_delimiter: input.hierarchy_delimiter,
+  });
   const validities = new Map<string, string>();
   // Keyed by message, not by action: consecutive undos of a chain walk the same message backwards, and
   // each move leaves it at an address no journal row knows about.
@@ -371,18 +448,27 @@ async function undoRows(input: {
       continue;
     }
 
+    // A path that cannot be resolved fails this row and mutates nothing, and it takes the ordinary
+    // failure route below so the reason is recorded exactly like every other refusal.
+    const resolution = filingResolutionFor(row, resolutions);
+
     let result: RowResult;
-    try {
-      result = await undoRow({
-        row,
-        flavor: input.flavor,
-        provider: input.provider,
-        folders,
-        live_address: live_addresses.get(row.message_id),
-        validities,
-      });
-    } catch (error) {
-      result = { outcome: "failed", action_id: row.action_id, error: toRecordedError(error) };
+    if (resolution !== null && resolution.outcome === "failed") {
+      result = { outcome: "failed", action_id: row.action_id, error: `unresolvable_folder: ${resolution.error}` };
+    } else {
+      try {
+        result = await undoRow({
+          row,
+          flavor: input.flavor,
+          provider: input.provider,
+          folders,
+          file_folder: resolution === null ? null : resolution.folder,
+          live_address: live_addresses.get(row.message_id),
+          validities,
+        });
+      } catch (error) {
+        result = { outcome: "failed", action_id: row.action_id, error: toRecordedError(error) };
+      }
     }
 
     results.push(result);
@@ -449,6 +535,7 @@ function classifyLookup(lookup: ActionUndoLookup | null, mailbox_id: string): Un
       from_state_json: lookup.from_state_json,
       to_state_json: lookup.to_state_json,
       applied_at: lookup.applied_at,
+      target_path: lookup.target_path,
     },
   };
 }
@@ -466,7 +553,14 @@ export async function undoAction(input: UndoActionInput): Promise<UndoActionResu
     return classified;
   }
 
-  const results = await undoRows({ rows: [classified.row], flavor: input.flavor, provider: input.provider, journal: input.journal });
+  const results = await undoRows({
+    rows: [classified.row],
+    flavor: input.flavor,
+    provider: input.provider,
+    journal: input.journal,
+    mailbox_id: input.mailbox_id,
+    hierarchy_delimiter: input.hierarchy_delimiter,
+  });
   const result = results[0];
   if (result === undefined || result.outcome === "skipped") {
     throw new Error(
@@ -497,7 +591,14 @@ export async function undoPolicyActions(input: UndoPolicyActionsInput): Promise<
     sender_policy_id: input.sender_policy_id,
     batch_size: input.batch_size,
   });
-  const results = await undoRows({ rows, flavor: input.flavor, provider: input.provider, journal: input.journal });
+  const results = await undoRows({
+    rows,
+    flavor: input.flavor,
+    provider: input.provider,
+    journal: input.journal,
+    mailbox_id: input.mailbox_id,
+    hierarchy_delimiter: input.hierarchy_delimiter,
+  });
 
   return {
     examined: rows.length,
