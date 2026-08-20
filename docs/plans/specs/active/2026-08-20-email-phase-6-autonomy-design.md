@@ -182,6 +182,13 @@ by default and stays closed until the operator records a real retention figure. 
 never *unlimited* — a trash that silently empties in seven days makes "reversible for the retention
 window" a false claim.
 
+**Editing a promoted policy demotes it.** A promotion is trust in the rule as its shadow record showed
+it; editing the rule's action, client, or scope makes that record describe a rule that no longer runs, so
+`upsertPolicy` resets `autonomy` to `shadow` on any edit rather than carrying the old value forward. This
+is the same reasoning as rescue detection suspending a policy instead of merely logging the mismatch — a
+changed rule has not yet earned trust for its new shape, and re-promotion is the operator's, through §4.3's
+dedicated procedure.
+
 ### 4.3 Opening the boundary that has been closed since Phase 3
 
 `upsertPolicy` rejects `"auto"` at the Zod boundary, deliberately, since Phase 3. **That rejection

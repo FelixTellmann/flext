@@ -132,6 +132,10 @@ const DAY_IN_MS = 24 * 60 * 60 * 1000;
 // this function reads that literally rather than inventing a bootstrap for it. The gate is specified so
 // the first auto_trash policy meets one that already exists, not one written to fit it.
 async function evaluateAutoTrashGate(policy: PolicyForGate, port: PromotionPort): Promise<PromotePolicyAutonomyResult> {
+  // Deliberately unscoped — do not narrow this to a caller-named mailbox. §8.2: a rescue suspends a policy
+  // everywhere because SenderPolicy has no mailbox scope, so the promotion gate is correspondingly global
+  // and errs strict: retention must be known on every mailbox before this policy may trash unattended on
+  // any of them.
   const missing_retention = await port.mailboxesMissingTrashRetention();
   if (missing_retention.length > 0) {
     return {

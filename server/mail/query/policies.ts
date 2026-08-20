@@ -83,7 +83,10 @@ export type PolicyIndex = {
   suppressed: Set<string>;
 };
 
-const upsert_policy_schema = z.object({
+// Exported so its own tests can pin behaviour without going through upsertPolicy's insert/select — every
+// DATABASE_URL variant points at the same production senderPolicy table, and this schema's own parsing
+// (see the "auto" refine and the demotion-on-edit default below) is what those tests need to exercise.
+export const upsert_policy_schema = z.object({
   scope: z.enum(["address", "domain"]),
   value: z.string().min(1).max(320),
   // §5.4/§8: a policy must never carry `purge`, the irreversible sweep action reserved for the separate
@@ -94,6 +97,16 @@ const upsert_policy_schema = z.object({
   topic: z.string().max(191).nullable().default(null),
   autonomy: z
     .enum(["shadow", "auto"])
+    // This default is also §8's demotion-on-edit, not a side effect of one: upsertPolicy carries no field
+    // that preserves an existing row's autonomy, so any edit that does not explicitly re-assert "auto"
+    // lands here and writes "shadow" over it, even if the row being edited was already promoted.
+    // That is deliberate, for the same reason a rescue suspends a policy rather than merely logging it: a
+    // promotion is trust in the rule AS THE SHADOW RECORD SHOWED IT. Editing the rule — its action,
+    // client, scope — makes that record describe a rule that no longer runs, while the promotion it
+    // justified would otherwise carry on unreviewed. Demoting says the changed rule has not yet earned
+    // trust for its new shape. Do not "fix" this by threading the current autonomy through as a default —
+    // that would let an edit silently keep unattended write access to a mailbox instead of asking the
+    // operator to promote it again through the dedicated procedure (autonomy.ts's promotePolicyAutonomy).
     .default("shadow")
     // §8: every policy is born in shadow, without exception, until Phase 4 gives the executor something
     // to promote into. A caller asking for "auto" made a mistake that must surface, not be silently
