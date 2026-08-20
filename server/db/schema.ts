@@ -261,6 +261,14 @@ export const syncRun = mysqlTable(
     messages_updated: int("messagesUpdated").default(0).notNull(),
     messages_vanished: int("messagesVanished").default(0).notNull(),
     error_message: text("errorMessage"),
+    // Non-failure detail from a run that still finished `ok` — most importantly the notes the three
+    // stages added by Phase 6 (rescue detection, the new-mail shadow pass, promotion + execution) emit
+    // when they catch. Those stages deliberately swallow their own failures so a broken classifier cannot
+    // cost the operator their mail, which without somewhere durable to land means an unmigrated column or
+    // a tripped loop-breaker fails silently on every run while the sync keeps reporting healthy. This
+    // column is where the failure becomes visible in the sync-run list; `errorMessage` stays reserved for
+    // a run whose status is `failed`.
+    note: text("note"),
   },
   (table) => ({
     mailboxStartedIndex: index("SyncRun_mailboxId_startedAt_idx").on(table.mailbox_id, table.started_at),

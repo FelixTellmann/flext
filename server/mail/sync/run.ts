@@ -310,6 +310,12 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
         messages_new: totals.new_messages,
         messages_updated: totals.flag_updates,
         messages_vanished: totals.vanished,
+        // The stage notes are persisted, not merely returned: rescue detection, the shadow pass and the
+        // promote/execute pair each swallow their own failure into a note so a broken safety net cannot
+        // cost the operator their mail. Returning that note only to the scheduled task's stdout would
+        // make an unmigrated column or a tripped MAX_CHUNK_ITERATIONS fail silently on every run forever,
+        // with the run still reporting `ok`. Here it lands in the sync-run list where it can be seen.
+        note: totals.note,
         updatedAt: finished_at,
       })
       .where(eq(syncRun.id, run_id));
@@ -398,9 +404,10 @@ async function runRepairOnce(): Promise<MailboxRunSummary> {
   try {
     const result = await repairSenderLinks({ batch_size: REPAIR_BATCH_SIZE });
     const finished_at = new Date();
+    const note = result.remaining > 0 ? `${result.remaining} message row(s) still have no matching Sender` : null;
     await db
       .update(syncRun)
-      .set({ status: "ok", finished_at, messages_updated: result.updated, updatedAt: finished_at })
+      .set({ status: "ok", finished_at, messages_updated: result.updated, note, updatedAt: finished_at })
       .where(eq(syncRun.id, run_id));
 
     return {
@@ -413,7 +420,7 @@ async function runRepairOnce(): Promise<MailboxRunSummary> {
       flag_updates: result.updated,
       vanished: 0,
       error: null,
-      note: result.remaining > 0 ? `${result.remaining} message row(s) still have no matching Sender` : null,
+      note,
     };
   } catch (error) {
     const failure = classifyMailboxError(error);

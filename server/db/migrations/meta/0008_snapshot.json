@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "e5d015af-42c2-4a06-8499-30c3d97d4926",
+  "id": "c899e123-9296-4d92-8fea-97ae6242b019",
   "prevId": "a0734488-340f-4801-b18d-b5ed5e38071c",
   "tables": {
     "Account": {
@@ -1704,6 +1704,13 @@
         },
         "errorMessage": {
           "name": "errorMessage",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "note": {
+          "name": "note",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

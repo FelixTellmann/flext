@@ -286,6 +286,9 @@ export const mailProcedures = {
       messages_updated: row.messages_updated,
       messages_vanished: row.messages_vanished,
       error_message: row.error_message,
+      // What a stage reported without failing the run — the only place a swallowed rescue/shadow/execute
+      // failure surfaces, since those stages catch on purpose and the run still ends `ok`.
+      note: row.note,
     }));
   }),
 
