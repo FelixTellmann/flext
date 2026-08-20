@@ -382,6 +382,10 @@ export const action = mysqlTable(
     statusDecidedAtIndex: index("Action_status_decidedAt_idx").on(table.status, table.decided_at),
     senderPolicyIdIndex: index("Action_senderPolicyId_idx").on(table.sender_policy_id),
     mailboxIdStatusIndex: index("Action_mailboxId_status_idx").on(table.mailbox_id, table.status),
+    // The rescue detector's candidate query: (mailboxId, status) equality then ORDER BY appliedAt with a
+    // LIMIT. Without appliedAt in the index MySQL filesorts every applied row of the mailbox on every
+    // sync just to return the oldest few — ~7,900 rows sorted to read 500.
+    mailboxIdStatusAppliedAtIndex: index("Action_mailboxId_status_appliedAt_idx").on(table.mailbox_id, table.status, table.applied_at),
     messageIdKindRunIdUnique: uniqueIndex("Action_messageId_kind_runId_key").on(table.message_id, table.kind, table.run_id),
   }),
 );

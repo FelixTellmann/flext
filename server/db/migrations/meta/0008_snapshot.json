@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "9d855107-3f84-42f9-adc0-7a4cb93364be",
+  "id": "e5d015af-42c2-4a06-8499-30c3d97d4926",
   "prevId": "a0734488-340f-4801-b18d-b5ed5e38071c",
   "tables": {
     "Account": {
@@ -290,6 +290,15 @@
           "columns": [
             "mailboxId",
             "status"
+          ],
+          "isUnique": false
+        },
+        "Action_mailboxId_status_appliedAt_idx": {
+          "name": "Action_mailboxId_status_appliedAt_idx",
+          "columns": [
+            "mailboxId",
+            "status",
+            "appliedAt"
           ],
           "isUnique": false
         },
