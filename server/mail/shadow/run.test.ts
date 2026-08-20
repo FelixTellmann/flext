@@ -13,6 +13,7 @@ describe("buildShadowActionRow", () => {
       message_id: "message-1",
       mailbox_id: "mailbox-1",
       decision: decisionFor(),
+      mapping: null,
       run_id: "run-1",
       now,
     });
@@ -25,6 +26,7 @@ describe("buildShadowActionRow", () => {
       message_id: "message-a",
       mailbox_id: "mailbox-a",
       decision: decisionFor(),
+      mapping: null,
       run_id: "run-shared",
       now,
     });
@@ -32,11 +34,51 @@ describe("buildShadowActionRow", () => {
       message_id: "message-b",
       mailbox_id: "mailbox-b",
       decision: decisionFor(),
+      mapping: null,
       run_id: "run-shared",
       now,
     });
     expect(row_a.mailbox_id).toBe("mailbox-a");
     expect(row_b.mailbox_id).toBe("mailbox-b");
+  });
+
+  test("a file decision from a policy with a client writes target_path as Clients/<client>", () => {
+    const now = new Date("2026-08-19T00:00:00.000Z");
+    const row = buildShadowActionRow({
+      message_id: "message-file",
+      mailbox_id: "mailbox-1",
+      decision: decisionFor({ action: "file", source: "address_policy", policy_id: "policy-1" }),
+      mapping: { client: "Acme Corp", topic: null },
+      run_id: "run-1",
+      now,
+    });
+    expect(row.target_path).toBe("Clients/Acme Corp");
+  });
+
+  test("a file decision from a policy with neither client nor topic writes a null target_path", () => {
+    const now = new Date("2026-08-19T00:00:00.000Z");
+    const row = buildShadowActionRow({
+      message_id: "message-file-no-mapping",
+      mailbox_id: "mailbox-1",
+      decision: decisionFor({ action: "file", source: "address_policy", policy_id: "policy-2" }),
+      mapping: { client: null, topic: null },
+      run_id: "run-1",
+      now,
+    });
+    expect(row.target_path).toBeNull();
+  });
+
+  test("an archive decision writes a null target_path even when its policy has a client set", () => {
+    const now = new Date("2026-08-19T00:00:00.000Z");
+    const row = buildShadowActionRow({
+      message_id: "message-archive",
+      mailbox_id: "mailbox-1",
+      decision: decisionFor({ action: "archive", source: "address_policy", policy_id: "policy-3" }),
+      mapping: { client: "Acme Corp", topic: null },
+      run_id: "run-1",
+      now,
+    });
+    expect(row.target_path).toBeNull();
   });
 });
 

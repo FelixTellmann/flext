@@ -4,6 +4,8 @@ import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
 import { decide } from "@server/mail/classify/rules";
 import { deriveSignals } from "@server/mail/classify/signals";
+import type { PolicyFilingMapping } from "@server/mail/filing/paths";
+import { logicalPathFor } from "@server/mail/filing/paths";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex } from "@server/mail/query/policies";
 import { isSentByMeSql, resolveThreadState, threadGroupKeySql } from "@server/mail/query/signal-sql";
@@ -52,6 +54,7 @@ export type ShadowActionRow = {
   run_id: string;
   decided_at: Date;
   updatedAt: Date;
+  target_path: string | null;
 };
 
 async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_folders: string[]): Promise<Map<string, ThreadFacts>> {
@@ -190,12 +193,33 @@ function buildDecisionInput(
   };
 }
 
+// The mapping must come from the policy that actually fired, not from any policy that merely matched —
+// matchPolicy (rules.ts) already resolved address-over-domain precedence, and decision.source names which
+// one won, so this looks the policy back up by that same scope rather than re-deriving precedence here.
+function filingMappingFor(
+  policy_index: PolicyIndex,
+  decision: Decision,
+  from_address: string,
+  from_domain: string,
+): PolicyFilingMapping | null {
+  if (decision.source === "address_policy") {
+    const row = policy_index.by_address.get(from_address.toLowerCase());
+    return row === undefined ? null : { client: row.client, topic: row.topic };
+  }
+  if (decision.source === "domain_policy") {
+    const row = policy_index.by_domain.get(from_domain.toLowerCase());
+    return row === undefined ? null : { client: row.client, topic: row.topic };
+  }
+  return null;
+}
+
 // status takes no parameter: every row this module can build is hardcoded to "shadow", so there is no
 // code path here that could produce "pending" or "applied" — Phase 4 owns writing those.
 export function buildShadowActionRow(input: {
   message_id: string;
   mailbox_id: string;
   decision: Decision;
+  mapping: PolicyFilingMapping | null;
   run_id: string;
   now: Date;
 }): ShadowActionRow {
@@ -209,6 +233,10 @@ export function buildShadowActionRow(input: {
     run_id: input.run_id,
     decided_at: input.now,
     updatedAt: input.now,
+    // The proposal, not the confirmation: §6's destination as the policy names it right now. Null on
+    // every kind but `file` — archive and trash take their targets from SPECIAL-USE at execution time,
+    // and a path on those rows would be a destination nothing reads.
+    target_path: input.decision.action === "file" && input.mapping !== null ? logicalPathFor(input.mapping) : null,
   };
 }
 
@@ -232,6 +260,7 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
         sender_policy_id: sql`VALUES(\`senderPolicyId\`)`,
         mailbox_id: sql`VALUES(\`mailboxId\`)`,
         source: sql`VALUES(\`source\`)`,
+        target_path: sql`VALUES(\`targetPath\`)`,
         decided_at: sql`VALUES(\`decidedAt\`)`,
         updatedAt: sql`VALUES(\`updatedAt\`)`,
       },
@@ -272,7 +301,8 @@ export async function runShadowPass(input: RunShadowPassInput): Promise<RunShado
       examined += 1;
       const decision = decide(buildDecisionInput(row, { policy_index, thread_facts, now }));
       by_decision[decision.action] = (by_decision[decision.action] ?? 0) + 1;
-      rows.push(buildShadowActionRow({ message_id: row.id, mailbox_id: input.mailbox_id, decision, run_id, now }));
+      const mapping = filingMappingFor(policy_index, decision, row.from_address ?? "", row.from_domain ?? "");
+      rows.push(buildShadowActionRow({ message_id: row.id, mailbox_id: input.mailbox_id, decision, mapping, run_id, now }));
     }
 
     await writeShadowBatch(rows);
