@@ -45,11 +45,10 @@ type RunTotals = {
 const RECLASSIFY_BATCH_SIZE = 100;
 
 // The ORPC rescue paths let an operator hand in a batch size; a scheduled sync has nobody to ask, so this
-// picks one. loadRescueCandidates (server/mail/rescue/journal.ts) already bounds the candidate set to
-// RESCUE_WINDOW_DAYS = 30 days of applied actions, so this is sized to clear one mailbox's normal 30 days
-// of applied actions in a single pass. Sizing it generously costs nothing if it overshoots: undershooting
-// is also safe, because the query orders oldest-applied-first and excludes anything already rescued, so
-// whatever a batch this size doesn't reach is simply picked up by the next scheduled run.
+// picks one. This is a CHUNK size, not a cap on total work: detectRescues loops with a keyset cursor until
+// the RESCUE_WINDOW_DAYS = 30-day candidate window (server/mail/rescue/journal.ts) is exhausted, reading
+// this many rows per round trip. A single batch-apply of ~7,900 actions costs ~4 chunks — a few queries,
+// nothing that needs tuning down for cost or up for coverage the way an actual cap would.
 const RESCUE_BATCH_SIZE = 2000;
 
 // Exported so a test can drive it with a fake RescuePort instead of the real drizzle-backed one — see

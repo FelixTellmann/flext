@@ -46,8 +46,19 @@ export type PolicySuspensionEntry = { sender_policy_id: string; suspended_at: Da
 //     idempotent and what stops it re-suspending a policy the operator deliberately un-suspended.
 //   - suspendPolicy is guarded `WHERE suspendedAt IS NULL` IN THE UPDATE. A policy already suspended
 //     keeps its original reason, because the first rescue is the one that explains it.
+// What the caller passed back after the previous chunk: the last row's ordering key. `null` means "start
+// from the beginning" — the same spelling loadRescueCandidates already used for "no floor" before chunking
+// existed, kept rather than inventing a second sentinel.
+export type RescueCursor = { applied_at: Date; action_id: string };
+
 export type RescuePort = {
-  loadRescueCandidates: (input: { mailbox_id: string; batch_size: number }) => Promise<RescueCandidateRow[]>;
+  // `batch_size` is a CHUNK size, not a cap: detectRescues calls this in a loop, advancing `after` by the
+  // last row of each chunk, until a chunk comes back smaller than `batch_size`. The implementation orders
+  // by (appliedAt, id) ascending and, when `after` is non-null, returns only rows strictly greater than it
+  // in that order — the same keyset pagination the window comment in journal.ts already argues for over
+  // OFFSET: the candidate set shifts under a running pass as rows get stamped, and OFFSET counts POSITION
+  // in that shifting set rather than identity.
+  loadRescueCandidates: (input: { mailbox_id: string; batch_size: number; after: RescueCursor | null }) => Promise<RescueCandidateRow[]>;
   // Set-based, and that is a property of the INTERFACE rather than an implementation detail: "the newest
   // sent-by-me message in this thread" cannot be answered per address without scanning the mailbox once
   // per candidate — `COALESCE(threadKey, id) = ?` is non-sargable and no (mailboxId, threadKey) index
@@ -121,83 +132,120 @@ export function rescueSuspensionReason(input: {
   )}. The rule is suspended until you clear it; the action is in the journal and can be undone.`;
 }
 
+// A loop breaker, not a size the pass is ever meant to reach: RESCUE_WINDOW_DAYS (journal.ts) already
+// bounds the candidate set, and a well-behaved cursor exhausts it (chunk smaller than batch_size) long
+// before this fires. 500 chunks covers a candidate set of 500 * batch_size — at the RESCUE_BATCH_SIZE the
+// sync uses, that is millions of rows, far past anything one mailbox's 30-day window will ever hold. If it
+// fires, the cursor has stopped advancing (an implementation bug) or the window has stopped bounding the
+// set (a design assumption broken elsewhere) — either way a bug worth surfacing loudly, never a truncation
+// to swallow silently and report as a clean `examined: N`.
+const MAX_CHUNK_ITERATIONS = 500;
+
 // Reads rows the sync already wrote and writes only to SenderPolicy and Action. No provider, no IMAP, no
 // mailbox mutation of any kind — the whole point of §8's rescue test is that it observes what the
 // operator did without touching what they did it to.
+//
+// Loops chunk by chunk rather than reading one batch: `batch_size` bounds ONE ROUND TRIP, not the total
+// work. A single bulk apply can land thousands of actions within the same second, all sorted to the front
+// of the 30-day window by appliedAt — a single-batch read would examine the same head of that window every
+// sync and never reach the rest until it aged out 30 days later, which is silent starvation dressed up as
+// a healthy `examined: N, rescued: 0`. Looping with a keyset cursor keeps memory and any one query bounded
+// by `batch_size` while still covering the whole window every pass.
 export async function detectRescues(input: { port: RescuePort; mailbox_id: string; batch_size: number }): Promise<DetectRescuesResult> {
   if (input.mailbox_id.length === 0) {
     throw new Error("detectRescues needs a mailbox id: an unscoped pass would suspend policies off evidence from every mailbox at once.");
   }
   if (!Number.isInteger(input.batch_size) || input.batch_size < 1) {
     throw new Error(
-      `detectRescues needs a positive batch size, got ${input.batch_size}. The caller bounds how much of the journal one run reads.`,
+      `detectRescues needs a positive batch size, got ${input.batch_size}. The caller bounds how much of the journal one round trip reads.`,
     );
   }
 
-  const candidates = await input.port.loadRescueCandidates({ mailbox_id: input.mailbox_id, batch_size: input.batch_size });
-
-  // Where each message lives NOW, which on generic IMAP is a different row from the one the action names.
-  // Joining on Action.messageId would read a dead row whose openedAt can never change again.
-  const addresses = candidates.map((candidate) =>
-    messageAddressForAction({ message_id: candidate.message_id, to_state_json: candidate.to_state_json }),
-  );
-  // One call for the whole batch, not one per candidate: the thread half of these facts costs a scan of
-  // the mailbox, and paying it per row is what turned this pass into a full cross product.
-  const live_by_key: Map<string, LiveMessageFacts> =
-    candidates.length === 0 ? new Map() : await input.port.loadLiveMessages({ mailbox_id: input.mailbox_id, addresses });
-
-  const stamps: RescueStampEntry[] = [];
-  const suspended_in_this_run = new Set<string>();
-  let unresolved = 0;
+  let cursor: RescueCursor | null = null;
+  let examined = 0;
+  let rescued = 0;
   let suspended = 0;
+  let unresolved = 0;
+  // Spans the WHOLE pass, not one chunk: a policy suspended by chunk 1 must not be attempted again — and
+  // miscounted as a fresh suspension — when chunk 3 carries another rescue against the same policy.
+  const suspended_in_this_run = new Set<string>();
 
-  for (const [index, candidate] of candidates.entries()) {
-    const address = addresses[index];
-    const live = address === undefined ? undefined : live_by_key.get(messageAddressKey(address));
-
-    if (live === undefined) {
-      unresolved += 1;
-      continue;
+  for (let iteration = 0; iteration < MAX_CHUNK_ITERATIONS; iteration += 1) {
+    const candidates = await input.port.loadRescueCandidates({ mailbox_id: input.mailbox_id, batch_size: input.batch_size, after: cursor });
+    if (candidates.length === 0) {
+      return { examined, rescued, suspended, unresolved };
     }
 
-    const verdict = judgeRescue({ applied_at: candidate.applied_at, opened_at: live.opened_at, last_reply_at: live.last_reply_at });
-    if (!verdict.rescued) {
-      continue;
+    // Where each message lives NOW, which on generic IMAP is a different row from the one the action
+    // names. Joining on Action.messageId would read a dead row whose openedAt can never change again.
+    const addresses = candidates.map((candidate) =>
+      messageAddressForAction({ message_id: candidate.message_id, to_state_json: candidate.to_state_json }),
+    );
+    // One call per CHUNK, not per candidate: the thread half of these facts costs a scan of the mailbox,
+    // and paying it per row is what turned this pass into a full cross product.
+    const live_by_key = await input.port.loadLiveMessages({ mailbox_id: input.mailbox_id, addresses });
+
+    const stamps: RescueStampEntry[] = [];
+
+    for (const [index, candidate] of candidates.entries()) {
+      examined += 1;
+      const address = addresses[index];
+      const live = address === undefined ? undefined : live_by_key.get(messageAddressKey(address));
+
+      if (live === undefined) {
+        unresolved += 1;
+        continue;
+      }
+
+      const verdict = judgeRescue({ applied_at: candidate.applied_at, opened_at: live.opened_at, last_reply_at: live.last_reply_at });
+      if (!verdict.rescued) {
+        continue;
+      }
+
+      stamps.push({ action_id: candidate.action_id, rescued_at: new Date() });
+
+      if (candidate.sender_policy_id === null) {
+        continue;
+      }
+      if (suspended_in_this_run.has(candidate.sender_policy_id)) {
+        continue;
+      }
+
+      // Suspend BEFORE stamping. A crash between the two re-detects the same rescue on the next pass and
+      // re-suspends harmlessly; the reverse order would stamp the action, hide it from every future pass,
+      // and leave the wrong rule running forever.
+      const newly_suspended = await input.port.suspendPolicy({
+        sender_policy_id: candidate.sender_policy_id,
+        suspended_at: new Date(),
+        reason: rescueSuspensionReason({
+          signal: verdict.signal,
+          at: verdict.at,
+          subject: live.subject,
+          kind: candidate.kind,
+          applied_at: candidate.applied_at,
+        }),
+      });
+      suspended_in_this_run.add(candidate.sender_policy_id);
+
+      if (newly_suspended) {
+        suspended += 1;
+      }
     }
 
-    stamps.push({ action_id: candidate.action_id, rescued_at: new Date() });
-
-    if (candidate.sender_policy_id === null) {
-      continue;
-    }
-    if (suspended_in_this_run.has(candidate.sender_policy_id)) {
-      continue;
+    if (stamps.length > 0) {
+      await input.port.markRescued(stamps);
+      rescued += stamps.length;
     }
 
-    // Suspend BEFORE stamping. A crash between the two re-detects the same rescue on the next pass and
-    // re-suspends harmlessly; the reverse order would stamp the action, hide it from every future pass,
-    // and leave the wrong rule running forever.
-    const newly_suspended = await input.port.suspendPolicy({
-      sender_policy_id: candidate.sender_policy_id,
-      suspended_at: new Date(),
-      reason: rescueSuspensionReason({
-        signal: verdict.signal,
-        at: verdict.at,
-        subject: live.subject,
-        kind: candidate.kind,
-        applied_at: candidate.applied_at,
-      }),
-    });
-    suspended_in_this_run.add(candidate.sender_policy_id);
-
-    if (newly_suspended) {
-      suspended += 1;
+    const last = candidates[candidates.length - 1];
+    if (last === undefined || candidates.length < input.batch_size) {
+      return { examined, rescued, suspended, unresolved };
     }
+    cursor = { applied_at: last.applied_at, action_id: last.action_id };
   }
 
-  if (stamps.length > 0) {
-    await input.port.markRescued(stamps);
-  }
-
-  return { examined: candidates.length, rescued: stamps.length, suspended, unresolved };
+  throw new Error(
+    `detectRescues did not finish within ${MAX_CHUNK_ITERATIONS} chunks of ${input.batch_size} for mailbox ${input.mailbox_id}. ` +
+      "Either the candidate set is far larger than a 30-day window should ever hold, or the pagination cursor stopped advancing.",
+  );
 }

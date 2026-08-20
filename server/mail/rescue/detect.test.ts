@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { serializeActionState } from "@server/mail/actions/state";
-import type { LiveMessageFacts, PolicySuspensionEntry, RescueCandidateRow, RescuePort, RescueStampEntry } from "@server/mail/rescue/detect";
+import type {
+  LiveMessageFacts,
+  PolicySuspensionEntry,
+  RescueCandidateRow,
+  RescueCursor,
+  RescuePort,
+  RescueStampEntry,
+} from "@server/mail/rescue/detect";
 import { detectRescues, messageAddressKey } from "@server/mail/rescue/detect";
 import type { MessageAddress } from "@server/mail/rescue/locate";
 
@@ -118,6 +125,66 @@ function createFakePort(input: {
       policies.set(entry.sender_policy_id, { suspended_at: entry.suspended_at, suspension_reason: entry.reason });
       return true;
     },
+  };
+}
+
+// A fake that actually implements keyset pagination on (appliedAt, id), the way the drizzle port in
+// journal.ts does — as opposed to createFakePort above, which just slices whatever `rows` it was given
+// and ignores `after` entirely. Needed to prove chunking end-to-end: a fake that already returns
+// everything in one call could never show the starvation this round of tests exists to catch.
+function createPaginatedFakePort(rows: RescueCandidateRow[]): RescuePort & { calls: (RescueCursor | null)[] } {
+  const sorted = [...rows].sort((a, b) => a.applied_at.getTime() - b.applied_at.getTime() || a.action_id.localeCompare(b.action_id));
+  const calls: (RescueCursor | null)[] = [];
+  const stamps = new Set<string>();
+
+  return {
+    calls,
+    loadRescueCandidates: async (query: {
+      mailbox_id: string;
+      batch_size: number;
+      after: RescueCursor | null;
+    }): Promise<RescueCandidateRow[]> => {
+      calls.push(query.after);
+      const start =
+        query.after === null
+          ? 0
+          : sorted.findIndex(
+              (row) =>
+                query.after !== null &&
+                row.applied_at.getTime() === query.after.applied_at.getTime() &&
+                row.action_id === query.after.action_id,
+            ) + 1;
+      return sorted.slice(start, start + query.batch_size).filter((row) => !stamps.has(row.action_id));
+    },
+    loadLiveMessages: async (query: { mailbox_id: string; addresses: MessageAddress[] }): Promise<Map<string, LiveMessageFacts>> => {
+      const found = new Map<string, LiveMessageFacts>();
+      for (const address of query.addresses) {
+        found.set(messageAddressKey(address), facts({ opened_at: OPENED_AFTER }));
+      }
+      return found;
+    },
+    markRescued: async (entries: RescueStampEntry[]): Promise<void> => {
+      for (const entry of entries) {
+        stamps.add(entry.action_id);
+      }
+    },
+    suspendPolicy: async (): Promise<boolean> => true,
+  };
+}
+
+// A fake whose cursor never moves: every call returns a full chunk regardless of `after`, simulating a
+// pagination bug where the cursor fails to advance. Used only to prove MAX_CHUNK_ITERATIONS actually stops
+// the loop and surfaces an error, rather than spinning or silently truncating.
+function createStuckFakePort(chunk_size: number): RescuePort {
+  const stuck_rows: RescueCandidateRow[] = Array.from({ length: chunk_size }, (_, index) =>
+    candidate({ action_id: `stuck-${index}`, sender_policy_id: null }),
+  );
+
+  return {
+    loadRescueCandidates: async (): Promise<RescueCandidateRow[]> => stuck_rows,
+    loadLiveMessages: async (): Promise<Map<string, LiveMessageFacts>> => new Map(),
+    markRescued: async (): Promise<void> => {},
+    suspendPolicy: async (): Promise<boolean> => false,
   };
 }
 
@@ -319,5 +386,55 @@ describe("detectRescues", () => {
 
     await expect(detectRescues({ port, mailbox_id: "", batch_size: 50 })).rejects.toThrow("needs a mailbox id");
     await expect(detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 0 })).rejects.toThrow("positive batch size");
+  });
+
+  // The regression this round of fixes exists for: a bulk apply lands far more candidates than one chunk
+  // holds, all sorted to the front of the window because they share (or nearly share) an appliedAt. Against
+  // the single-batch implementation this reads batch_size=2 once, examines 2 of 5, and reports a clean
+  // `examined: 2, rescued: 2` that hides the other 3 forever (until they age out of the 30-day window) —
+  // this test fails on that implementation because 5 !== 2.
+  test("a candidate set larger than one chunk is fully examined, across chunks", async () => {
+    const port = createPaginatedFakePort([
+      candidate({ action_id: "action-p1", sender_policy_id: "policy-p1" }),
+      candidate({ action_id: "action-p2", sender_policy_id: "policy-p2" }),
+      candidate({ action_id: "action-p3", sender_policy_id: "policy-p3" }),
+      candidate({ action_id: "action-p4", sender_policy_id: "policy-p4" }),
+      candidate({ action_id: "action-p5", sender_policy_id: "policy-p5" }),
+    ]);
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 2 });
+
+    expect(result).toEqual({ examined: 5, rescued: 5, suspended: 5, unresolved: 0 });
+  });
+
+  // Same scenario, checked from the other side: not just that every row eventually gets examined, but that
+  // each round trip moves the cursor past the row it just read rather than re-reading page one until the
+  // set happens to look exhausted from position zero.
+  test("each chunk's cursor is the previous chunk's last row, not a repeat of the first page", async () => {
+    const port = createPaginatedFakePort([
+      candidate({ action_id: "action-c1", sender_policy_id: "policy-c1" }),
+      candidate({ action_id: "action-c2", sender_policy_id: "policy-c2" }),
+      candidate({ action_id: "action-c3", sender_policy_id: "policy-c3" }),
+      candidate({ action_id: "action-c4", sender_policy_id: "policy-c4" }),
+      candidate({ action_id: "action-c5", sender_policy_id: "policy-c5" }),
+    ]);
+
+    await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 2 });
+
+    expect(port.calls).toEqual([
+      null,
+      { applied_at: APPLIED_AT, action_id: "action-c2" },
+      { applied_at: APPLIED_AT, action_id: "action-c4" },
+    ]);
+  });
+
+  // The loop breaker: a cursor that never advances must not spin forever or quietly under-report. It
+  // throws, and the throw names both the shape of the problem and the numbers involved, which is what lets
+  // a caller (server/mail/sync/run.ts's runRescuePassForMailbox) surface it as a real failure instead of a
+  // clean-looking summary.
+  test("a cursor that never advances hits the iteration cap and throws, rather than truncating silently", async () => {
+    const port = createStuckFakePort(2);
+
+    await expect(detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 2 })).rejects.toThrow("did not finish within 500 chunks of 2");
   });
 });

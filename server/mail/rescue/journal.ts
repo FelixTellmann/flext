@@ -2,13 +2,20 @@ import { db } from "@server/db/drizzle";
 import { action, mailbox, message, senderPolicy } from "@server/db/schema";
 import { APPLIED_STATUS } from "@server/mail/actions/executor";
 import { isSentByMeSql, threadGroupKeySql } from "@server/mail/query/signal-sql";
-import type { LiveMessageFacts, PolicySuspensionEntry, RescueCandidateRow, RescuePort, RescueStampEntry } from "@server/mail/rescue/detect";
+import type {
+  LiveMessageFacts,
+  PolicySuspensionEntry,
+  RescueCandidateRow,
+  RescueCursor,
+  RescuePort,
+  RescueStampEntry,
+} from "@server/mail/rescue/detect";
 import { messageAddressKey } from "@server/mail/rescue/detect";
 import type { MessageAddress } from "@server/mail/rescue/locate";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the rescue port, kept out of detect.ts so a test importing
 // the pass cannot reach a real connection: every DATABASE_URL variant points at the same production
@@ -66,14 +73,43 @@ async function loadMailboxSentConfig(mailbox_id: string): Promise<MailboxSentCon
 // the status filter exists: §8's test is "after appliedAt", so a row without one has nothing to judge.
 // The age window (see RESCUE_WINDOW_DAYS) is what stops the oldest rows from occupying every batch
 // forever; ascending order then means the longest-unjudged row inside the window goes first.
-async function loadRescueCandidates(input: { mailbox_id: string; batch_size: number }): Promise<RescueCandidateRow[]> {
+//
+// `after` is keyset pagination on that same (appliedAt, id) order, not OFFSET: detectRescues calls this
+// in a loop to walk the whole window chunk by chunk, and the candidate set shifts under a running pass as
+// rows get stamped — OFFSET counts POSITION in that shifting set, which skips or repeats rows depending on
+// which direction it shifted. `(appliedAt, id) > (after.appliedAt, after.actionId)` names an identity
+// instead, so a row stamped mid-pass simply stops matching `rescuedAt IS NULL` and drops out cleanly.
+async function loadRescueCandidates(input: {
+  mailbox_id: string;
+  batch_size: number;
+  after: RescueCursor | null;
+}): Promise<RescueCandidateRow[]> {
   if (input.mailbox_id.length === 0) {
     throw new Error("loadRescueCandidates needs a mailbox id: an unscoped sweep would read applied actions across every mailbox at once.");
   }
   if (!Number.isInteger(input.batch_size) || input.batch_size < 1) {
     throw new Error(
-      `loadRescueCandidates needs a positive batch size, got ${input.batch_size}. The caller bounds how much of the journal one run reads.`,
+      `loadRescueCandidates needs a positive batch size, got ${input.batch_size}. The caller bounds how much of the journal one round trip reads.`,
     );
+  }
+
+  const cursor_condition =
+    input.after === null
+      ? undefined
+      : (or(
+          gt(action.applied_at, input.after.applied_at),
+          and(eq(action.applied_at, input.after.applied_at), gt(action.id, input.after.action_id)),
+        ) as SQL);
+
+  const clauses: SQL[] = [
+    eq(action.status, APPLIED_STATUS) as SQL,
+    eq(action.mailbox_id, input.mailbox_id) as SQL,
+    isNull(action.rescued_at) as SQL,
+    isNotNull(action.applied_at) as SQL,
+    sql`${action.applied_at} > NOW() - INTERVAL ${sql.raw(String(RESCUE_WINDOW_DAYS))} DAY`,
+  ];
+  if (cursor_condition !== undefined) {
+    clauses.push(cursor_condition);
   }
 
   const rows = await db
@@ -86,15 +122,7 @@ async function loadRescueCandidates(input: { mailbox_id: string; batch_size: num
       applied_at: action.applied_at,
     })
     .from(action)
-    .where(
-      and(
-        eq(action.status, APPLIED_STATUS),
-        eq(action.mailbox_id, input.mailbox_id),
-        isNull(action.rescued_at),
-        isNotNull(action.applied_at),
-        sql`${action.applied_at} > NOW() - INTERVAL ${sql.raw(String(RESCUE_WINDOW_DAYS))} DAY`,
-      ),
-    )
+    .where(and(...clauses))
     .orderBy(asc(action.applied_at), asc(action.id))
     .limit(input.batch_size);
 
