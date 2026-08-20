@@ -5,6 +5,9 @@ import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { createImapProvider } from "@server/mail/providers/imap";
 import type { MailboxProvider } from "@server/mail/providers/types";
+import type { RescuePort } from "@server/mail/rescue/detect";
+import { detectRescues } from "@server/mail/rescue/detect";
+import { createDatabaseRescuePort } from "@server/mail/rescue/journal";
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
@@ -35,15 +38,41 @@ type RunTotals = {
   new_messages: number;
   flag_updates: number;
   vanished: number;
+  note: string | null;
 };
 
 // Matches BACKFILL_BATCH_SIZE: the reclassify walks the same UID space with the same per-batch fetch.
 const RECLASSIFY_BATCH_SIZE = 100;
 
+// The ORPC rescue paths let an operator hand in a batch size; a scheduled sync has nobody to ask, so this
+// picks one. loadRescueCandidates (server/mail/rescue/journal.ts) already bounds the candidate set to
+// RESCUE_WINDOW_DAYS = 30 days of applied actions, so this is sized to clear one mailbox's normal 30 days
+// of applied actions in a single pass. Sizing it generously costs nothing if it overshoots: undershooting
+// is also safe, because the query orders oldest-applied-first and excludes anything already rescued, so
+// whatever a batch this size doesn't reach is simply picked up by the next scheduled run.
+const RESCUE_BATCH_SIZE = 2000;
+
+// Exported so a test can drive it with a fake RescuePort instead of the real drizzle-backed one — see
+// server/mail/sync/run.test.ts. Detection is a safety net, not a precondition for delivering mail: a
+// throw here becomes a note on the run summary rather than a failed sync, following the same
+// `${kind}: ${message}` shape runMailboxSync's catch block already uses via classifyMailboxError.
+export async function runRescuePassForMailbox(input: { port: RescuePort; mailbox_id: string; batch_size: number }): Promise<string | null> {
+  try {
+    const result = await detectRescues({ port: input.port, mailbox_id: input.mailbox_id, batch_size: input.batch_size });
+    if (result.rescued === 0) {
+      return null;
+    }
+    return `rescue: examined ${result.examined}, rescued ${result.rescued}, suspended ${result.suspended}, unresolved ${result.unresolved}`;
+  } catch (error) {
+    const failure = classifyMailboxError(error);
+    return `rescue detection failed: ${failure.kind}: ${failure.message}`;
+  }
+}
+
 async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxRow; mode: SyncMode }): Promise<RunTotals> {
   if (input.mode === "backfill") {
     const result = await backfillMailbox({ provider: input.provider, mailbox_row: input.mailbox_row });
-    return { folders: result.folders, new_messages: result.messages, flag_updates: 0, vanished: 0 };
+    return { folders: result.folders, new_messages: result.messages, flag_updates: 0, vanished: 0, note: null };
   }
   if (input.mode === "repair") {
     throw new Error("repair is database-wide and must not run per mailbox; call repairSenderLinks directly");
@@ -51,7 +80,7 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
 
   const folders = await input.provider.listFolders();
   const walked = selectSyncFolders({ flavor: parseMailboxFlavor(input.mailbox_row.flavor), folders });
-  const totals: RunTotals = { folders: walked.length, new_messages: 0, flag_updates: 0, vanished: 0 };
+  const totals: RunTotals = { folders: walked.length, new_messages: 0, flag_updates: 0, vanished: 0, note: null };
 
   if (input.mode === "reclassify") {
     const result = await reclassifyMailbox({
@@ -79,6 +108,17 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
     totals.flag_updates += result.flag_updates;
     totals.vanished += result.vanished;
   }
+
+  // Rescue detection runs here: after the incremental fetch above has observed this run's `\Seen`
+  // transitions (openedAt is only fresh once that happens), and before anything else new is added to this
+  // mode. It must not run any earlier — a pass before the fetch reads stale rows and silently
+  // under-reports, which for a safety net is worse than an error.
+  totals.note = await runRescuePassForMailbox({
+    port: createDatabaseRescuePort(),
+    mailbox_id: input.mailbox_row.id,
+    batch_size: RESCUE_BATCH_SIZE,
+  });
+
   for (const folder of selectSentFolders(folders)) {
     await scanSentFolder({ provider: input.provider, mailbox_row: input.mailbox_row, folder });
   }
@@ -140,7 +180,7 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
       flag_updates: totals.flag_updates,
       vanished: totals.vanished,
       error: null,
-      note: null,
+      note: totals.note,
     };
   } catch (error) {
     // Per-mailbox isolation: a dead connection, an expired app password or an SPKI change fails this
