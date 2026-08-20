@@ -38,6 +38,12 @@ export type ActionJournalRow = {
   to_state: ActionStateSnapshot | null;
   decided_at: string | null;
   applied_at: string | null;
+  // §9 Task 9: when server/mail/rescue/detect.ts recorded that the operator opened or answered this
+  // message after this action landed. Null on every row rescue detection has not (yet, or ever) judged
+  // this way — the overwhelmingly common case. This is the ACTION's own record of the rescue; the
+  // sender policy's suspendedAt/suspensionReason (query/policies.ts's PolicyRow) is the RULE's record of
+  // the same event, and the two surfaces answer different questions (see journal.tsx / senders.tsx).
+  rescued_at: string | null;
   occurred_at: string;
   subject: string | null;
   from_address: string | null;
@@ -105,6 +111,7 @@ type JournalQueryRow = {
   decided_at: Date | null;
   applied_at: Date | null;
   created_at: Date;
+  rescued_at: Date | null;
   subject: string | null;
   from_address: string | null;
   internal_date: Date;
@@ -131,6 +138,7 @@ function toJournalRow(row: JournalQueryRow): ActionJournalRow {
     to_state: parseActionState(row.to_state_json),
     decided_at: row.decided_at?.toISOString() ?? null,
     applied_at: row.applied_at?.toISOString() ?? null,
+    rescued_at: row.rescued_at?.toISOString() ?? null,
     occurred_at: (row.applied_at ?? row.decided_at ?? row.created_at).toISOString(),
     subject: row.subject,
     from_address: row.from_address,
@@ -164,6 +172,7 @@ export async function listActionJournal(input: ListActionJournalInput): Promise<
       decided_at: action.decided_at,
       applied_at: action.applied_at,
       created_at: action.createdAt,
+      rescued_at: action.rescued_at,
       subject: message.subject,
       from_address: message.from_address,
       internal_date: message.internal_date,

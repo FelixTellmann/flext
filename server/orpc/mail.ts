@@ -21,6 +21,7 @@ import { ACTION_JOURNAL_STATUS_FILTERS, listActionJournal } from "@server/mail/q
 import { listFilingQueue } from "@server/mail/query/filing";
 import { listNeedsAction } from "@server/mail/query/needs-action";
 import {
+  clearPolicySuspension,
   deleteNeverTouchRule,
   deletePolicy,
   listNeverTouchRules,
@@ -390,6 +391,14 @@ export const mailProcedures = {
   demotePolicyAutonomy: authed
     .input(z.object({ sender_policy_id: z.string().min(1) }))
     .handler(async ({ input }) => demotePolicyAutonomy({ sender_policy_id: input.sender_policy_id, port: createDatabasePromotionPort() })),
+
+  // §9 / §3.4: the ONLY way a suspension is ever cleared — "only an operator clears a suspension", never
+  // automatically. Unconditional like demotePolicyAutonomy above, and deliberately separate from it:
+  // autonomy is untouched here, so a policy rescued while `auto` stays `auto` once cleared.
+  clearPolicySuspension: authed.input(z.object({ sender_policy_id: z.string().min(1) })).handler(async ({ input }) => {
+    await clearPolicySuspension(input.sender_policy_id);
+    return { outcome: "cleared" as const };
+  }),
 
   listNeverTouchRules: authed.handler(async () => listNeverTouchRules()),
 

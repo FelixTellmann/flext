@@ -277,6 +277,20 @@ export async function demotePolicyToShadow(sender_policy_id: string): Promise<vo
   await db.update(senderPolicy).set({ autonomy: "shadow", updatedAt: new Date() }).where(eq(senderPolicy.id, sender_policy_id));
 }
 
+// §9 Task 9 / §3.4: the operator-only inverse of a rescue's suspension (server/mail/rescue/journal.ts's
+// suspendPolicy). "Only an operator clears a suspension" (§3.4) — nothing in this codebase does it
+// automatically. Unconditional, like demotePolicyToShadow, and for the same reason: no precondition can
+// make this call unsafe, so refusing it would only make the operator's own mailbox harder to manage.
+// autonomy is left untouched, deliberately — clearing a suspension is not a promotion and not a demotion;
+// a policy rescued while promoted to `auto` stays `auto` once cleared, mirroring how the rescue that
+// suspended it never touched autonomy either.
+export async function clearPolicySuspension(sender_policy_id: string): Promise<void> {
+  await db
+    .update(senderPolicy)
+    .set({ suspended_at: null, suspension_reason: null, updatedAt: new Date() })
+    .where(eq(senderPolicy.id, sender_policy_id));
+}
+
 export async function listNeverTouchRules(): Promise<NeverTouchRow[]> {
   const rows = await db.select().from(neverTouchRule).orderBy(desc(neverTouchRule.createdAt));
   return rows.map(toNeverTouchRow);
