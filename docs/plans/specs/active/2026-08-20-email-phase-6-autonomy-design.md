@@ -94,6 +94,17 @@ message end up" is the two-spellings failure this project has now paid for seven
 | replied | a sent-by-me message in the same thread dated after `appliedAt` | yes |
 | starred | — | **no**, see below |
 
+**A promoted row the sync never executed stays `pending`, and only the operator can clear it.** Promotion
+and execution share one batch budget, and a crash between the two stages — or a row the executor marks
+`failed` — leaves rows promoted but unexecuted. The scheduled sync will not pick them up again: it
+executes only the ids it promoted in that run, and promotion reads only `shadow`.
+
+That is the safety contract working rather than failing. Recovering them automatically would mean the
+sync selecting pending rows by their policy's autonomy, which is precisely the join that would let a
+timer reach rows the operator approved by hand. The recovery path is the one the operator already has:
+Apply on `/admin/mail` loads every pending row for a mailbox, so a stranded row is one click away and
+never lost.
+
 **A message moved a second time becomes undetectable.** `to_state_json` records where the action put a
 message; if the operator then finds it and files it somewhere else themselves, that address points at a
 row the sync has since marked vanished, and the rescue cannot be seen. This is the same family as the
