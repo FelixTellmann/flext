@@ -955,6 +955,8 @@ one CREATE, not 400 sequential resolutions.
 - Modify: `server/mail/actions/executor.ts`
 - Modify: `server/mail/actions/journal.ts`
 - Modify: `server/mail/actions/executor.test.ts`
+- Modify: `server/mail/actions/undo.ts` (step 3b)
+- Modify: `server/mail/actions/undo.test.ts`
 - Modify: `server/orpc/mail.ts` (`applyPending` passes the delimiter)
 
 **Interfaces:**
@@ -1105,6 +1107,29 @@ already loads the mailbox row to get its flavour — read `hierarchyDelimiter` f
 it. A mailbox with an empty delimiter fails at `renderFolderPath`, which is the correct place: it means
 the mailbox was never synced.
 
+- [ ] **Step 3b: Undo has to resolve the destination too**
+
+`server/mail/actions/undo.ts:120` rebuilds the plan with `planFor` and inverts it, so an `applied` `file`
+row needs a real `file_folder` there as well — Task 6 left a `null` stopgap. Without this, undo of a
+filing throws instead of reversing, and undo is the whole trust surface §9 rests on.
+
+- `UndoableActionRow` and `ActionUndoLookup` gain `target_path: string | null`; both loaders select it.
+- `requirePlan` takes the resolved folder as a parameter rather than resolving inside itself — it is
+  pure today and must stay that way.
+- The undo entry points build a resolver exactly as the executor does and resolve `row.target_path`
+  before calling `requirePlan`.
+
+Re-resolving rather than reading the destination back out of `to_state_json` is deliberate, and safe for
+a reason already in this file: `resumeIndexFor` compares every projected state against the recorded
+`to_state` and refuses when none matches. A binding edited since the action would therefore produce a
+plan that matches nothing and a refusal, never a move out of a folder the message was never in — the
+same protection the comment above `resumeIndexFor` already claims for a renamed `\Archive` folder.
+Deriving the folder from the recorded states instead would mean a second piece of code that knows what
+the `file` mutation does to a state, which is the duplication `kinds.ts` exists to prevent.
+
+A `file` row that is `applied` with `target_path IS NULL` cannot be planned. That is data that should not
+exist; let the existing "no executable plan" throw report it rather than inventing a destination.
+
 - [ ] **Step 4: Extend `server/mail/actions/executor.test.ts`**
 
 - a generic `file` row with a resolvable path issues one move to the resolved folder and is `applied`
@@ -1112,6 +1137,9 @@ the mailbox was never synced.
 - a domain-scoped `file` row with `dkim_aligned: null` is `deferred` with a `dkim_unaligned` reason and
   **nothing is sent to the provider** — assert the fake recorded zero mutations
 - a `file` row with `target_path: null` is `deferred` with `no_mapping`
+- **undo of a filed message**, both flavours: the inverse moves it back to `from_state.folder` (generic)
+  or removes the destination label and restores `\Inbox` (gmail), and an undo whose resolved folder no
+  longer matches the recorded `to_state` REFUSES rather than mutating
 - a resolver that throws queues **every** row wanting that path, and rows wanting other paths still file
 - **two rows, same path, one CREATE** — the batching property this task exists to preserve
 - archive and trash rows are unaffected by all of the above
