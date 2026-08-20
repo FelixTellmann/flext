@@ -282,6 +282,10 @@ export const senderPolicy = mysqlTable(
     client: varchar("client", { length: 191 }),
     topic: varchar("topic", { length: 191 }),
     autonomy: varchar("autonomy", { length: 191 }).default("shadow").notNull(),
+    // When the operator promoted this policy to autonomy "auto". §8's auto_trash gate measures "a full
+    // shadow cycle" from here, so it must be the promotion moment and not createdAt — a policy that sat
+    // in shadow for a year has not thereby earned anything.
+    autonomy_promoted_at: datetime("autonomyPromotedAt", { fsp: 3 }),
     source: varchar("source", { length: 191 }).notNull(),
     suspended_at: datetime("suspendedAt", { fsp: 3 }),
     suspension_reason: text("suspensionReason"),
@@ -369,6 +373,10 @@ export const action = mysqlTable(
     decided_at: datetime("decidedAt", { fsp: 3 }),
     applied_at: datetime("appliedAt", { fsp: 3 }),
     error: text("error"),
+    // When a rescue was detected against this action. Makes detection idempotent — a rescue already
+    // recorded must not re-suspend a policy the operator has since deliberately cleared — and lets the
+    // journal show WHICH action was rescued rather than only that some policy is suspended.
+    rescued_at: datetime("rescuedAt", { fsp: 3 }),
   },
   (table) => ({
     statusDecidedAtIndex: index("Action_status_decidedAt_idx").on(table.status, table.decided_at),
