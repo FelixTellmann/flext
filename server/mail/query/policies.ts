@@ -198,6 +198,27 @@ export async function listPolicies(filter: PolicyFilter): Promise<PolicyRow[]> {
   return rows.map(toPolicyRow);
 }
 
+// Every column an EDIT of an existing policy is allowed to overwrite. `suspended_at` and
+// `suspension_reason` are absent, and adding them back is a data-loss edit — §3.4: an edit "does not
+// un-suspend anything, ever". Both fields default to null on upsert_policy_schema and both UI callers
+// (the sender screen's action buttons, including the BULK one) omit them, so a SET clause carrying them
+// would write null over a live rescue suspension and destroy the reason text with it — turning a routine
+// "mark these as archive" click into a silent re-arming of the rule that just got rescued.
+// clearPolicySuspension below is the only path that may lift one, because lifting one is a deliberate
+// operator act with the reason in front of them.
+// Exported so policies.test.ts can pin the absence: this is the second SET clause in this codebase to
+// quietly destroy state, and the first cost two review rounds in Phase 4.
+export function policyEditColumns(parsed: z.infer<typeof upsert_policy_schema>, now: Date) {
+  return {
+    action: parsed.action,
+    client: parsed.client,
+    topic: parsed.topic,
+    autonomy: parsed.autonomy,
+    source: parsed.source,
+    updatedAt: now,
+  };
+}
+
 export async function upsertPolicy(input: UpsertPolicyInput): Promise<PolicyRow> {
   const parsed = upsert_policy_schema.parse(input);
   const now = new Date();
@@ -207,27 +228,13 @@ export async function upsertPolicy(input: UpsertPolicyInput): Promise<PolicyRow>
     .values({
       scope: parsed.scope,
       value: parsed.value,
-      action: parsed.action,
-      client: parsed.client,
-      topic: parsed.topic,
-      autonomy: parsed.autonomy,
-      source: parsed.source,
+      // A row that does not exist yet has no suspension to preserve, so the INSERT half carries both
+      // fields; the UPDATE half must not, which is what policyEditColumns above is for.
       suspended_at: parsed.suspended_at,
       suspension_reason: parsed.suspension_reason,
-      updatedAt: now,
+      ...policyEditColumns(parsed, now),
     })
-    .onDuplicateKeyUpdate({
-      set: {
-        action: parsed.action,
-        client: parsed.client,
-        topic: parsed.topic,
-        autonomy: parsed.autonomy,
-        source: parsed.source,
-        suspended_at: parsed.suspended_at,
-        suspension_reason: parsed.suspension_reason,
-        updatedAt: now,
-      },
-    });
+    .onDuplicateKeyUpdate({ set: policyEditColumns(parsed, now) });
 
   const [row] = await db
     .select()

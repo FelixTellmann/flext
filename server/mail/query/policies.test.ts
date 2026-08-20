@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { upsert_policy_schema, upsertPolicy } from "@server/mail/query/policies";
+import { policyEditColumns, upsert_policy_schema, upsertPolicy } from "@server/mail/query/policies";
 
 // §8, §4.3: upsertPolicy has rejected autonomy "auto" at its Zod boundary since Phase 3, and Task 8 does
 // NOT weaken that — promotion is a dedicated procedure (autonomy.ts's promotePolicyAutonomy), never a
@@ -38,5 +38,43 @@ describe("editing a policy demotes it (§4.2 — deliberate, not a default's sid
     });
 
     expect(parsed.autonomy).toBe("shadow");
+  });
+});
+
+// §3.4, plainly: an edit "does not un-suspend anything, ever". upsertPolicy's onDuplicateKeyUpdate used
+// to carry suspended_at and suspension_reason, both of which default to null on the schema and are
+// omitted by both UI callers — including the sender screen's BULK action button. So assigning a policy
+// wrote null over a live rescue suspension and destroyed the reason text, silently re-arming the rule the
+// rescue had just stopped. The columns an edit may write are pinned here rather than inside the query
+// builder because that is where the loss happened: a SET clause is easy to extend and impossible to see.
+describe("editing a policy never clears a rescue suspension (§3.4)", () => {
+  const parsed = upsert_policy_schema.parse({
+    scope: "address",
+    value: "someone@example.com",
+    action: "archive",
+    source: "test",
+  });
+
+  test("the edit's SET clause carries neither suspended_at nor suspension_reason", () => {
+    const columns = Object.keys(policyEditColumns(parsed, new Date()));
+
+    expect(columns).not.toContain("suspended_at");
+    expect(columns).not.toContain("suspension_reason");
+  });
+
+  test("it still writes everything an edit is meant to change", () => {
+    expect(Object.keys(policyEditColumns(parsed, new Date())).sort()).toEqual([
+      "action",
+      "autonomy",
+      "client",
+      "source",
+      "topic",
+      "updatedAt",
+    ]);
+  });
+
+  test("the schema still defaults both suspension fields to null — the reason the SET clause was destructive", () => {
+    expect(parsed.suspended_at).toBeNull();
+    expect(parsed.suspension_reason).toBeNull();
   });
 });
