@@ -17,6 +17,7 @@ import { createImapProvider } from "@server/mail/providers/imap";
 import { observeCertificate } from "@server/mail/providers/tls";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import { ACTION_JOURNAL_STATUS_FILTERS, listActionJournal } from "@server/mail/query/actions";
+import { listFilingQueue } from "@server/mail/query/filing";
 import { listNeedsAction } from "@server/mail/query/needs-action";
 import {
   deleteNeverTouchRule,
@@ -446,6 +447,25 @@ export const mailProcedures = {
       });
       return { scope: "policy" as const, ...result };
     }),
+
+  // Task 10's trust-surface read: every `file` action parked at kind = 'file' AND status = 'deferred',
+  // the half of §9's journal that asks the operator for a decision instead of reporting one. No mailbox
+  // connection opens for a read.
+  listFilingQueue: authed
+    .input(
+      z.object({
+        mailbox_id: z.string().nullable().default(null),
+        limit: z.number().int().positive().max(200).default(50),
+        offset: z.number().int().min(0).default(0),
+      }),
+    )
+    .handler(async ({ input }) =>
+      listFilingQueue({
+        mailbox_id: input.mailbox_id,
+        limit: input.limit,
+        offset: input.offset,
+      }),
+    ),
 
   // Task 9's path out of `deferred`: the operator confirms a destination for one queued `file` row.
   // Nothing here opens a mailbox connection — like approveDecision, this only moves an Action row's

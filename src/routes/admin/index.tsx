@@ -11,6 +11,11 @@ const admin_links = [
     label: "Action Journal",
     description: "Every action ever decided or taken, with the state it recorded before acting — and how to reverse it.",
   },
+  {
+    to: "/admin/filing",
+    label: "Filing Queue",
+    description: "`file` actions the filing gate could not resolve on its own — confirm or correct a destination to unstick one.",
+  },
 ] as const;
 
 const AdminHome: FC = () => {
