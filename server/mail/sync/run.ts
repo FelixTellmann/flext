@@ -1,5 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, syncRun } from "@server/db/schema";
+import { createDatabaseAutonomyPort, promoteAutoPolicies } from "@server/mail/actions/autonomy";
 import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
@@ -114,12 +115,6 @@ export type ClassifyAndExecuteInput = {
 
 export type AutoPromotionInput = { mailbox_id: string; run_id: string };
 
-// TASK 7 SEAM. Task 7 replaces this body with the promotion that moves every shadow row whose sender
-// policy sits at autonomy `auto` to `pending`, and returns the ids of exactly the rows it moved. Until
-// then nothing can be at `auto` — all 103 sender policies are at `shadow`, and Task 8 builds the
-// procedure that could change one — so it promotes nothing and returns nothing, which leaves the executor
-// below unreached.
-//
 // THE RETURN TYPE IS THE SAFETY CONTRACT, not an implementation detail. `pending` is also the status
 // operator approval produces, so an executor that loaded the whole pending set would apply, on a
 // fifteen-minute timer, decisions the operator approved intending to review them before pressing Apply.
@@ -129,8 +124,20 @@ export type AutoPromotionInput = { mailbox_id: string; run_id: string };
 // Do not widen this to "everything pending for the mailbox", and do not let the executor re-derive the
 // set by joining to the policy's autonomy: a row's autonomy at execution time is not necessarily what
 // promoted it, and an id list is precise where a join is a guess.
-export async function promoteAutoActions(_input: AutoPromotionInput): Promise<string[]> {
-  return [];
+//
+// A thin wrapper around promoteAutoPolicies, wiring the real database-backed port and journal. The
+// promotion logic itself — including the suspension guard — lives in server/mail/actions/autonomy.ts,
+// where it can be exercised over fakes instead of the production database. `run_id` rides on
+// AutoPromotionInput for symmetry with the rest of this pipeline's per-mailbox inputs; promotion has no
+// use for it, since eligibility is a property of the policy and the shadow rows, not of which sync run is
+// asking.
+export async function promoteAutoActions(input: AutoPromotionInput): Promise<string[]> {
+  return promoteAutoPolicies({
+    mailbox_id: input.mailbox_id,
+    batch_size: EXECUTOR_BATCH_SIZE,
+    port: createDatabaseAutonomyPort(),
+    journal: createDatabaseJournal(),
+  });
 }
 
 // Classification and execution, unattended. Until this existed both halves ran only when the operator

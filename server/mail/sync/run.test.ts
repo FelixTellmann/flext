@@ -22,7 +22,7 @@ import type {
 } from "@server/mail/providers/types";
 import type { RescuePort } from "@server/mail/rescue/detect";
 import type { RunShadowPassInput, RunShadowPassResult } from "@server/mail/shadow/run";
-import { promoteAutoActions, runClassifyAndExecutePassForMailbox, runRescuePassForMailbox } from "@server/mail/sync/run";
+import { runClassifyAndExecutePassForMailbox, runRescuePassForMailbox } from "@server/mail/sync/run";
 
 function okPort(): RescuePort {
   return {
@@ -226,9 +226,10 @@ function shadowResult(examined: number): RunShadowPassResult {
   return { examined, journaled: examined, by_decision: { keep: examined } };
 }
 
-// THE GUARD. Every one of the 103 sender policies is at autonomy `shadow`, nothing can be at `auto` until
-// Task 8 builds the promotion procedure, and the Task 7 seam inside the pipeline is empty — so the shadow
-// pass writes rows at `shadow`, nothing promotes them, and the executor that now runs unattended must
+// THE GUARD. Every one of the 103 sender policies is at autonomy `shadow` in production today, so a real
+// promotion pass would find nothing to promote — but proving that here would mean querying the real
+// database, which server/mail/actions/autonomy.test.ts covers with fakes instead. This test stands in the
+// promotion result production would produce right now (empty) and asserts what the executor does with it:
 // reach a real mailbox and change nothing in it. The real executeActions runs here, not a fake: the claim
 // is about what the executor does, so substituting it would prove nothing.
 test("a sync with no auto policies reaches the executor and issues zero mailbox mutations", async () => {
@@ -247,7 +248,7 @@ test("a sync with no auto policies reaches the executor and issues zero mailbox 
     journal,
     run_id: "sweep-run-1",
     shadowPass: async () => shadowResult(3),
-    promoteAutoActions,
+    promoteAutoActions: async () => [],
     executePendingActions: executeActions,
   });
 
@@ -380,9 +381,9 @@ test("an operator-approved pending row is never executed by the scheduled sync",
     journal,
     run_id: "sweep-run-1",
     shadowPass: async () => shadowResult(2),
-    // The real seam: with no policy at `auto` it promotes nothing, so this run has nothing of its own to
-    // execute and the approved rows are none of its business.
-    promoteAutoActions,
+    // Standing in for the real promoteAutoActions: with no policy at `auto` it promotes nothing, so this
+    // run has nothing of its own to execute and the approved rows are none of its business.
+    promoteAutoActions: async () => [],
     executePendingActions: executeActions,
   });
 
