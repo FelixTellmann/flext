@@ -12,7 +12,7 @@ import { loadPolicyIndex } from "@server/mail/query/policies";
 import { isSentByMeSql, resolveThreadState, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, notExists, sql } from "drizzle-orm";
 
 // run_id is an input rather than always minted here because a sweep across several mailboxes is ONE
 // shadow run: getShadowReport and getShadowSummary both scope to a single latest run id, so four
@@ -96,10 +96,22 @@ async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_f
   return facts;
 }
 
-async function fetchMessageBatch(input: { mailbox_id: string; after_id: string | null; batch_size: number }): Promise<ShadowMessageRow[]> {
+type MessageBatchQueryInput = { mailbox_id: string; after_id: string | null; batch_size: number; unclassified_only: boolean };
+
+// Exported unexecuted so server/mail/shadow/run.test.ts can assert the scheduled path's NOT EXISTS is
+// actually emitted without opening a connection: every DATABASE_URL points at the same production MySQL,
+// so a test that ran this would read live data. Calling .toSQL() on the returned builder connects to
+// nothing.
+export function messageBatchQuery(input: MessageBatchQueryInput) {
   const conditions = [eq(message.mailbox_id, input.mailbox_id), isNull(message.disappeared_at)];
   if (input.after_id !== null) {
     conditions.push(gt(message.id, input.after_id));
+  }
+  if (input.unclassified_only) {
+    // Messages that have never been classified at all — no Action row of any kind, run or status. Cheap
+    // because Action_messageId_kind_runId_key leads on messageId. The keyset cursor above still drives the
+    // walk, so writing this batch's rows cannot make the next batch skip or repeat anything.
+    conditions.push(notExists(db.select({ classified: sql`1` }).from(action).where(eq(action.message_id, message.id))));
   }
 
   return db
@@ -130,6 +142,10 @@ async function fetchMessageBatch(input: { mailbox_id: string; after_id: string |
     .where(and(...conditions))
     .orderBy(asc(message.id))
     .limit(input.batch_size);
+}
+
+async function fetchMessageBatch(input: MessageBatchQueryInput): Promise<ShadowMessageRow[]> {
+  return messageBatchQuery(input);
 }
 
 function toSenderPolicyInput(row: PolicyRow): SenderPolicyInput {
@@ -277,7 +293,7 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
     });
 }
 
-export async function runShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
+async function runPass(input: RunShadowPassInput & { unclassified_only: boolean }): Promise<RunShadowPassResult> {
   const run_id = input.run_id ?? crypto.randomUUID();
   const now = new Date();
 
@@ -301,7 +317,12 @@ export async function runShadowPass(input: RunShadowPassInput): Promise<RunShado
   let after_id: string | null = null;
 
   for (;;) {
-    const batch = await fetchMessageBatch({ mailbox_id: input.mailbox_id, after_id, batch_size: input.batch_size });
+    const batch = await fetchMessageBatch({
+      mailbox_id: input.mailbox_id,
+      after_id,
+      batch_size: input.batch_size,
+      unclassified_only: input.unclassified_only,
+    });
     if (batch.length === 0) {
       break;
     }
@@ -325,4 +346,24 @@ export async function runShadowPass(input: RunShadowPassInput): Promise<RunShado
   }
 
   return { examined, journaled, by_decision };
+}
+
+// The operator's sweep, unchanged: every live message in the mailbox is re-decided. This is the pass a
+// policy edit calls for, and it stays something a human asks for from /admin/shadow, because it is also
+// the expensive one — one Action row per message per run id.
+export async function runShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
+  return runPass({ ...input, unclassified_only: false });
+}
+
+// The scheduled sync's pass: only messages that have never been classified. New mail is the only input a
+// scheduled classification can have seen change, so re-deciding the rest buys nothing and costs a full
+// sweep plus tens of thousands of Action rows every fifteen minutes, growing a table that already holds
+// 44,102 rows without bound and invisibly.
+//
+// What this deliberately gives up: a policy edit does NOT retroactively re-classify old mail on the next
+// sync. That is the intended behaviour, not a gap — silently re-deciding thousands of already-reviewed
+// messages because a rule changed is exactly what the shadow-and-review cycle exists to prevent. The
+// operator re-sweeps from /admin/shadow when they mean to.
+export async function runNewMailShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
+  return runPass({ ...input, unclassified_only: true });
 }

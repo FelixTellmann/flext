@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Decision } from "@server/mail/classify/rules";
-import { buildShadowActionRow } from "@server/mail/shadow/run";
+import { buildShadowActionRow, messageBatchQuery } from "@server/mail/shadow/run";
 
 function decisionFor(overrides: Partial<Decision> = {}): Decision {
   return { action: "archive", source: "derived", policy_id: null, suppressed_by: null, reasons: [], ...overrides };
@@ -97,5 +97,28 @@ describe("writeShadowBatch's ON DUPLICATE KEY UPDATE clause", () => {
     expect(set_clause).toContain("sender_policy_id:");
     expect(set_clause).toContain("updatedAt:");
     expect(set_clause).not.toContain("status");
+  });
+});
+
+// The scheduled sync must not re-classify the whole mailbox every fifteen minutes: it classifies only
+// messages that have never been classified, which is one NOT EXISTS against Action on messageId. The
+// query is inspected rather than executed — every DATABASE_URL points at the same production MySQL, so a
+// behavioural test here would read live data.
+describe("the scheduled classification's message batch", () => {
+  test("skips messages that already have an Action row", () => {
+    const sql = messageBatchQuery({ mailbox_id: "mailbox-1", after_id: null, batch_size: 500, unclassified_only: true }).toSQL().sql;
+
+    expect(sql).toContain("not exists");
+    expect(sql).toContain("`Action`");
+    // Correlated on the message, not on run or status: a message classified in ANY earlier run is left
+    // alone, which is what bounds the scheduled pass to newly arrived mail.
+    expect(sql).toContain("`Action`.`messageId` = `Message`.`id`");
+  });
+
+  test("the operator's full sweep still classifies every live message", () => {
+    const sql = messageBatchQuery({ mailbox_id: "mailbox-1", after_id: null, batch_size: 500, unclassified_only: false }).toSQL().sql;
+
+    expect(sql).not.toContain("not exists");
+    expect(sql).not.toContain("`Action`");
   });
 });
