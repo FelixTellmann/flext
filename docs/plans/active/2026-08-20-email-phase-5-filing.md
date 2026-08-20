@@ -1359,7 +1359,7 @@ the derived path rather than the columns.
 | `Clients/Listify` | `no-reply@listifyregistry.com`, `noreply@shopify.com`, `partners@shopify.com`, `app-audits@shopify.zendesk.com`, `no-reply@lunalemon.dev` |
 | `Clients/KidsLiving` | `support@bobgo.co.za` |
 | `Ops/Shopify` | `mailer@shopify.com`, `store+26179660@t.shopifyemail.com` |
-| `Finances` | the sixteen Group E senders — FNB ×3, PayPal, bobpay, Google payments ×2, takealot, stripe.com, sendgrid, Shopify billing, Figma ×2, Apple, xneelo billing, Anthropic — **plus** `noreply@sars.gov.za` and `donotreply@usvisa-info.com` |
+| `Finances` | the sixteen Group E senders — FNB ×3, PayPal, bobpay, Google payments ×2, takealot, stripe.com, sendgrid, Shopify billing, Figma ×2, Apple, xneelo billing, Anthropic — **plus all six** of `seed-sender-policies.ts`'s Group H tax/banking/legal records: `noreply@sars.gov.za`, `donotreply@usvisa-info.com`, `no-reply@carta.com`, `no-reply@deel.support`, `noreply@dkb.de`, `noreply@wise.com` |
 | `Personal/Tennis` | `no-reply@booknplay.co.za` |
 | `Personal/Restaurants` | `reservations@mailer.dineplan.com` |
 | `Personal/Medical` | `dailyclaims@discovery.co.za` |
@@ -1368,6 +1368,11 @@ the derived path rather than the columns.
 Everything above uses the `topic` axis except the two `Clients/` groups, which use `client`. A sender in
 the `file` set that this table does not name keeps `client` and `topic` null, and its messages queue as
 `no_mapping` — which is correct and visible, not a silent gap.
+
+`contact-form@tellmann.co.za` stays unmapped on purpose. It is inbound leads from the operator's own
+site, and the triage doc calls it "worth a look before filing" — the one `file` policy whose destination
+is a judgement the operator has not made yet. It queues as `no_mapping`, which is the visible, correct
+outcome for an undecided mapping.
 
 **No `Finances/Tax` split.** Bindings match a logical path exactly and a sub-path does NOT inherit its
 parent's binding, so with `Finances` bound to `INBOX.Finances - Ref`, a `Finances/Tax` path would render
@@ -1395,6 +1400,22 @@ the script's output rather than omitting them silently.
 
 The three Gmail mailboxes get **no** bindings — they have no user labels at all, so every path renders
 and is created on first use.
+
+- [ ] **Step 1b: Refuse to apply against an unmigrated database**
+
+The apply path writes policy mappings first and `FilingBinding` rows second, and nothing in this repo
+uses `db.transaction`. So `--apply` before migration `0006` commits all 37 mappings and then throws on
+the first binding insert — leaving mappings with NO bindings, which is worse than doing nothing:
+`Finances` mapped but unbound makes filing render and CREATE a fresh `INBOX.Finances` instead of using
+the operator's `INBOX.Finances - Ref` and its 99 messages, and `INBOX.Clients.KidsLiving` beside the real
+`INBOX.KidsLiving` and its 303.
+
+Two changes, both before any write:
+- A preflight existence probe for `FilingBinding` — a caught `SELECT 1 … LIMIT 1`, or an
+  `information_schema.tables` lookup — that aborts with "run `bun run db:migrate` first" when absent.
+- Wrap the whole apply path in one `db.transaction`, as the backstop for every other partial failure.
+  This is the first transaction in the repo; that is fine, it is also the first script that writes two
+  dependent kinds of row.
 
 - [ ] **Step 2: Dry-run it and report**
 
