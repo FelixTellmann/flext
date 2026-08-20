@@ -108,7 +108,12 @@ export type FilingResolutionEntry = { action_id: string; target_path: string };
 // points at the same production MySQL, so a test that reached a real implementation would mutate ~29,000
 // live Action rows. server/mail/actions/journal.ts holds the only drizzle-backed implementation.
 export type ActionJournal = {
-  loadPendingActions: (input: { mailbox_id: string; batch_size: number }) => Promise<PendingActionRow[]>;
+  // `action_ids`, when present, narrows the batch to exactly those rows and NOTHING else. It is how the
+  // scheduled sync executes only what it promoted itself: `pending` is also what operator approval
+  // produces, so a run that loaded the whole pending set would apply, on a timer, decisions the operator
+  // approved intending to review before pressing Apply. Absent means the full pending set, which is what
+  // the operator-driven applyPending procedure asks for.
+  loadPendingActions: (input: { mailbox_id: string; batch_size: number; action_ids?: string[] }) => Promise<PendingActionRow[]>;
   // Writes from_state_json ONLY where the row has none. A crashed run leaves a pending row holding the
   // correct pre-state, and the next run re-captures a post-mutation one; the first capture is the truth,
   // and journal.ts enforces that in the UPDATE's WHERE clause rather than trusting a caller to check.
@@ -159,6 +164,9 @@ export type ExecuteActionsInput = {
   // Mailbox.hierarchyDelimiter, populated at sync time from the LIST response. An empty one fails inside
   // renderFolderPath, which is the correct place: it means this mailbox was never synced.
   hierarchy_delimiter: string;
+  // Passed straight through to loadPendingActions — see the note on the port. Omitted by the
+  // operator-driven path, supplied by the scheduled one.
+  action_ids?: string[];
 };
 
 export type ExecuteActionsResult = {
@@ -369,7 +377,11 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
 }
 
 export async function executeActions(input: ExecuteActionsInput): Promise<ExecuteActionsResult> {
-  const rows = await input.journal.loadPendingActions({ mailbox_id: input.mailbox_id, batch_size: input.batch_size });
+  const rows = await input.journal.loadPendingActions({
+    mailbox_id: input.mailbox_id,
+    batch_size: input.batch_size,
+    action_ids: input.action_ids,
+  });
   const result: ExecuteActionsResult = { examined: rows.length, applied: 0, failed: 0, deferred: 0 };
   if (rows.length === 0) {
     return result;

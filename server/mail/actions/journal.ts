@@ -21,7 +21,7 @@ import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 import type { PolicyScope } from "@server/mail/classify/rules";
 import { loadFilingBindings } from "@server/mail/filing/bindings";
-import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the executor's journal port, kept out of executor.ts so a test
 // importing the executor cannot reach a real connection: every DATABASE_URL variant points at the same
@@ -35,7 +35,7 @@ function toPolicyScope(raw: string | null): PolicyScope | null {
   return raw === "address" || raw === "domain" ? raw : null;
 }
 
-async function loadPendingActions(input: { mailbox_id: string; batch_size: number }): Promise<PendingActionRow[]> {
+async function loadPendingActions(input: { mailbox_id: string; batch_size: number; action_ids?: string[] }): Promise<PendingActionRow[]> {
   if (input.mailbox_id.length === 0) {
     throw new Error("loadPendingActions needs a mailbox id: an unscoped sweep would execute pending actions across every mailbox at once.");
   }
@@ -43,6 +43,13 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
     throw new Error(
       `loadPendingActions needs a positive batch size, got ${input.batch_size}. The caller bounds how much mail one run may mutate.`,
     );
+  }
+
+  // An empty id list means "execute exactly these zero rows", never "execute everything pending". The
+  // caller is expected to short-circuit before it gets here; this is the second lock on the same door,
+  // because the difference between the two readings is the operator's whole approved backlog.
+  if (input.action_ids !== undefined && input.action_ids.length === 0) {
+    return [];
   }
 
   // A LEFT join to SenderPolicy, not an inner one: a row whose policy was deleted must still load and
@@ -64,7 +71,16 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
     .from(action)
     .innerJoin(message, eq(message.id, action.message_id))
     .leftJoin(senderPolicy, eq(senderPolicy.id, action.sender_policy_id))
-    .where(and(eq(action.status, PENDING_STATUS), eq(action.mailbox_id, input.mailbox_id), isNull(message.disappeared_at)))
+    .where(
+      and(
+        eq(action.status, PENDING_STATUS),
+        eq(action.mailbox_id, input.mailbox_id),
+        isNull(message.disappeared_at),
+        // Named ids only, when the caller named any. The mailbox and status predicates still apply on top:
+        // an id list is a narrowing, never a way past either of them.
+        ...(input.action_ids === undefined ? [] : [inArray(action.id, input.action_ids)]),
+      ),
+    )
     .orderBy(asc(action.decided_at), asc(action.id))
     .limit(input.batch_size);
 

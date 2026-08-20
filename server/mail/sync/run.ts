@@ -12,7 +12,7 @@ import type { RescuePort } from "@server/mail/rescue/detect";
 import { detectRescues } from "@server/mail/rescue/detect";
 import { createDatabaseRescuePort } from "@server/mail/rescue/journal";
 import type { RunShadowPassInput, RunShadowPassResult } from "@server/mail/shadow/run";
-import { runShadowPass } from "@server/mail/shadow/run";
+import { runNewMailShadowPass } from "@server/mail/shadow/run";
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
@@ -103,12 +103,35 @@ export type ClassifyAndExecuteInput = {
   // mailbox: getShadowSummary scopes to the single latest run id, so four mailboxes minting four ids would
   // leave the report describing whichever mailbox happened to finish last.
   run_id: string;
-  // Both injected rather than called through their module imports so server/mail/sync/run.test.ts can
-  // drive this pipeline over fakes. runShadowPass and the drizzle-backed journal both open the production
-  // database on import, and executeActions is the one function here that can mutate a real mailbox.
+  // All three injected rather than called through their module imports so server/mail/sync/run.test.ts can
+  // drive this pipeline over fakes. The shadow pass and the drizzle-backed journal both open the
+  // production database on import, and executeActions is the one function here that can mutate a real
+  // mailbox.
   shadowPass: (input: RunShadowPassInput) => Promise<RunShadowPassResult>;
+  promoteAutoActions: (input: AutoPromotionInput) => Promise<string[]>;
   executePendingActions: (input: ExecuteActionsInput) => Promise<ExecuteActionsResult>;
 };
+
+export type AutoPromotionInput = { mailbox_id: string; run_id: string };
+
+// TASK 7 SEAM. Task 7 replaces this body with the promotion that moves every shadow row whose sender
+// policy sits at autonomy `auto` to `pending`, and returns the ids of exactly the rows it moved. Until
+// then nothing can be at `auto` — all 103 sender policies are at `shadow`, and Task 8 builds the
+// procedure that could change one — so it promotes nothing and returns nothing, which leaves the executor
+// below unreached.
+//
+// THE RETURN TYPE IS THE SAFETY CONTRACT, not an implementation detail. `pending` is also the status
+// operator approval produces, so an executor that loaded the whole pending set would apply, on a
+// fifteen-minute timer, decisions the operator approved intending to review them before pressing Apply.
+// Running against this id list and nothing else is what makes the invariant hold: A ROW THE OPERATOR
+// APPROVED BY HAND CAN NEVER BE EXECUTED BY THE SCHEDULED SYNC — only rows this run promoted itself.
+//
+// Do not widen this to "everything pending for the mailbox", and do not let the executor re-derive the
+// set by joining to the policy's autonomy: a row's autonomy at execution time is not necessarily what
+// promoted it, and an id list is precise where a join is a guess.
+export async function promoteAutoActions(_input: AutoPromotionInput): Promise<string[]> {
+  return [];
+}
 
 // Classification and execution, unattended. Until this existed both halves ran only when the operator
 // clicked a button in /admin; §8's `auto` promises that an auto policy "executes on the next sync run",
@@ -121,9 +144,9 @@ export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExec
   const notes: string[] = [];
 
   try {
-    // Every live message in the mailbox is re-decided here, not just the ones this run fetched — that is
-    // what runShadowPass does, and it writes one Action row per message per run id. On a mailbox of any
-    // size that is a substantial write per pass; see the report for Task 6 for the cost note.
+    // runNewMailShadowPass, NOT runShadowPass: the scheduled path classifies only messages that have never
+    // been classified, so its cost is bounded by how much mail arrived rather than by how much the
+    // mailbox holds. The full re-sweep stays the operator's, from /admin/shadow.
     const shadow = await input.shadowPass({ mailbox_id: input.mailbox_id, batch_size: SHADOW_BATCH_SIZE, run_id: input.run_id });
     notes.push(`shadow: examined ${shadow.examined}, journaled ${shadow.journaled}`);
   } catch (error) {
@@ -131,23 +154,19 @@ export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExec
     notes.push(`shadow pass failed: ${failure.kind}: ${failure.message}`);
   }
 
-  // ---------------------------------------------------------------------------------------------------
-  // TASK 7 SEAM — auto promotion goes HERE, between the shadow pass above and the executor below.
-  //
-  // It promotes the shadow rows whose sender policy sits at autonomy `auto` from `shadow` to `pending`,
-  // so the executor below picks them up on this same run. Nothing else belongs at this seam.
-  //
-  // While the seam is empty this pipeline promotes nothing. No policy can be at `auto` yet — all 103 are
-  // at `shadow`, and Task 8 builds the procedure that could change one — so loadPendingActions returns no
-  // row this pipeline created and the run issues no mailbox mutation whatsoever. That is the guard that
-  // makes calling the executor from an unattended run safe to ship, and run.test.ts asserts it against a
-  // provider that records every mutating call.
-  // ---------------------------------------------------------------------------------------------------
-
+  // Promotion and execution share one try/catch on purpose: the ids are the executor's entire input, so a
+  // promotion that threw has nothing to hand it and there is no second attempt worth making this run.
   try {
-    // Reached on every run, promotions or not. With none, executeActions finds no pending rows and
-    // returns before it touches the provider at all — resolveActionFolders is below its empty-batch
-    // early return, so not even a LIST is issued.
+    const promoted_action_ids = await input.promoteAutoActions({ mailbox_id: input.mailbox_id, run_id: input.run_id });
+
+    // The inert state, and an early return rather than an executor call with an empty filter: with the
+    // Task 7 seam empty this run promoted nothing, so there is nothing for it to execute and the provider
+    // is not touched at all. Calling the executor here instead would put the operator's approved backlog
+    // one wrong predicate away from being applied by a timer.
+    if (promoted_action_ids.length === 0) {
+      return notes.length === 0 ? null : notes.join("; ");
+    }
+
     const executed = await input.executePendingActions({
       mailbox_id: input.mailbox_id,
       flavor: input.flavor,
@@ -155,12 +174,13 @@ export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExec
       journal: input.journal,
       batch_size: EXECUTOR_BATCH_SIZE,
       hierarchy_delimiter: input.hierarchy_delimiter,
+      // Exactly the rows this run promoted. Anything the operator approved by hand is `pending` too and
+      // must be left for them to apply deliberately.
+      action_ids: promoted_action_ids,
     });
-    if (executed.examined > 0) {
-      notes.push(
-        `execute: examined ${executed.examined}, applied ${executed.applied}, failed ${executed.failed}, deferred ${executed.deferred}`,
-      );
-    }
+    notes.push(
+      `execute: promoted ${promoted_action_ids.length}, examined ${executed.examined}, applied ${executed.applied}, failed ${executed.failed}, deferred ${executed.deferred}`,
+    );
   } catch (error) {
     const failure = classifyMailboxError(error);
     notes.push(`execution failed: ${failure.kind}: ${failure.message}`);
@@ -245,7 +265,8 @@ async function runMode(input: {
       provider: input.provider,
       journal: createDatabaseJournal(),
       run_id: input.shadow_run_id,
-      shadowPass: runShadowPass,
+      shadowPass: runNewMailShadowPass,
+      promoteAutoActions,
       executePendingActions: executeActions,
     }),
   );
