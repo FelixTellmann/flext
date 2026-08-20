@@ -34,9 +34,12 @@ export const FILING_REASON_INFO: Record<FilingQueueReason, FilingReasonInfo> = {
     label: "Thread spans two clients",
     operator_action: "Pick one.",
   },
+  // No binding UI and no ORPC write to FilingBinding exist — scripts/seed-filing-mapping.ts is the only
+  // thing that writes the table — so telling the operator to "bind the path" names an action the product
+  // cannot perform. This says what they can actually do today.
   unresolvable_folder: {
     label: "Folder could not be created",
-    operator_action: "Bind the path to an existing folder.",
+    operator_action: "Pick a destination the server already has, or add a binding in scripts/seed-filing-mapping.ts and re-run it.",
   },
 };
 

@@ -127,18 +127,12 @@ function requirePlan(
   from_state: ActionStateSnapshot,
   file_folder: string | null,
 ): PlannedAction {
-  const plan = planFor(row.kind, flavor, {
+  return planFor(row.kind, flavor, {
     source_folder: from_state.folder,
     archive_folder: folders.archive_folder,
     trash_folder: folders.trash_folder,
     file_folder,
   });
-  if (plan.outcome === "deferred") {
-    throw new Error(
-      `action ${row.action_id} has status applied but ${row.kind} has no executable plan (${plan.reason}), so there is nothing to invert. A deferred action never reached the mailbox; the status is wrong, not the plan.`,
-    );
-  }
-  return plan;
 }
 
 // Every state the message passes through on the way back: index 0 is what the executor's mutation

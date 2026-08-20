@@ -1,5 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message, sender, threadState } from "@server/db/schema";
+import { FILE_KIND } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
 import { decide } from "@server/mail/classify/rules";
@@ -236,7 +237,7 @@ export function buildShadowActionRow(input: {
     // The proposal, not the confirmation: §6's destination as the policy names it right now. Null on
     // every kind but `file` — archive and trash take their targets from SPECIAL-USE at execution time,
     // and a path on those rows would be a destination nothing reads.
-    target_path: input.decision.action === "file" && input.mapping !== null ? logicalPathFor(input.mapping) : null,
+    target_path: input.decision.action === FILE_KIND && input.mapping !== null ? logicalPathFor(input.mapping) : null,
   };
 }
 

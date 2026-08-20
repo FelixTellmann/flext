@@ -142,8 +142,9 @@ async function markFailed(entries: FailedEntry[]): Promise<void> {
 async function markDeferred(entries: DeferredEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
-    // A status of its own, not "failed": nothing went wrong, the action simply has no executable plan in
-    // this phase (Ruling 4). It parks the row out of the pending set instead of re-examining it every run.
+    // A status of its own, not "failed": nothing went wrong and nothing was sent to the mailbox — §6's
+    // filing gate held the row back, and `error` carries which reason. It parks the row out of the pending
+    // set until resolveFilingActions confirms a destination and moves it back to `pending`.
     // The reason rides in `error` because it is the row's only free-text column, which is a trap for any
     // surface that reads a non-null `error` as a failure: §9's journal and the admin views must render
     // `deferred` as its own outcome, or a deliberate deferral reads as a broken action.

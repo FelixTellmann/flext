@@ -16,8 +16,8 @@ import { eq } from "drizzle-orm";
 // "Clients/Listify"` is rejected by upsertPolicy's Zod refine (a client is one segment), and `topic =
 // "Clients/Listify"` would silently render `Clients/Clients/Listify`. columnsForPath() below is the one
 // place that turns a path into columns: a `Clients/<name>` path sets `client`, everything else sets
-// `topic` verbatim. Every mapping is asserted against logicalPathFor() before anything is printed or
-// written, so a wrong split fails loudly here rather than shipping a silently wrong folder.
+// `topic` verbatim. Every mapping AND every binding is asserted against logicalPathFor() before anything
+// is printed or written, so a wrong split fails loudly here rather than shipping a silently wrong folder.
 //
 // NO Finances/Tax split: `noreply@sars.gov.za` and `donotreply@usvisa-info.com` go to `Finances` with
 // the rest of the financial records, not a `Finances/Tax` sub-path. Bindings match a logical path
@@ -155,6 +155,31 @@ function assertMappingsRoundTrip(mappings: readonly SeedMapping[]): void {
   }
 }
 
+// The bindings half of the same round trip, and the reason it exists: the resolver matches a binding
+// EXACTLY (Ruling 3), so a one-character typo in a logical_path here is silent and inert — nothing ever
+// matches it, the path renders instead, and createFolder mints a brand-new folder beside the operator's
+// real one. That is the harm the --apply preflight was added to prevent, arriving through the other door.
+// Asserting the path derives from columnsForPath is what turns "bound but unmatchable" into a loud
+// failure at the top of the script, before anything is printed or written.
+//
+// NOT asserted: that some mapping targets the path. Ruling 4 keeps `Personal -> INBOX.Personal` bound
+// with no policy pointing at it, deliberately, as documentation of an existing folder for a later mapping
+// edit. So an unmatched binding is REPORTED rather than refused, and the operator judges each one.
+function assertBindingsRoundTrip(bindings: readonly Binding[]): void {
+  for (const binding of bindings) {
+    const derived = logicalPathFor(columnsForPath(binding.logical_path));
+    if (derived !== binding.logical_path) {
+      throw new Error(
+        `binding "${binding.logical_path}" -> "${binding.folder}" is not a derivable logical path: columnsForPath + logicalPathFor produce ${JSON.stringify(derived)}. Nothing would ever match it, so the path would render into a fresh folder next to "${binding.folder}".`,
+      );
+    }
+  }
+}
+
+function mappingGroupsTargeting(logical_path: string): readonly MappingGroup[] {
+  return MAPPING_GROUPS.filter((group) => group.path === logical_path);
+}
+
 type ResolvedMapping = SeedMapping & { existing: PolicyRow | null };
 
 function resolveMappings(index: PolicyIndex, mappings: readonly SeedMapping[]): ResolvedMapping[] {
@@ -196,6 +221,7 @@ async function main(): Promise<void> {
   const apply = process.argv.includes("--apply");
 
   assertMappingsRoundTrip(SEED_MAPPINGS);
+  assertBindingsRoundTrip(BINDINGS);
 
   const index = await loadPolicyIndex();
   const resolved = resolveMappings(index, SEED_MAPPINGS);
@@ -251,12 +277,35 @@ async function main(): Promise<void> {
     );
   }
   console.log(`mailbox: ${TELLMANN_MAILBOX_LABEL} (id ${tellmann.id})\n`);
+  console.log("every logical path below round-trips through columnsForPath + logicalPathFor, so the resolver's exact match can find it.\n");
+  const inert_bindings: Binding[] = [];
   for (const binding of BINDINGS) {
-    console.log(`  ${binding.logical_path}  ->  ${binding.folder}`);
+    const targeting = mappingGroupsTargeting(binding.logical_path);
+    if (targeting.length === 0) {
+      inert_bindings.push(binding);
+      console.log(`  ${binding.logical_path}  ->  ${binding.folder}    (INERT: no mapping group targets this path)`);
+      continue;
+    }
+    const senders = targeting.flatMap((group) => group.senders);
+    console.log(`  ${binding.logical_path}  ->  ${binding.folder}    (targeted by ${senders.length} mapped sender(s))`);
   }
   console.log(
     `\n${BINDINGS.length} bindings for ${TELLMANN_MAILBOX_LABEL}. No bindings for the three Gmail mailboxes: no user labels to preserve.`,
   );
+
+  // Not a failure. Ruling 4 keeps an inert binding on purpose — it documents an existing folder for a
+  // later mapping edit — so this is the operator's judgement call, one binding at a time. What it is NOT
+  // allowed to hide is a typo: a mistyped path would also show up here as inert, which is exactly why the
+  // list is printed rather than summed.
+  if (inert_bindings.length > 0) {
+    console.log(
+      `\n${inert_bindings.length} of ${BINDINGS.length} bindings are inert — no mapped sender files to them, so they write a FilingBinding row nothing resolves:`,
+    );
+    for (const binding of inert_bindings) {
+      console.log(`  ${binding.logical_path}  ->  ${binding.folder}`);
+    }
+    console.log("  Deliberate for a folder kept as documentation; a typo otherwise. Check each against the mapping table above.");
+  }
 
   console.log("\nDeliberately left unbound (no sender policy points at them yet, so binding them now could only ever be wrong later):");
   for (const folder of DELIBERATELY_UNBOUND_FOLDERS) {

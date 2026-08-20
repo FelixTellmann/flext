@@ -1,4 +1,4 @@
-import type { ActionPlan, ExecutableActionKind, MailboxMutation, MailboxState } from "@server/mail/actions/kinds";
+import type { ExecutableActionKind, MailboxMutation, MailboxState, PlannedAction } from "@server/mail/actions/kinds";
 import { applyToState, FILE_KIND, planFor } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { captureFolderStates, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
@@ -444,7 +444,7 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
       continue; // already queued by the resolution round above
     }
 
-    let plan: ActionPlan;
+    let plan: PlannedAction;
     try {
       plan = planFor(row.kind, input.flavor, {
         source_folder: row.folder,
@@ -456,11 +456,6 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
       // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a
       // name, and the refusal is recorded against the row instead of being turned into a default target.
       unplannable.push({ action_id: row.action_id, error: toRecordedError(error) });
-      continue;
-    }
-
-    if (plan.outcome === "deferred") {
-      deferred.push({ action_id: row.action_id, reason: plan.reason });
       continue;
     }
 

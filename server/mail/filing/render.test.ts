@@ -52,4 +52,17 @@ describe("renderFolderPath", () => {
   test("refuses an empty delimiter", () => {
     expect(() => renderFolderPath({ logical_path: "Finances", delimiter: "", namespace_root: null })).toThrow(/no hierarchy delimiter/);
   });
+
+  // Action.targetPath is 191 and rendering adds the namespace root and the delimiters on top, so a path
+  // this module accepts can outgrow Message.folder. Refusing here queues the row as unresolvable_folder;
+  // creating it would succeed on the server and then blow up at the next sync instead.
+  test("refuses a rendered folder wider than Message.folder", () => {
+    const long_path = `${"a".repeat(120)}/${"b".repeat(70)}`;
+    expect(() => renderFolderPath({ logical_path: long_path, delimiter: ".", namespace_root: "INBOX" })).toThrow(/191/);
+  });
+
+  test("accepts a rendered folder of exactly 191 characters", () => {
+    const rendered = renderFolderPath({ logical_path: "x".repeat(185), delimiter: ".", namespace_root: "INBOX" });
+    expect(rendered.length).toBe(191);
+  });
 });

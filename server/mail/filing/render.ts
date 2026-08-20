@@ -3,6 +3,15 @@ import type { FolderInfo } from "@server/mail/providers/types";
 
 const INBOX = "INBOX";
 
+// Message.folder is varchar(191), and every message filed into a folder gets that folder name written to
+// it at the next sync. Ruling 6 matched FilingBinding.folder to the same width for exactly this reason; an
+// UNBOUND path had no equivalent guard, because Action.targetPath is 191 and rendering then ADDS the
+// namespace root and the delimiters on top of it. Refusing here turns the overflow into an
+// `unresolvable_folder` queue entry the operator can see and correct, instead of a folder created
+// successfully on the server followed by ER_DATA_TOO_LONG at the next sync — the deferred failure shape
+// Ruling 6 rejected.
+const MAX_FOLDER_LENGTH = 191;
+
 // Where a new user folder belongs on this server. On felix@tellmann.co.za every user folder lives under
 // "INBOX." — INBOX.KidsLiving, INBOX.Finances - Ref, INBOX.Sent — so a folder rendered as
 // "Clients.KidsLiving" would be created as a SIBLING of INBOX rather than inside it, which is a
@@ -54,5 +63,11 @@ export function renderFolderPath(input: { logical_path: string; delimiter: strin
   }
 
   const rooted = input.namespace_root === null ? segments : [input.namespace_root, ...segments];
-  return rooted.join(input.delimiter);
+  const folder = rooted.join(input.delimiter);
+  if (folder.length > MAX_FOLDER_LENGTH) {
+    throw new Error(
+      `the rendered folder "${folder}" is ${folder.length} characters, and Message.folder holds ${MAX_FOLDER_LENGTH}: the folder would be created on the server and then fail to store against the message at the next sync. Rename the client or topic on the sender policy, or bind this path to a shorter existing folder.`,
+    );
+  }
+  return folder;
 }

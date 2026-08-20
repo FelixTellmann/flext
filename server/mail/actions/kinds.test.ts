@@ -59,11 +59,7 @@ function contextFor(flavor: MailboxFlavor, from_state: MailboxState): PlanContex
 }
 
 function plannedFor(kind: "archive" | "auto_trash" | "file", flavor: MailboxFlavor, from_state: MailboxState): PlannedAction {
-  const plan = planFor(kind, flavor, contextFor(flavor, from_state));
-  if (plan.outcome !== "planned") {
-    throw new Error(`expected ${flavor} ${kind} to produce a planned action`);
-  }
-  return plan;
+  return planFor(kind, flavor, contextFor(flavor, from_state));
 }
 
 // The whole returned sequence, folded in order — never just its first element. Undoing a Gmail trash takes
@@ -86,10 +82,6 @@ describe("every action round-trips through its inverse", () => {
       for (const [index, from_state] of statesFor(flavor).entries()) {
         test(`${flavor} ${kind} on state ${index} restores the original state`, () => {
           const plan = planFor(kind, flavor, contextFor(flavor, from_state));
-          if (plan.outcome !== "planned") {
-            throw new Error(`expected ${flavor} ${kind} to produce a planned action`);
-          }
-
           const to_state = applyToState(plan.mutation, from_state);
 
           expect(undo(plan, from_state, to_state)).toEqual(from_state);
@@ -98,12 +90,12 @@ describe("every action round-trips through its inverse", () => {
     }
   }
 
-  test("the property covered at least one planned action per flavor", () => {
+  // Guards against the loop above going vacuous: planFor refuses a kind it cannot plan by throwing, so a
+  // combination it stops handling disappears from the property silently unless the count is asserted.
+  test("planFor produces a plan for every kind x flavor x state the property covers", () => {
     const planned = flavors.flatMap((flavor) =>
       statesFor(flavor).flatMap((from_state) =>
-        EXECUTABLE_ACTION_KINDS.map((kind) => planFor(kind, flavor, contextFor(flavor, from_state))).filter(
-          (plan) => plan.outcome === "planned",
-        ),
+        EXECUTABLE_ACTION_KINDS.map((kind) => planFor(kind, flavor, contextFor(flavor, from_state))),
       ),
     );
     expect(planned.length).toBe((gmail_states.length + generic_states.length) * EXECUTABLE_ACTION_KINDS.length);

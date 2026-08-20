@@ -37,8 +37,10 @@ export type ActionErrorNote = { text: string; meaning: ActionErrorMeaning };
 // non-null `error` as "this action broke" is wrong for two of them:
 //
 //   - `failed`  — markFailed: the mutation itself did not land. A real failure.
-//   - `deferred` — markDeferred: nothing went wrong, the action has no executable plan in this phase
-//     (Ruling 4 defers filing to Phase 5). A deliberate outcome.
+//   - `deferred` — markDeferred: nothing went wrong and nothing was sent to the mailbox. §6's filing gate
+//     held the row back and `error` carries the reason it was held (no_mapping, dkim_unaligned,
+//     ambiguous_client, unresolvable_folder). A deliberate outcome, and a resolvable one: /admin/filing
+//     confirms a destination and moves the row back to `pending`.
 //   - `applied` — recordUndoFailure: the action stands and the message is exactly where it put it; a
 //     REVERSAL did not land. `status` is deliberately left applied so the retry stays reachable.
 //

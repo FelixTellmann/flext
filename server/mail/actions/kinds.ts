@@ -70,17 +70,6 @@ export type PlannedAction = {
   mutation: MailboxMutation;
 };
 
-// Not a thrown error and not a silent no-op: the executor has to be able to skip these rows and record
-// why it skipped them.
-export type DeferredAction = {
-  outcome: "deferred";
-  kind: ExecutableActionKind;
-  flavor: MailboxFlavor;
-  reason: string;
-};
-
-export type ActionPlan = PlannedAction | DeferredAction;
-
 export function isExecutableActionKind(raw: string): raw is ExecutableActionKind {
   return EXECUTABLE_ACTION_KINDS.some((kind) => kind === raw);
 }
@@ -110,7 +99,11 @@ function normalizeLabels(labels: string[]): string[] {
   return [...new Set(labels)].sort();
 }
 
-export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: PlanContext): ActionPlan {
+// Every kind this accepts is either planned or refused by a throw. There is no third outcome: Phase 4's
+// deferred plan carried FILE_DEFERRED_REASON, and Phase 5 made filing real, which removed the last thing
+// that could build one. Filing is now held back by §6's gate in the executor, on data about the message,
+// which is not something a pure function over (kind, flavor, context) can decide.
+export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: PlanContext): PlannedAction {
   if (kind === "keep_inbox" || kind === "needs_action") {
     throw new Error(
       `planFor("${kind}") is a caller error: ${kind} means the message is left exactly where it is, so there is no mutation to plan and nothing for undo to reverse.`,
@@ -207,8 +200,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
 // would be correct on generic and silently lossy on nearly all real traffic.
 //
 // Takes the state recorded in from_state_json, not the plan alone, because only the recorded state knows
-// which folder to move back to (§7.2) and which labels the message actually carried. Deferred plans are
-// excluded at the type level: they are never executed, so they can never be undone. A mutation that would
+// which folder to move back to (§7.2) and which labels the message actually carried. A mutation that would
 // change nothing is left out rather than issued as an empty command.
 export function inverseOf(plan: PlannedAction, from_state: MailboxState): MailboxMutation[] {
   const { mutation } = plan;

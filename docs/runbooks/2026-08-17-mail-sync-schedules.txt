@@ -520,8 +520,13 @@ Grep 1 — every mutating imapflow call, and where it lives:
 
     grep -rn 'messageMove\|messageCopy\|messageDelete\|messageFlagsAdd\|messageFlagsRemove\|messageFlagsSet\|mailboxCreate' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-20, RE-RUN after Phase 5 landed, all nine lines in one file
-and unchanged from the first recording of this grep:
+Output on 2026-08-20, RE-RUN after the Phase 5 fix round, all nine lines in one
+file. NOT unchanged from the first recording (2026-08-19), on three counts: the
+grep pattern itself gained |mailboxCreate, a ninth line appeared for the
+mailboxCreate call Phase 5 added, and every line number moved because Phase 5
+added lines to imap.ts above them (183->198, 191->206, 306-308->321-323,
+310->325, 345->360, 349->364). The invariant is unchanged: one file, and the
+only new call is the createFolder the widened contract above admits.
 
     server/mail/providers/imap.ts:198:    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
     server/mail/providers/imap.ts:206:    requireApplied(await client.messageDelete(uids, { uid: true }), `UID EXPUNGE ${uids.join(",")}`, folder);
@@ -562,14 +567,18 @@ Grep 3 — who calls the mutation methods. Only three files may appear:
 
     grep -rn 'provider\.moveMessages\|provider\.setLabels\|provider\.createFolder' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-20, RE-RUN after Phase 5 landed server/mail/filing/resolver.ts
-(the note directly below was written when that file did not exist yet; this is
-the update it told you to come back for):
+Output on 2026-08-20, RE-RUN after the Phase 5 fix round, which landed
+server/mail/filing/resolver.ts (the note directly below was written when that
+file did not exist yet; this is the update it told you to come back for). Line
+numbers moved from the recording taken earlier the same day — executor.ts
+224->226, 241->243 and undo.ts 203->197, 220->214 — because the fix round added
+a column to PendingActionRow and deleted the dead deferred-plan branch from
+both files. The set of files and calls is unchanged:
 
-    server/mail/actions/executor.ts:224:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
-    server/mail/actions/executor.ts:241:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
-    server/mail/actions/undo.ts:203:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
-    server/mail/actions/undo.ts:220:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/actions/executor.ts:226:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:243:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:197:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:214:  const result = await provider.setLabels(address.folder, [address.uid], {
     server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
 
 Three files — executor.ts, undo.ts, resolver.ts — exactly the set the contract
