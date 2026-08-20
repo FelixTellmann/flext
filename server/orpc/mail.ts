@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
 import { mailbox, mailboxObservedAddress, syncRun } from "@server/db/schema";
+import { createDatabasePromotionPort, demotePolicyAutonomy, promotePolicyAutonomy } from "@server/mail/actions/autonomy";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
 import { promoteAction, promotePolicyActions, resolveFilingAction } from "@server/mail/actions/promote";
@@ -369,6 +370,26 @@ export const mailProcedures = {
     .handler(async ({ input }) => upsertPolicy(input)),
 
   deletePolicy: authed.input(mailbox_id_schema).handler(async ({ input }) => deletePolicy(input.id)),
+
+  // §4.3: the one path that may ever set autonomy to "auto" — upsertPolicy rejects it unconditionally.
+  // No mailbox is named because SenderPolicy has no mailbox scope (§8.2); the auto_trash gate checks
+  // every mailbox's trashRetentionDays itself rather than trusting a caller to name the right one.
+  // `reviewed_shadow_record` defaults to false rather than being optional, so an omitted field reads as
+  // "not reviewed" and the archive/file gate refuses, never as an accidental promotion.
+  promotePolicyAutonomy: authed
+    .input(z.object({ sender_policy_id: z.string().min(1), reviewed_shadow_record: z.boolean().default(false) }))
+    .handler(async ({ input }) =>
+      promotePolicyAutonomy({
+        sender_policy_id: input.sender_policy_id,
+        reviewed_shadow_record: input.reviewed_shadow_record,
+        port: createDatabasePromotionPort(),
+      }),
+    ),
+
+  // Unconditional: no gate, cannot fail. Making it easy to stop is what makes it safe to start (§8 Task 8).
+  demotePolicyAutonomy: authed
+    .input(z.object({ sender_policy_id: z.string().min(1) }))
+    .handler(async ({ input }) => demotePolicyAutonomy({ sender_policy_id: input.sender_policy_id, port: createDatabasePromotionPort() })),
 
   listNeverTouchRules: authed.handler(async () => listNeverTouchRules()),
 
