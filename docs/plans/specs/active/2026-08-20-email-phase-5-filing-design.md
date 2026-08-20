@@ -165,8 +165,11 @@ dot-delimited server — §6 calls this hazard out and the live data confirms it
 The namespace root in step 2 is the other half of the same hazard: on tellmann every user folder
 lives under `INBOX.`, so a bare rendered `Clients.KidsLiving` would be created as a sibling of
 `INBOX` rather than inside it. The root is derived from the existing folder list rather than
-hardcoded, and a mailbox whose root cannot be determined hard-fails rather than guessing — the same
-rule Phase 4 set for a missing `\Archive` or `\Trash` special-use folder.
+hardcoded: it is `INBOX` when every selectable folder is `INBOX` or sits beneath it, and null —
+meaning top level — otherwise. Null is a determination, not a failure; Gmail's list contains
+`[Gmail]/All Mail`, so top level is the correct answer there. The only hard failure is an empty
+folder list, where there is no evidence to reason from at all, which follows the rule Phase 4 set
+for a missing `\Archive` or `\Trash` special-use folder.
 
 Bindings are operator-owned data, not derived. Phase 5 ships them as a seed script the operator
 reviews and applies, in the shape of `scripts/seed-sender-policies.ts`.
@@ -255,8 +258,12 @@ input type carries no `status` field so only one value can be written.
 **Related defect to close in the same phase:** the refusal to approve a `file` policy is enforced in
 the UI only (`src/routes/admin/shadow.tsx`). `approveDecision` and `promote.ts` have no kind check,
 so a direct API call still promotes one. Phase 4 explicitly deferred the server-side guard to
-Phase 5. With filing real, the guard changes shape rather than disappearing: a `file` action may be
-promoted only when it has a resolved `targetPath`, which is the same rule expressed where it binds.
+Phase 5. With filing real, that guard is **retired rather than implemented**: approving a `file`
+decision is now a legitimate operation, and a row whose mapping is missing is queued by the gate
+with reason `no_mapping` rather than refused at approval. The UI-side refusal comes out in the same
+change, so the two stop disagreeing. The guard that does bind is on the transition out of
+`deferred`, which is scoped `WHERE status = 'deferred' AND kind = 'file'` so it can never un-defer
+an `auto_trash` row.
 
 ---
 
