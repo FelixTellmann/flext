@@ -547,6 +547,12 @@ newsletters is a handful of commands, not 400 round trips.
 
 ## 8. Autonomy ladder — per policy, never global
 
+> **Amended 2026-08-20 by `docs/plans/specs/active/2026-08-20-email-phase-6-autonomy-design.md`.**
+> Rescue detection covers EVERY applied action, not only auto ones — the first real use of this
+> system is a manually approved bulk apply, and that is what most needs watching. The starred
+> signal is deferred: `isFlagged` records that a message is starred, never when, so only opened
+> and replied are detectable today. Read that document alongside this section.
+
 | Level | Behavior |
 |---|---|
 | `shadow` | Decision computed and journaled with `status = shadow`. Mailbox untouched. |
