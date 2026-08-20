@@ -499,3 +499,30 @@ close.
 **Task interface conflicts:** Tasks 7 and 8 both edit `server/mail/actions/autonomy.ts`; Tasks 8 and 9
 both edit `server/orpc/mail.ts`; Tasks 5, 6 and 7 all edit `server/mail/sync/run.ts`. Sequential
 dispatch throughout, as the skill requires.
+
+---
+
+**Completed: 2026-08-21**
+- Verified: `bun run tsc` 0 errors across 2,485 files · `bun test` 479 pass / 0 fail across 32 files ·
+  `bun run build` succeeded · `bunx biome check` 0 errors. All three read-only-invariant greps re-run:
+  same three files, same five call sites, same count — **this phase adds no mutating call site at all**,
+  which is the expected result and the one the greps exist to confirm. Ten tasks, each individually
+  reviewed; a whole-branch review found seven further defects, all fixed, and every fix was re-verified
+  by reading the code directly.
+- Open: **nothing in this phase has run against a live database or a real mailbox.** Migration `0008`
+  (`0008_marvelous_ben_grimm.sql` — `Action.rescuedAt`, `SenderPolicy.autonomyPromotedAt`,
+  `SyncRun.note`, and an index) is generated and **unapplied**; until it is, rescue detection and the
+  new-mail classification pass both throw on every scheduled sync, and the note column that would make
+  that visible is the very thing the migration adds. The admin routes have no component tests, so the
+  surfaces were verified by typecheck, build and reading only — browser QA is the operator's.
+  No policy has ever been promoted to `auto`; all 103 remain at `shadow`, so the pipeline is inert by
+  construction. Silence = confirmed.
+- Deliberate gaps, each recorded in the spec rather than left to be discovered: the **starred** signal
+  needs a `flaggedAt` column and is absent, so a message rescued only by starring is not detected; a
+  message the operator **moves a second time** becomes undetectable; rescues are looked for only within
+  **30 days** of the action; and a **promoted-but-unexecuted** row waits for the operator's Apply rather
+  than being retried by the sync, because automatic recovery would need the very join that keeps a timer
+  away from operator-approved rows.
+- Deferred: `PolicyIndex.by_id` (three call sites derive "which policy fired" from a scope plus a
+  normalized key rather than reading `decision.policy_id` — no divergence is constructible today), and
+  `promoteAction`'s single-row operator path still ignores its new return value.
