@@ -111,9 +111,10 @@ export type LabelChange = {
 // may appear. `createFolder` is the narrowest of the three and takes no lock at all — see its own comment
 // below for why. Every other method here, and every other file under `server/mail`, stays read-only.
 //
-// Each mutation resolves with the UIDs it actually confirmed, or throws. There is no partial-success
-// return: the executor issues an ordered sequence per message and must be able to tell a wholly
-// applied action from one that stopped halfway.
+// Each MESSAGE mutation resolves with the UIDs it actually confirmed, or throws. There is no
+// partial-success return: the executor issues an ordered sequence per message and must be able to tell a
+// wholly applied action from one that stopped halfway. `createFolder` is outside that rule because it
+// addresses no messages — it resolves void, and its postcondition is only that the folder now exists.
 //
 // `purge` is deliberately absent and must stay absent. §1.7 puts irreversible deletion behind a
 // separate scheduled sweep (Phase 8) with its own dwell, digest and eligibility rules; a `purge`
