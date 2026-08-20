@@ -707,6 +707,12 @@ export async function createFilingResolver(input: CreateFilingResolverInput): Pr
   const bound = new Map(input.bindings.map((binding) => [binding.logical_path, binding.folder]));
   const resolved = new Map<string, string>();
 
+  // A binding matches a logical path EXACTLY. A sub-path does not inherit its parent's binding, on
+  // purpose: `Finances` is bound to `INBOX.Finances - Ref` on felix@tellmann.co.za, and letting
+  // `Finances/Tax` inherit it would have to invent `INBOX.Finances - Ref.Tax` from a name the operator
+  // never wrote. Longest-prefix matching would also give every binding an unbounded, invisible blast
+  // radius — re-parenting one path would silently move mail filed under all of its children. An unbound
+  // sub-path renders and is created like any other, which is visible and correctable.
   return {
     resolve: async (logical_path: string): Promise<string> => {
       const cached = resolved.get(logical_path);
@@ -1305,23 +1311,39 @@ Filing cannot propose a destination for any of the 103 policies today: all have 
 Model it on `scripts/seed-sender-policies.ts` exactly: `--apply` performs the write, without it the run
 is a dry run that writes nothing and prints what it would do. Two sections.
 
-**Mapping** — sets `client` and `topic` on existing `file` policies. From the triage doc:
+**Mapping** — sets `client` and `topic` on existing `file` policies. From the triage doc.
+
+**The left column below is a LOGICAL PATH, not a column value.** Storing it verbatim is wrong in both
+directions: `client = "Clients/Listify"` is rejected by Task 1's Zod refinement, and
+`topic = "Clients/Listify"` silently yields `Clients/Clients/Listify`. The rule:
+
+- a `Clients/<name>` row → `client = "<name>"`, `topic = null`
+- every other row → `client = null`, `topic = "<the path verbatim>"`
+
+so that `logicalPathFor` returns exactly the left column. Assert that in the script: for every seeded
+policy, `logicalPathFor({ client, topic })` must equal the intended path, and the dry run should print
+the derived path rather than the columns.
 
 | logical path | senders |
 |---|---|
 | `Clients/Listify` | `no-reply@listifyregistry.com`, `noreply@shopify.com`, `partners@shopify.com`, `app-audits@shopify.zendesk.com`, `no-reply@lunalemon.dev` |
 | `Clients/KidsLiving` | `support@bobgo.co.za` |
 | `Ops/Shopify` | `mailer@shopify.com`, `store+26179660@t.shopifyemail.com` |
-| `Finances` | the sixteen Group E senders — FNB ×3, PayPal, bobpay, Google payments ×2, takealot, stripe.com, sendgrid, Shopify billing, Figma ×2, Apple, xneelo billing, Anthropic |
+| `Finances` | the sixteen Group E senders — FNB ×3, PayPal, bobpay, Google payments ×2, takealot, stripe.com, sendgrid, Shopify billing, Figma ×2, Apple, xneelo billing, Anthropic — **plus** `noreply@sars.gov.za` and `donotreply@usvisa-info.com` |
 | `Personal/Tennis` | `no-reply@booknplay.co.za` |
 | `Personal/Restaurants` | `reservations@mailer.dineplan.com` |
 | `Personal/Medical` | `dailyclaims@discovery.co.za` |
 | `Personal/Travel` | booking, uber, deutschebahn, oebb, easyjet, amadeus, flyairlink, webtickets |
-| `Finances/Tax` | `noreply@sars.gov.za`, `donotreply@usvisa-info.com` |
 
 Everything above uses the `topic` axis except the two `Clients/` groups, which use `client`. A sender in
 the `file` set that this table does not name keeps `client` and `topic` null, and its messages queue as
 `no_mapping` — which is correct and visible, not a silent gap.
+
+**No `Finances/Tax` split.** Bindings match a logical path exactly and a sub-path does NOT inherit its
+parent's binding, so with `Finances` bound to `INBOX.Finances - Ref`, a `Finances/Tax` path would render
+as `INBOX.Finances.Tax` — a folder under a different parent, because `INBOX.Finances - Ref` and
+`INBOX.Finances` are different mailboxes. §6 splits by topic "only where volume earns it", and two
+senders do not, so the tax senders go to `Finances` with the rest of the records.
 
 **Bindings** — `FilingBinding` rows for `felix@tellmann.co.za` only, pointing logical paths at the
 thirteen folders that already exist:
