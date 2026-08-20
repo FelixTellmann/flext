@@ -322,7 +322,52 @@ Their output must be byte-identical to what the runbook already records. If it i
 
 ---
 
-### Task 6: The autonomy promotion step
+### Task 6: Run classification and execution inside the sync
+
+**§8's `auto` says "executes on the next sync run". Nothing does that today.** Verified before this plan
+was executed: `runShadowPass` has exactly two non-test callers — the ORPC procedure and
+`tmp/run-shadow.ts` — and `executeActions` has exactly one, the ORPC procedure. `runSyncForAllMailboxes`
+does backfill, incremental, reconcile, reclassify and repair, and stops. Classification and execution are
+things the operator triggers from the admin UI.
+
+So this is not a small edit. It is the change from a tool the operator drives to a system that acts
+unattended, which is exactly what the autonomy ladder exists to gate — so it gets its own task, its own
+review, and its own guard rather than hiding inside the promotion step.
+
+**Files:** Modify `server/mail/sync/run.ts`.
+
+- [ ] **Step 1: The pipeline, in order**
+
+```
+incremental fetch          (existing)
+        ↓
+rescue detection           (Task 5)
+        ↓
+shadow pass                (existing function, newly called here)
+        ↓
+auto promotion             (Task 7)
+        ↓
+executor                   (existing function, newly called here)
+```
+
+- [ ] **Step 2: A run with no `auto` policies must do exactly what it does today**
+
+This is the guard that makes the task safe to ship. If no policy is at autonomy `auto` — which is the
+state of all 103 today — the promotion step promotes nothing, the executor finds no pending rows, and
+the run's observable behaviour is unchanged. Test that explicitly: a sync over a database with zero auto
+policies issues **zero mutations**.
+
+- [ ] **Step 3: A failure in the shadow pass or executor must not fail the sync.** Same reasoning as
+Task 5: fetching mail is the sync's job, and classification failing should not cost the operator their
+mail. Record the error on the run summary and continue.
+
+- [ ] **Step 4: The executor's batch size must be bounded here.** The ORPC path takes a `batch_size` from
+the operator; a scheduled run has nobody to choose one. Pick a conservative default, state it in a
+comment, and make it a named constant rather than a literal.
+
+---
+
+### Task 7: The autonomy promotion step
 
 Only now does `auto` mean anything. Nothing before this task may promote a policy.
 
@@ -358,7 +403,7 @@ suspended `auto` policy's do not; an `applied` row is untouched; a second run is
 
 ---
 
-### Task 7: Promotion to `auto`, and its gates
+### Task 8: Promotion to `auto`, and its gates
 
 **Files:** Modify `server/mail/actions/autonomy.ts`, `server/orpc/mail.ts`, `server/mail/query/policies.ts`.
 
@@ -389,7 +434,7 @@ Making it easy to stop is what makes it safe to start.
 
 ---
 
-### Task 8: The surfaces
+### Task 9: The surfaces
 
 **Files:** Modify `src/routes/admin/journal.tsx`, `src/routes/admin/senders.tsx`, `server/orpc/mail.ts`,
 `server/mail/query/actions.ts`.
@@ -413,7 +458,7 @@ gitignored — never commit it.
 
 ---
 
-### Task 9: Runbook and ship
+### Task 10: Runbook and ship
 
 - [ ] **Step 1: Document the Phase 6 operator sequence** in
 `docs/runbooks/2026-08-17-mail-sync-schedules.txt`, matching the PHASE 4 and PHASE 5 sections' voice:
@@ -447,10 +492,10 @@ expected result is **no change at all** — Phase 6 adds no mutation. A diff her
 spec §3.3 and in `signals.ts`), and automatic undo of a rescued action (a heuristic-triggered mutation is
 what the ladder exists to prevent).
 
-**Ordering:** Tasks 1–5 must land before Task 6. The spec is explicit that the net precedes the
+**Ordering:** Tasks 1–5 must land before Tasks 6–8. The spec is explicit that the net precedes the
 automation, and a plan that built `auto` first would create exactly the window this phase exists to
 close.
 
-**Task interface conflicts:** Tasks 6 and 7 both edit `server/mail/actions/autonomy.ts`; Tasks 7 and 8
-both edit `server/orpc/mail.ts`; Tasks 5 and 6 both edit `server/mail/sync/run.ts`. Sequential dispatch
-throughout, as the skill requires.
+**Task interface conflicts:** Tasks 7 and 8 both edit `server/mail/actions/autonomy.ts`; Tasks 8 and 9
+both edit `server/orpc/mail.ts`; Tasks 5, 6 and 7 all edit `server/mail/sync/run.ts`. Sequential
+dispatch throughout, as the skill requires.
