@@ -321,6 +321,7 @@ function createFakeJournal(input: { events: string[]; seed: SeedRow[]; bindings?
     loadActionForPromotion: async () => unsupported("loadActionForPromotion"),
     loadShadowActionsByPolicy: async () => unsupported("loadShadowActionsByPolicy"),
     promoteShadowActions: async () => unsupported("promoteShadowActions"),
+    resolveFilingActions: async () => unsupported("resolveFilingActions"),
   };
 }
 

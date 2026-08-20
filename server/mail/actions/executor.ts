@@ -97,6 +97,11 @@ export type UndoFailureEntry = { action_id: string; error: string; to_state_json
 export type ActionPromotionLookup = { action_id: string; mailbox_id: string | null; status: string };
 export type PromotedEntry = { action_id: string };
 
+// Carries no `status`: journal.ts writes `pending` and nothing else can be expressed here. That is the
+// same shape PromotedEntry uses, and for the same reason — a status the caller could name is a status the
+// caller could get wrong.
+export type FilingResolutionEntry = { action_id: string; target_path: string };
+
 // The database sits behind a port so the executor can be exercised over a fake: every DATABASE_URL variant
 // points at the same production MySQL, so a test that reached a real implementation would mutate ~29,000
 // live Action rows. server/mail/actions/journal.ts holds the only drizzle-backed implementation.
@@ -137,6 +142,10 @@ export type ActionJournal = {
   // pick up, and journal.ts's UPDATE is guarded on `WHERE status = 'shadow'` so this can never move a row
   // that is not one, applied included.
   promoteShadowActions: (entries: PromotedEntry[]) => Promise<void>;
+  // Moves ONE deferred filing row to `pending` with the operator's confirmed destination. Guarded in the
+  // UPDATE's WHERE clause on both status and kind, not in the caller: a check the caller performs is a
+  // check a second caller can skip, and this is the only transition that can un-defer a row.
+  resolveFilingActions: (entries: FilingResolutionEntry[]) => Promise<void>;
 };
 
 export type ExecuteActionsInput = {

@@ -7,6 +7,7 @@ import type {
   AppliedEntry,
   DeferredEntry,
   FailedEntry,
+  FilingResolutionEntry,
   FromStateEntry,
   PendingActionRow,
   PromotedEntry,
@@ -15,7 +16,7 @@ import type {
   UndoneEntry,
 } from "@server/mail/actions/executor";
 import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
-import { isExecutableActionKind } from "@server/mail/actions/kinds";
+import { FILE_KIND, isExecutableActionKind } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 import type { PolicyScope } from "@server/mail/classify/rules";
@@ -342,6 +343,23 @@ async function promoteShadowActions(entries: PromotedEntry[]): Promise<void> {
   }
 }
 
+// Moves one queued filing row back to `pending` with the operator-confirmed destination. Guarded on BOTH
+// `status = 'deferred'` and `kind = FILE_KIND` in the WHERE clause, not in the caller: the status half is
+// FIRST WRITE WINS against a row some other run has already advanced, and the kind half is what stops this
+// from ever un-deferring an `auto_trash` row — §1.7 keeps destruction behind a policy a human created.
+//
+// `error: null` clears the queue reason: it explained why the row could not proceed, and status.ts reads a
+// non-null `error` on a `pending` row as an explanation that is no longer true once resolution runs.
+async function resolveFilingActions(entries: FilingResolutionEntry[]): Promise<void> {
+  for (const entry of entries) {
+    const now = new Date();
+    await db
+      .update(action)
+      .set({ status: PENDING_STATUS, target_path: entry.target_path, error: null, updatedAt: now })
+      .where(and(eq(action.id, entry.action_id), eq(action.status, DEFERRED_STATUS), eq(action.kind, FILE_KIND)));
+  }
+}
+
 export function createDatabaseJournal(): ActionJournal {
   return {
     loadPendingActions,
@@ -357,5 +375,6 @@ export function createDatabaseJournal(): ActionJournal {
     loadActionForPromotion,
     loadShadowActionsByPolicy,
     promoteShadowActions,
+    resolveFilingActions,
   };
 }

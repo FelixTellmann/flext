@@ -13,6 +13,9 @@ type FakeRow = {
   mailbox_id: string | null;
   sender_policy_id: string | null;
   status: string;
+  kind: string;
+  error: string | null;
+  target_path: string | null;
   from_state_json: string | null;
   to_state_json: string | null;
   applied_at: string | null;
@@ -26,6 +29,9 @@ function shadowRow(action_id: string, overrides: Partial<FakeRow> = {}): FakeRow
     mailbox_id: MAILBOX_ID,
     sender_policy_id: POLICY_ID,
     status: "shadow",
+    kind: "archive",
+    error: null,
+    target_path: null,
     from_state_json: null,
     to_state_json: null,
     applied_at: null,
@@ -72,6 +78,24 @@ function createFakeJournal(input: { events: string[]; seed: FakeRow[] }): FakeJo
         }
         if (row.status === "shadow") {
           row.status = "pending";
+        }
+      }
+    },
+
+    // Mirrors journal.ts's `WHERE status = 'deferred' AND kind = FILE_KIND` guard (Task 9): only a
+    // `deferred` `file` row moves, target_path and status change, and error is cleared because the queue
+    // reason it held is no longer true once the row has resolved.
+    resolveFilingActions: async (entries) => {
+      input.events.push(`resolve_filing ${entries.map((entry) => entry.action_id).join(",")}`);
+      for (const entry of entries) {
+        const row = rows.get(entry.action_id);
+        if (row === undefined) {
+          throw new Error(`fixture asked to resolve unknown action ${entry.action_id}`);
+        }
+        if (row.status === "deferred" && row.kind === "file") {
+          row.status = "pending";
+          row.target_path = entry.target_path;
+          row.error = null;
         }
       }
     },
@@ -238,5 +262,68 @@ describe("promotePolicyActions — all decisions for one policy (Task 8)", () =>
     await expect(promotePolicyActions({ sender_policy_id: POLICY_ID, mailbox_id: "", batch_size: 10, journal })).rejects.toThrow(
       /needs a mailbox id/,
     );
+  });
+});
+
+describe("resolveFilingActions — the path out of `deferred` (Task 9)", () => {
+  test("moves a deferred file row to pending and clears its error", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("action-1", { status: "deferred", kind: "file", error: "no_mapping: the sender policy sets no client or topic." })],
+    });
+
+    await journal.resolveFilingActions([{ action_id: "action-1", target_path: "Clients/Acme/Ops" }]);
+
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("pending");
+    expect(row?.target_path).toBe("Clients/Acme/Ops");
+    expect(row?.error).toBeNull();
+  });
+
+  test("does not touch a deferred auto_trash row — the kind guard stops it un-deferring destruction", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("action-1", { status: "deferred", kind: "auto_trash", error: "some deferral reason" })],
+    });
+
+    await journal.resolveFilingActions([{ action_id: "action-1", target_path: "Clients/Acme/Ops" }]);
+
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("deferred");
+    expect(row?.target_path).toBeNull();
+    expect(row?.error).toBe("some deferral reason");
+  });
+
+  test("does not touch an applied row", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("action-1", { status: "applied", kind: "file", applied_at: "2026-08-19T10:00:00Z" })],
+    });
+
+    await journal.resolveFilingActions([{ action_id: "action-1", target_path: "Clients/Acme/Ops" }]);
+
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("applied");
+    expect(row?.target_path).toBeNull();
+  });
+
+  test("resolving the same row twice is idempotent — the second call matches nothing", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("action-1", { status: "deferred", kind: "file", error: "no_mapping: the sender policy sets no client or topic." })],
+    });
+
+    await journal.resolveFilingActions([{ action_id: "action-1", target_path: "Clients/Acme/Ops" }]);
+    // The row is now `pending`, so the guard's status check fails this time and nothing changes — a
+    // second target_path here must not overwrite the first resolution.
+    await journal.resolveFilingActions([{ action_id: "action-1", target_path: "Clients/Other" }]);
+
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("pending");
+    expect(row?.target_path).toBe("Clients/Acme/Ops");
   });
 });

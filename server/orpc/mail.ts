@@ -9,7 +9,7 @@ import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import { encryptCredential } from "@server/mail/crypto/credentials";
 import { classifyMailboxError } from "@server/mail/errors";
-import { CLIENT_SEGMENT_RULE } from "@server/mail/filing/paths";
+import { CLIENT_SEGMENT_RULE, logicalPathFor } from "@server/mail/filing/paths";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FETCH_SPEC } from "@server/mail/providers/headers";
@@ -445,6 +445,36 @@ export const mailProcedures = {
         journal,
       });
       return { scope: "policy" as const, ...result };
+    }),
+
+  // Task 9's path out of `deferred`: the operator confirms a destination for one queued `file` row.
+  // Nothing here opens a mailbox connection — like approveDecision, this only moves an Action row's
+  // status, this time from "deferred" back to "pending", and journal.ts's UPDATE guards the transition on
+  // both status and kind so this can never touch an applied row or un-defer an auto_trash one.
+  resolveFiling: authed
+    .input(
+      z.object({
+        mailbox_id: z.string().min(1),
+        action_id: z.string().min(1),
+        target_path: z.string().min(1).max(191),
+      }),
+    )
+    .handler(async ({ input }) => {
+      await requireEnabledMailbox(input.mailbox_id);
+
+      // Rejected here, before the journal ever sees it: a path whose segments do not round-trip through
+      // logicalPathFor's normalization (trim, drop empty segments) is one the filing resolver would only
+      // refuse later, after the row was already moved back to pending — reusing the write-side normalizer
+      // so this stays the one place that decides what a canonical logical path looks like.
+      const normalized = logicalPathFor({ client: null, topic: input.target_path });
+      if (normalized === null || normalized !== input.target_path) {
+        throw new ORPCError("BAD_REQUEST", {
+          message: `"${input.target_path}" is not a normalized logical path (expected "${normalized ?? ""}"). Trim each segment and drop empty ones.`,
+        });
+      }
+
+      await createDatabaseJournal().resolveFilingActions([{ action_id: input.action_id, target_path: input.target_path }]);
+      return { ok: true };
     }),
 
   // The first procedure in this codebase that changes a real mailbox. One mailbox, one bounded batch,

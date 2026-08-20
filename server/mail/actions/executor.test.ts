@@ -261,6 +261,9 @@ function createFakeJournal(input: {
     promoteShadowActions: async () => {
       throw new Error("promoteShadowActions is not part of this fixture");
     },
+    resolveFilingActions: async () => {
+      throw new Error("resolveFilingActions is not part of this fixture");
+    },
   };
 }
 
