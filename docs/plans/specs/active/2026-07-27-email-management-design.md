@@ -467,6 +467,12 @@ propose `archive`, never `trash` or `purge`** — destruction requires a policy 
 
 ## 6. Filing
 
+> **Amended 2026-08-20 by `docs/plans/specs/active/2026-08-20-email-phase-5-filing-design.md`.**
+> Two changes: the DKIM gate below applies to `domain`-scoped file policies only, and logical
+> paths bind to a physical folder per mailbox rather than only being rendered with the server's
+> delimiter. `filing_queue` is a view over `Action`, not a table. Read that document alongside
+> this section.
+
 **Client is the primary axis, topic a secondary split only where volume earns it.** Client is stable and
 unambiguous; topic is fuzzy and drifts.
 
@@ -485,7 +491,8 @@ first use. Hardcoding `/` produces a literal folder named `Clients/Acme` on a do
 Assignment is deterministic: sender domain → client, configured once in the Sender Policy table.
 Individuals on personal addresses get explicit per-address mappings.
 
-**Filing requires DKIM alignment.** A domain-based mapping means `@acmecorp.com` decides where a message
+**Filing requires DKIM alignment** — amended 2026-08-20 to `domain`-scoped policies only, see the
+note above. A domain-based mapping means `@acmecorp.com` decides where a message
 is permanently filed, so a spoofed `From` would let anyone write into a client's record folder. Where
 `Authentication-Results` shows DKIM failing or absent, the message routes to `filing_queue` rather than
 being filed. Genuinely ambiguous cases — a thread spanning two clients — land in the same queue.
