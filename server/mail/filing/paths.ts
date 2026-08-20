@@ -24,6 +24,14 @@ export const CLIENT_SEGMENT_RULE = {
 export const FILING_QUEUE_REASONS = ["no_mapping", "dkim_unaligned", "ambiguous_client", "unresolvable_folder"] as const;
 export type FilingQueueReason = (typeof FILING_QUEUE_REASONS)[number];
 
+// The one place a queued reason is turned into the string that lands in `Action.error`. `unresolvable_folder`
+// is the only reason produced outside this module — the executor and undo raise it when a path cannot be
+// resolved to a folder — and routing it through here makes a typo a compile error rather than a row whose
+// reason Task 9's queue UI silently fails to render.
+export function filingQueueReason(reason: FilingQueueReason, detail: string): string {
+  return `${reason}: ${detail}`;
+}
+
 export type PolicyFilingMapping = { client: string | null; topic: string | null };
 
 // Trims each segment and drops empties, so "Ops//Shopify " and " Ops/Shopify" render the same path and
@@ -76,7 +84,7 @@ export type FilingGateInput = {
 
 export type FilingDecision = { outcome: "file"; logical_path: string } | { outcome: "queue"; reason: FilingQueueReason; detail: string };
 
-// §6's DKIM gate as amended 2026-08-20: it applies to `domain`-scoped policies only.
+// §6's DKIM gate as amended 2026-08-20: an EXPLICIT `address` scope is the only thing that un-gates it.
 //
 // The threat §6 names is that "@acmecorp.com decides where a message is permanently filed, so a spoofed
 // From would let anyone write into a client's record folder" — a threat specific to a mapping keyed on a
@@ -86,10 +94,12 @@ export type FilingDecision = { outcome: "file"; logical_path: string } | { outco
 //
 // `dkim_aligned !== true` rather than `=== false`: §6 queues DKIM "failing or absent", and absent is NULL.
 //
-// A null scope means no policy produced this decision. rules.ts step 5 can only ever derive `archive`,
-// `keep_inbox` or `needs_action`, so a derived `file` cannot exist and a null scope here means the row
-// carries a logical path with no policy behind it. It is left ungated rather than queued because the
-// path had to come from somewhere, and queuing on a condition that cannot occur would be untestable.
+// The test is written as "not address" rather than "is domain" because a null scope DOES occur and must
+// fail CLOSED. deletePolicy hard-deletes and Action.senderPolicyId carries an index but no foreign key, so
+// a `file` row proposed by a domain-scoped policy that has since been deleted loads with a null scope: the
+// left join that correctly keeps the row reportable is the same join that would otherwise strip its gate.
+// Unknown provenance is treated as the stricter case, because the gate exists to stop a spoofed From from
+// writing into a records folder and the operator can still confirm the destination to file it anyway.
 export function filingDecisionFor(input: FilingGateInput): FilingDecision {
   if (input.logical_path === null) {
     return {
@@ -100,11 +110,12 @@ export function filingDecisionFor(input: FilingGateInput): FilingDecision {
     };
   }
 
-  if (input.policy_scope === "domain" && input.dkim_aligned !== true) {
+  if (input.policy_scope !== "address" && input.dkim_aligned !== true) {
+    const chooser = input.policy_scope === null ? "a policy that no longer exists" : "a domain-scoped policy";
     return {
       outcome: "queue",
       reason: "dkim_unaligned",
-      detail: `a domain-scoped policy chose ${input.logical_path}, and this message is not DKIM-aligned, so the From header deciding a permanent destination is exactly the spoofing risk §6 gates. Confirm the destination to file it anyway.`,
+      detail: `${chooser} chose ${input.logical_path}, and this message is not DKIM-aligned, so the From header deciding a permanent destination is exactly the spoofing risk §6 gates. Confirm the destination to file it anyway.`,
     };
   }
 

@@ -7,7 +7,7 @@ import { classifyMailboxError } from "@server/mail/errors";
 // Type-only, deliberately: bindings.ts opens the drizzle connection at import time, and the executor is
 // exercised over a fake journal. The rows arrive through the port instead.
 import type { FilingBindingRow } from "@server/mail/filing/bindings";
-import { filingDecisionFor } from "@server/mail/filing/paths";
+import { filingDecisionFor, filingQueueReason } from "@server/mail/filing/paths";
 import { createFilingResolver } from "@server/mail/filing/resolver";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
@@ -24,6 +24,12 @@ import type { MailboxFlavor } from "@server/mail/types";
 // what lets the next run reconcile by comparing real server state against from_state / to_state. Nothing
 // below may reorder those four steps, and executor.test.ts asserts the order by killing the run between
 // them.
+//
+// Creating a filing folder is the one mailbox write that sits OUTSIDE those four steps, and deliberately:
+// it happens once per run, before any row is journalled. It is sound because it touches no message — a
+// CREATE has no pre-state to lose and nothing for undo to reverse — and because it is idempotent, so a
+// crash straight after it leaves an empty folder the next run reuses rather than a message whose location
+// no row records. The four steps govern anything that moves or relabels mail; this does neither.
 
 export const PENDING_STATUS = "pending" as const;
 export const APPLIED_STATUS = "applied" as const;
@@ -179,6 +185,16 @@ function groupKeyFor(folder: string, mutation: MailboxMutation): string {
     return ["move", folder, mutation.target_folder].join(" | ");
   }
   return ["set_labels", folder, [...mutation.add_labels].sort().join(","), [...mutation.remove_labels].sort().join(",")].join(" | ");
+}
+
+// Every wanted path either resolved or had its rows queued, and pass two skips the queued ones — so a
+// miss here is a bug in that pairing rather than a destination the planner should guess at.
+function requireResolvedFolder(resolved_folders: Map<string, string>, logical_path: string): string {
+  const folder = resolved_folders.get(logical_path);
+  if (folder === undefined) {
+    throw new Error(`no resolved folder for logical path ${logical_path}; a row reaches the planner only after its path resolves.`);
+  }
+  return folder;
 }
 
 function requireState(states: Map<string, ActionStateSnapshot>, action_id: string): ActionStateSnapshot {
@@ -374,7 +390,7 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
       // §6's filing queue: kind `file` at status `deferred`, with the reason in `error`. Nothing was sent
       // to the mailbox, and a deferred row's `error` is an explanation rather than a failure. Resolution
       // moves the row back to `pending` and it re-enters this function unchanged.
-      deferred.push({ action_id: row.action_id, reason: `${decision.reason}: ${decision.detail}` });
+      deferred.push({ action_id: row.action_id, reason: filingQueueReason(decision.reason, decision.detail) });
       continue;
     }
 
@@ -400,7 +416,7 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
         const detail = toRecordedError(error);
         for (const entry of classified) {
           if (entry.logical_path === logical_path) {
-            deferred.push({ action_id: entry.row.action_id, reason: `unresolvable_folder: ${detail}` });
+            deferred.push({ action_id: entry.row.action_id, reason: filingQueueReason("unresolvable_folder", detail) });
           }
         }
       }
@@ -422,7 +438,7 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
         source_folder: row.folder,
         archive_folder: folders.archive_folder,
         trash_folder: folders.trash_folder,
-        file_folder: entry.logical_path === null ? null : (resolved_folders.get(entry.logical_path) ?? null),
+        file_folder: entry.logical_path === null ? null : requireResolvedFolder(resolved_folders, entry.logical_path),
       });
     } catch (error) {
       // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a

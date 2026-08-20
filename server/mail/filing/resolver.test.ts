@@ -132,3 +132,39 @@ describe("createFilingResolver", () => {
     expect(events.filter((event) => event.startsWith("list_folders"))).toEqual(["list_folders:1"]);
   });
 });
+
+describe("resolveWithoutCreating", () => {
+  test("renders an unlisted path and creates nothing", async () => {
+    const events: string[] = [];
+    const resolver = await createFilingResolver(resolverInput({ folders: GMAIL_FOLDERS, events, delimiter: "/" }));
+
+    expect(resolver.resolveWithoutCreating("Clients/Acme")).toBe("Clients/Acme");
+    expect(events.filter((event) => event.startsWith("create_folder"))).toEqual([]);
+  });
+
+  test("returns a binding verbatim, exactly as resolve does", async () => {
+    const events: string[] = [];
+    const resolver = await createFilingResolver(
+      resolverInput({
+        folders: TELLMANN_FOLDERS,
+        events,
+        delimiter: ".",
+        bindings: [{ logical_path: "Finances", folder: "INBOX.Finances - Ref" }],
+      }),
+    );
+
+    // The two resolutions may only differ about whether they are allowed to create, never about where a
+    // logical path lives.
+    expect(resolver.resolveWithoutCreating("Finances")).toBe("INBOX.Finances - Ref");
+    expect(await resolver.resolve("Finances")).toBe("INBOX.Finances - Ref");
+    expect(events.filter((event) => event.startsWith("create_folder"))).toEqual([]);
+  });
+
+  test("refuses a segment carrying the server's delimiter, rather than creating hierarchy", async () => {
+    const events: string[] = [];
+    const resolver = await createFilingResolver(resolverInput({ folders: TELLMANN_FOLDERS, events, delimiter: "." }));
+
+    expect(() => resolver.resolveWithoutCreating("Ops.Shopify")).toThrow("hierarchy delimiter");
+    expect(events.filter((event) => event.startsWith("create_folder"))).toEqual([]);
+  });
+});

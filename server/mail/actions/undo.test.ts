@@ -1138,6 +1138,46 @@ describe("undoAction — a filed message (§6)", () => {
     expect(row?.error).toContain("matches no point");
   });
 
+  // The regression this exists for: resolving through the CREATING resolution would have issued a CREATE
+  // for the unlisted rendered path BEFORE resumeIndexFor got to refuse, leaving an undo that mutated the
+  // mailbox and then declined to act. moveEvents cannot catch it — it filters create_folder out — so the
+  // assertion is against the raw event log.
+  test("refuses an unbound, unlisted path without creating the folder it would have rendered", async () => {
+    const events: string[] = [];
+    // The server lists the folder the message is actually in, and NOT the one "Clients/Acme" renders to.
+    const mailbox = genericMailbox({ folder: "Clients/Acme Old", uid: 9002, extra_folders: ["Clients/Acme Old"] });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "file",
+          target_path: CLIENT_PATH,
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_FILE_FROM,
+          to_state: { folder: "Clients/Acme Old", uid: 9002, uid_validity: CLIENT_VALIDITY, flags: ["\\Seen"], labels: null },
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result.outcome).toBe("failed");
+    expect(events.filter((event) => event.startsWith("create_folder"))).toEqual([]);
+    expect(moveEvents(events)).toEqual([]);
+    expect(locate(mailbox, MESSAGE_ID)).toEqual({ folder: "Clients/Acme Old", uid: 9002 });
+    expect(journal.rows.get("action-1")?.status).toBe("applied");
+    expect(journal.rows.get("action-1")?.error).toContain("matches no point");
+  });
+
   test("an applied filing with no logical path is reported, not given an invented destination", async () => {
     const events: string[] = [];
     const mailbox = genericMailbox({ folder: CLIENT_FOLDER, uid: 9002, extra_folders: [CLIENT_FOLDER] });

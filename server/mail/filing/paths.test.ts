@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { CLIENT_SEGMENT_RULE, filingDecisionFor, LOGICAL_SEPARATOR, logicalPathFor } from "@server/mail/filing/paths";
+import {
+  CLIENT_SEGMENT_RULE,
+  FILING_QUEUE_REASONS,
+  filingDecisionFor,
+  filingQueueReason,
+  LOGICAL_SEPARATOR,
+  logicalPathFor,
+} from "@server/mail/filing/paths";
 
 describe("logicalPathFor", () => {
   test("composes client and topic under the Clients root", () => {
@@ -52,11 +59,29 @@ describe("filingDecisionFor", () => {
     expect(decision).toMatchObject({ outcome: "queue", reason: "no_mapping" });
   });
 
-  // The branch the module argues cannot occur — rules.ts step 5 can only derive archive, keep_inbox or
-  // needs_action, so no derived decision is ever `file`. Pinned anyway: the argument lives in a comment,
-  // and a later caller reaching this branch some other way would otherwise change behaviour silently.
-  test("leaves a decision with no policy behind it ungated rather than queued", () => {
+  // Fails CLOSED. Only an explicit `address` scope un-gates, so a decision whose provenance is unknown is
+  // treated as the stricter case rather than the looser one.
+  test("queues a decision with no policy behind it rather than filing it ungated", () => {
     const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: null });
+    expect(decision).toMatchObject({ outcome: "queue", reason: "dkim_unaligned" });
+  });
+
+  // The live path to a null scope, named here so the reason is recorded where someone will read it:
+  // deletePolicy hard-deletes and Action.senderPolicyId has an index but no foreign key, so the executor's
+  // LEFT join hands this shape over for any `file` row whose policy was deleted after it was proposed.
+  test("a deleted domain-scoped policy cannot file an unaligned message by losing its scope", () => {
+    const decision = filingDecisionFor({ logical_path: "Clients/Acme", policy_scope: null, dkim_aligned: false });
+    expect(decision.outcome).toBe("queue");
+    expect(decision).toMatchObject({ reason: "dkim_unaligned" });
+    if (decision.outcome !== "queue") {
+      throw new Error("a queued decision carries the detail the operator reads");
+    }
+    expect(decision.detail).toContain("no longer exists");
+  });
+
+  // A null scope is gated on DKIM, not blocked outright: an aligned message still files.
+  test("still files a scope-less decision when the message is DKIM-aligned", () => {
+    const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: true });
     expect(decision).toEqual({ outcome: "file", logical_path: "Finances" });
   });
 });
@@ -71,5 +96,14 @@ describe("CLIENT_SEGMENT_RULE", () => {
 
   test("names the separator it rejects, so the message cannot drift from the rule", () => {
     expect(CLIENT_SEGMENT_RULE.message).toContain(LOGICAL_SEPARATOR);
+  });
+});
+
+describe("filingQueueReason", () => {
+  // The single spelling of what lands in Action.error, so the executor and undo cannot drift from the
+  // reasons Task 9's queue UI renders.
+  test("prefixes the detail with a reason drawn from FILING_QUEUE_REASONS", () => {
+    expect(filingQueueReason("unresolvable_folder", "CREATE was rejected")).toBe("unresolvable_folder: CREATE was rejected");
+    expect(FILING_QUEUE_REASONS).toContain("unresolvable_folder");
   });
 });

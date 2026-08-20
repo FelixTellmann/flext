@@ -3,6 +3,13 @@ import type { FolderInfo, MailboxProvider } from "@server/mail/providers/types";
 
 export type FilingResolver = {
   resolve: (logical_path: string) => Promise<string>;
+  // Bind-or-render with no CREATE, and synchronous because it does no IO at all. Undo uses this one: there
+  // the resolved folder is the SOURCE of the inverse move, so the message is already sitting in it and it
+  // exists by construction. If it does not, the move must fail loudly against the real server rather than
+  // have undo create an empty folder and then fail anyway — and the create would land BEFORE
+  // resumeIndexFor decides whether to proceed, so an undo that ultimately REFUSES could still have
+  // mutated the mailbox. That is the one thing the undo path is built to never do.
+  resolveWithoutCreating: (logical_path: string) => string;
 };
 
 export type CreateFilingResolverInput = {
@@ -27,6 +34,7 @@ export async function createFilingResolver(input: CreateFilingResolverInput): Pr
   const namespace_root = findNamespaceRoot(folders, input.delimiter);
   const existing = new Set(folders.map((folder) => folder.path));
   const bound = new Map(input.bindings.map((binding) => [binding.logical_path, binding.folder]));
+  const render = (logical_path: string): string => renderFolderPath({ logical_path, delimiter: input.delimiter, namespace_root });
 
   // A binding matches a logical path EXACTLY. A sub-path does not inherit its parent's binding, on
   // purpose: `Finances` is bound to `INBOX.Finances - Ref` on felix@tellmann.co.za, and letting
@@ -52,12 +60,16 @@ export async function createFilingResolver(input: CreateFilingResolverInput): Pr
       // Deliberately not concurrency-safe: two overlapping resolutions of the same new path can both pass
       // this check. Callers resolve sequentially, and createFolder treats an existing folder as success,
       // so the worst case is one wasted round trip rather than an error.
-      const folder = renderFolderPath({ logical_path, delimiter: input.delimiter, namespace_root });
+      const folder = render(logical_path);
       if (!existing.has(folder)) {
         await input.provider.createFolder(folder);
         existing.add(folder);
       }
       return folder;
     },
+
+    // Steps 1 and 2 of the order above, and never step 3. Same binding map and same rendering as `resolve`,
+    // so the two cannot disagree about where a logical path lives — only about whether they may create it.
+    resolveWithoutCreating: (logical_path: string): string => bound.get(logical_path) ?? render(logical_path),
   };
 }

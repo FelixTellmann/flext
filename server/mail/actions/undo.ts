@@ -5,6 +5,7 @@ import { applyToState, FILE_KIND, inverseOf, isExecutableActionKind, planFor } f
 import type { ActionFolders, ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
 import { classifyMailboxError } from "@server/mail/errors";
+import { filingQueueReason } from "@server/mail/filing/paths";
 import { createFilingResolver } from "@server/mail/filing/resolver";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
@@ -363,8 +364,13 @@ type FilingResolution = { outcome: "resolved"; folder: string } | { outcome: "fa
 // matches — so a binding edited since the action yields a refusal, never a move out of a folder the
 // message was never in.
 //
-// One round for the distinct paths, exactly as the executor does it, so a bulk undo of 400 filed messages
-// resolves once rather than per row, and a resolution that throws fails only the rows wanting that path.
+// One round for the distinct paths, so a bulk undo of 400 filed messages resolves once rather than per row,
+// and a resolution that throws fails only the rows wanting that path.
+//
+// resolveWithoutCreating, NOT resolve: the folder is the source of the inverse move, so the message is
+// already in it. Creating one here would mutate the mailbox before resumeIndexFor has decided whether to
+// proceed, which would let an undo that ultimately refuses still leave a folder behind. It also makes
+// resolving for rows the loop below goes on to mark `skipped` completely harmless.
 async function resolveFilingDestinations(input: {
   rows: UndoableActionRow[];
   provider: MailboxProvider;
@@ -391,7 +397,7 @@ async function resolveFilingDestinations(input: {
   });
   for (const logical_path of wanted_paths) {
     try {
-      resolutions.set(logical_path, { outcome: "resolved", folder: await resolver.resolve(logical_path) });
+      resolutions.set(logical_path, { outcome: "resolved", folder: resolver.resolveWithoutCreating(logical_path) });
     } catch (error) {
       resolutions.set(logical_path, { outcome: "failed", error: toRecordedError(error) });
     }
@@ -454,7 +460,7 @@ async function undoRows(input: {
 
     let result: RowResult;
     if (resolution !== null && resolution.outcome === "failed") {
-      result = { outcome: "failed", action_id: row.action_id, error: `unresolvable_folder: ${resolution.error}` };
+      result = { outcome: "failed", action_id: row.action_id, error: filingQueueReason("unresolvable_folder", resolution.error) };
     } else {
       try {
         result = await undoRow({

@@ -281,9 +281,10 @@ function pendingRow(input: {
     folder: input.folder ?? "INBOX",
     uid: input.uid,
     target_path: input.target_path ?? null,
-    // Address-scoped by default: §6's DKIM gate applies to domain-scoped policies only, so this is the
-    // shape that reaches a folder, and a test that wants the gate asks for "domain" explicitly.
-    policy_scope: input.policy_scope ?? "address",
+    // Address-scoped by default: only an explicit `address` scope un-gates §6's DKIM check, so this is the
+    // shape that reaches a folder. `=== undefined` rather than `??` because an explicitly passed null is a
+    // case under test — the deleted-policy shape — and must not be quietly defaulted back to "address".
+    policy_scope: input.policy_scope === undefined ? "address" : input.policy_scope,
     dkim_aligned: input.dkim_aligned ?? null,
   };
 }
@@ -795,6 +796,32 @@ describe("executeActions filing (§6)", () => {
     // touched the server at all — not a move, not a label write, not even the folder it would file into.
     expect(mutationEvents(events)).toEqual([]);
     expect(row?.from_state_json).toBeNull();
+  });
+
+  // The live shape the LEFT join produces: deletePolicy hard-deletes and Action.senderPolicyId has no
+  // foreign key, so a row whose domain-scoped policy was deleted after it was proposed loads with a null
+  // scope. The gate fails closed on it rather than letting the deletion strip the DKIM check.
+  test("a row whose policy was deleted is queued, not filed ungated", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 116, kind: "file", target_path: CLIENT_PATH, policy_scope: null, dkim_aligned: false })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 116, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 0, failed: 0, deferred: 1 } satisfies ExecuteActionsResult);
+    const row = journal.rows.get("action-116");
+    expect(row?.status).toBe("deferred");
+    expect(row?.error).toContain("dkim_unaligned");
+    expect(row?.error).toContain("no longer exists");
+    expect(mutationEvents(events)).toEqual([]);
   });
 
   test("an address-scoped row files without DKIM alignment — the gate is domain-scoped only", async () => {
