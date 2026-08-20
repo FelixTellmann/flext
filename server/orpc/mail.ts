@@ -356,7 +356,15 @@ export const mailProcedures = {
         // retyped, so "purge" (the irreversible sweep action reserved for the separate Phase 8 job) has
         // exactly one place it could ever be added back.
         action: z.enum(POLICY_ACTIONS),
-        client: z.string().max(191).nullable().default(null),
+        client: z
+          .string()
+          .max(191)
+          .refine((value) => !value.includes("/"), {
+            message:
+              'a client name may not contain "/": it is one segment of a logical path, and a separator here would let a policy inject folder hierarchy that logicalPathFor never sees.',
+          })
+          .nullable()
+          .default(null),
         topic: z.string().max(191).nullable().default(null),
         autonomy: policy_autonomy_schema,
         source: z.string().min(1).max(191),

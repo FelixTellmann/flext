@@ -83,7 +83,15 @@ const upsert_policy_schema = z.object({
   // Phase 8 job (§1.7). POLICY_ACTIONS is the same allowlist rules.ts enforces on read; this is the write
   // side of that defence, and it must reject a bad value here rather than let it reach a stored row.
   action: z.enum(POLICY_ACTIONS),
-  client: z.string().max(191).nullable().default(null),
+  client: z
+    .string()
+    .max(191)
+    .refine((value) => !value.includes("/"), {
+      message:
+        'a client name may not contain "/": it is one segment of a logical path, and a separator here would let a policy inject folder hierarchy that logicalPathFor never sees.',
+    })
+    .nullable()
+    .default(null),
   topic: z.string().max(191).nullable().default(null),
   autonomy: z
     .enum(["shadow", "auto"])
