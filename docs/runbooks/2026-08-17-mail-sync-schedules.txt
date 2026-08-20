@@ -567,9 +567,10 @@ Grep 3 — who calls the mutation methods. Only three files may appear:
 
     grep -rn 'provider\.moveMessages\|provider\.setLabels\|provider\.createFolder' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-20, RE-RUN after the Phase 5 fix round, which landed
-server/mail/filing/resolver.ts (the note directly below was written when that
-file did not exist yet; this is the update it told you to come back for). Line
+Output on 2026-08-20, RE-RUN after the Phase 5 fix round. The caller that was
+missing when the note directly below was written — server/mail/filing/resolver.ts
+— arrived with Phase 5's resolver task, not with the fix round; this is the
+update that note told you to come back for. Line
 numbers moved from the recording taken earlier the same day — executor.ts
 224->226, 241->243 and undo.ts 203->197, 220->214 — because the fix round added
 a column to PendingActionRow and deleted the dead deferred-plan branch from

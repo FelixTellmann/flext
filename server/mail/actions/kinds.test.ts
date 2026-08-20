@@ -198,9 +198,6 @@ describe("archive means one thing per flavor", () => {
       trash_folder: null,
       file_folder: null,
     });
-    if (plan.outcome !== "planned") {
-      throw new Error("expected a planned action");
-    }
     const recorded = state("INBOX/Clients", [], null);
     expect(inverseOf(plan, recorded)).toEqual([{ verb: "move", source_folder: GENERIC_ARCHIVE, target_folder: "INBOX/Clients" }]);
   });
@@ -348,9 +345,6 @@ describe("state model guards", () => {
     const flagged = state(GMAIL_CANONICAL_FOLDER, ["\\Seen", "\\Flagged"], [GMAIL_INBOX_LABEL]);
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       const plan = planFor(kind, "gmail", contextFor("gmail", flagged));
-      if (plan.outcome !== "planned") {
-        continue;
-      }
       const to_state = applyToState(plan.mutation, flagged);
       expect(to_state.flags).toEqual(flagged.flags);
       expect(undo(plan, flagged, to_state).flags).toEqual(flagged.flags);

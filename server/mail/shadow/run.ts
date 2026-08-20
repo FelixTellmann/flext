@@ -261,6 +261,15 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
         sender_policy_id: sql`VALUES(\`senderPolicyId\`)`,
         mailbox_id: sql`VALUES(\`mailboxId\`)`,
         source: sql`VALUES(\`source\`)`,
+        // A confirmation is a human vouching for ONE destination, so it survives a re-decision only while
+        // that destination is unchanged. Without this, a same-run-id re-run after a policy edit rewrites
+        // targetPath while leaving filingConfirmedAt standing, and the row files into the NEW path with
+        // the DKIM gate short-circuited by approval of the OLD one.
+        // ORDER IS LOAD-BEARING and must stay above target_path: MySQL evaluates ON DUPLICATE KEY UPDATE
+        // assignments left to right, and a column read after its own assignment yields the NEW value — so
+        // below the next line this comparison would always be true and would never clear anything.
+        // `<=>` rather than `=` because both sides are nullable and NULL = NULL is NULL, not true.
+        filing_confirmed_at: sql`IF(VALUES(\`targetPath\`) <=> \`targetPath\`, \`filingConfirmedAt\`, NULL)`,
         target_path: sql`VALUES(\`targetPath\`)`,
         decided_at: sql`VALUES(\`decidedAt\`)`,
         updatedAt: sql`VALUES(\`updatedAt\`)`,

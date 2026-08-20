@@ -419,9 +419,6 @@ describe("executeActions ordering (§7.1)", () => {
       trash_folder: GMAIL_TRASH_FOLDER,
       file_folder: null,
     });
-    if (plan.outcome !== "planned") {
-      throw new Error("a Gmail archive must produce a planned action");
-    }
 
     // The point of the whole rule: undo restores the label from the surviving pre-state.
     expect(inverseOf(plan, recovered ?? original_from_state)).toEqual([
