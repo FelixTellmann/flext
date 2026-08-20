@@ -211,9 +211,13 @@ export type RescueInput = {
 
 export type RescueVerdict = { rescued: false } | { rescued: true; signal: RescueSignal; at: Date };
 
-// Strictly later, never equal. A message opened in the same millisecond the action was applied is the
-// executor's own read, not the operator's — captureFolderStates fetches flags immediately before the
-// mutation, and on some servers that fetch is itself what sets \Seen.
+// Strictly later, never equal — and the reason is what openedAt actually measures. The incremental sync
+// stamps it with the time it OBSERVED the \Seen transition, not the moment the operator opened the
+// message, so it is already coarse and always lands after the real open. Equality with appliedAt would
+// therefore mean a sync ran in the same millisecond as the apply: an artifact of two fsp:3 timestamps
+// written by different code paths, not evidence that anybody read anything.
+// (The executor's own read cannot cause this: captureFolderStates fetches with BODY.PEEK, which by
+// definition does not set \Seen.)
 function isAfter(candidate: Date | null, applied_at: Date): candidate is Date {
   return candidate !== null && candidate.getTime() > applied_at.getTime();
 }
@@ -233,9 +237,10 @@ export function judgeRescue(input: RescueInput): RescueVerdict {
 
 - opened after → rescued, signal `opened`
 - replied after → rescued, signal `replied`
-- **opened at exactly `applied_at` → NOT rescued.** This is the load-bearing boundary: the executor
-  reads flags immediately before mutating, and on some servers that read sets `\Seen`. An inclusive
-  comparison would make the executor rescue its own actions and suspend every policy it ran.
+- **opened at exactly `applied_at` → NOT rescued.** `openedAt` is stamped when the sync *observed* the
+  transition, not when the operator opened the message, so equality means two independently-written
+  timestamps collided — an artifact, not a signal. An inclusive comparison would turn every such
+  collision into a suspended policy.
 - both null → not rescued
 - opened before, replied after → rescued via `replied`
 - an action with an `applied_at` in the future relative to both → not rescued
