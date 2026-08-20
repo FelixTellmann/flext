@@ -541,6 +541,12 @@ only new call is the createFolder the widened contract above admits.
 Three of those nine are the comment at 321-323, which is prose, not a call.
 Any path OUTSIDE server/mail/providers/imap.ts is a breach.
 
+Re-run for Phase 6 on 2026-08-21: BYTE-IDENTICAL to the block above — same
+nine lines, same file, same line numbers. Phase 6 adds no mutating IMAP call
+site; it only reaches the existing executor from a second caller (the
+scheduled sync). Expected, not a coincidence: a diff here would have been a
+breach, not a documentation update.
+
 Grep 2 — the write lock, which must stay a population of exactly one:
 
     grep -rn 'getMailboxLock' server --include='*.ts' | grep -v '\.test\.ts'
@@ -562,6 +568,11 @@ literal string "getMailboxLock" as prose — grep cannot tell code from a
 comment that quotes code, so it is not a seventh call site. One
 readOnly: false, at line 186, inside withWriteLock. Five read locks in
 imap.ts. A second readOnly: false anywhere is a breach.
+
+Re-run for Phase 6 on 2026-08-21: BYTE-IDENTICAL to the block above — same
+seven lines, same files, same line numbers. Still exactly one
+readOnly: false, still at imap.ts:186. Expected: Phase 6 adds no new caller
+of getMailboxLock.
 
 Grep 3 — who calls the mutation methods. Only three files may appear:
 
@@ -587,6 +598,25 @@ above names, and exactly one createFolder call site, inside resolver.ts's
 resolve(), memoised per run. No fourth file appears. Had one appeared, that
 would be a breach of the invariant, not a documentation update, and this
 runbook would say so instead of recording a clean grep.
+
+Re-run for Phase 6 on 2026-08-21. NOT byte-identical this time, and it is a
+line-number move, not a breach: Task 6's safety-contract comment ("THE
+RETURN TYPE IS THE SAFETY CONTRACT...", server/mail/sync/run.ts) landed
+above executor.ts's own code between the Phase 5 recording and now, and
+executor.ts gained lines above both its mutation calls for an unrelated
+reason (the F1 fix's action_ids narrowing). Both executor.ts lines moved
+by +8; undo.ts and resolver.ts did not move at all. The set of files, the
+set of calls and the count of five are unchanged:
+
+    server/mail/actions/executor.ts:234:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:251:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:197:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:214:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
+
+Still three files, still five call sites, still no fourth file — the moved
+lines are a side effect of an earlier task's own edit to executor.ts, not
+anything Phase 6 added to the invariant's reach.
 
 The paragraph below is left as it was written during Phase 4, for the record:
 it is what the previous grep looked like BEFORE resolver.ts existed, and why
@@ -839,3 +869,254 @@ the same class of risk the Phase 4 section above documents for the archive
 and trash paths. Every one of these is reasoned about in code comments in
 server/mail/filing/resolver.ts, render.ts and paths.ts; none of them has met a
 real server. The ceremony above is what proves or disproves that reasoning.
+
+
+=============================================================================
+PHASE 6 — RESCUE DETECTION AND THE AUTONOMY LADDER (added 2026-08-21)
+=============================================================================
+
+Phase 6 adds two things. First, a safety net: if the operator opens or
+replies to a message a rule already archived, filed or trashed, the rule
+that touched it suspends itself and records why. Second, a gated ladder that
+lets a policy the operator trusts run unattended — classify new mail,
+promote its own shadow decisions, and execute them — without a click, once
+it has earned that through the gates below.
+
+Nothing in this phase has ever run against a real IMAP server or the
+production database. Every mutating path — the promotion write, the
+suspension write, the unattended executor call — was verified by typecheck,
+by unit tests over fake ports, and by reading. The admin routes that render
+a suspension and drive promotion have no component tests in this repo, so
+they were checked by tsc, biome and build only. See "WHAT HAS NOT BEEN
+VERIFIED" below before trusting any of this in front of a real mailbox.
+
+
+-----------------------------------------------------------------------------
+APPLY MIGRATION 0008 — THE ONLY ONE OUTSTANDING
+-----------------------------------------------------------------------------
+
+    bun run db:migrate
+
+server/db/migrations/0008_supreme_flatman.sql adds two nullable columns and
+one index:
+
+    ALTER TABLE `Action` ADD `rescuedAt` datetime(3);
+    ALTER TABLE `SenderPolicy` ADD `autonomyPromotedAt` datetime(3);
+    CREATE INDEX `Action_mailboxId_status_appliedAt_idx`
+      ON `Action` (`mailboxId`,`status`,`appliedAt`);
+
+`rescuedAt` is the stamp that makes rescue detection idempotent — a rescued
+action never comes back as a candidate. `autonomyPromotedAt` is the clock
+the auto_trash gate measures a shadow cycle from. The index serves the
+rescue pass's `(mailboxId, status, appliedAt)` scan and its keyset
+pagination on appliedAt; without it every pass filesorts.
+
+0005, 0006 and 0007 are applied — the operator applied them during Phase 4
+and Phase 5. 0008 is the only one outstanding. Nothing in this phase's sync
+changes below has any effect until it is applied: rescue detection reads and
+writes `rescuedAt`, and promotion reads and writes `autonomyPromotedAt`.
+
+
+-----------------------------------------------------------------------------
+WHAT NOW HAPPENS ON EVERY SCHEDULED SYNC, WITHOUT ANYONE ASKING FOR IT
+-----------------------------------------------------------------------------
+
+This is the part that changed the shape of the sync. The `mail-sync
+incremental` task on its existing */15 schedule (see the top of this file)
+now does three more things per mailbox, after its incremental fetch, inside
+the same `runMode` call in server/mail/sync/run.ts — nobody has to trigger
+any of them, and none of them touch backfill, reclassify or reconcile runs:
+
+  1. RESCUE DETECTION runs first, right after the incremental fetch and
+     before the sent-folder scan. It has to run after the fetch: openedAt is
+     only fresh once this run's own \Seen transitions have been observed,
+     and a pass reading stale rows would silently under-report — worse than
+     an error, for a safety net. See below for what it does.
+
+  2. NEW MAIL IS CLASSIFIED — runNewMailShadowPass, not the full
+     runShadowPass the operator's /admin/shadow button uses. The scheduled
+     path takes only messages with NO Action row at all, so its cost tracks
+     how much mail arrived, not how much the mailbox holds. A policy edit
+     does NOT retroactively re-classify old mail on the next sync — that
+     full re-sweep stays the operator's manual action from /admin/shadow,
+     deliberately: silently re-deciding thousands of already-classified
+     messages because a rule changed is what the shadow-and-review cycle
+     exists to prevent.
+
+  3. ROWS BELONGING TO `auto` POLICIES ARE PROMOTED AND EXECUTED. Promotion
+     (promoteAutoActions, server/mail/sync/run.ts) moves each eligible
+     `auto` policy's shadow rows to pending — built on the same
+     promotePolicyActions transition the operator's own approval uses, per
+     Ruling 2, not a second promotion path — and returns the ids it just
+     promoted. The executor is then called scoped to EXACTLY that id list.
+
+Read step 3 again: scoped to exactly that id list. That is not an
+implementation detail, it is the safety property the whole phase rests on —
+see the next section.
+
+
+-----------------------------------------------------------------------------
+THE GUARD THAT MAKES THAT SAFE TODAY
+-----------------------------------------------------------------------------
+
+All 103 sender policies in the database are at autonomy "shadow" today.
+Nothing can reach "auto" except through the gated promotion procedure below
+— upsertPolicy has rejected autonomy: "auto" at its Zod boundary since Phase
+3, and that rejection still holds; editing a policy's label cannot grant it
+unattended write access to a mailbox. So on every scheduled sync as it
+stands right now: promotion finds zero eligible policies, returns an empty
+id list, and step 3 above takes its early return (run.ts, "the inert
+state") — the executor is never called, and the provider is never touched.
+This is the correct inert state, not a workaround, and it has its own test.
+
+The property that survives once a policy IS promoted is the one to hold
+onto: A ROW THE OPERATOR APPROVED BY HAND IS NEVER EXECUTED BY THE SCHEDULED
+SYNC — only rows the run promoted itself. executeActions loads whatever
+pending rows the id list names and nothing else; it does not join on a
+policy's current autonomy, because a row's autonomy at execution time is not
+necessarily what promoted it, and a join is a guess where an id list is
+precise. This is what lets the operator approve a large batch by hand and
+still choose, on their own schedule, when to press Apply — the scheduled
+sync will not do it for them, no matter how long the approved batch sits.
+
+
+-----------------------------------------------------------------------------
+HOW TO READ A SUSPENSION
+-----------------------------------------------------------------------------
+
+A rescue suspends the POLICY (not the single action) and records why on
+SenderPolicy.suspensionReason, guarded so the FIRST rescue's reason survives
+— a second rescue against an already-suspended policy is still stamped, but
+does not overwrite the reason the operator needs to read.
+
+WHERE TO SEE IT:
+
+  - /admin/senders, the Policies panel. A suspended policy shows
+    "suspended" in its row, plus "Suspended YYYY-MM-DD", the reason text,
+    and a "Clear suspension" button.
+  - /admin/journal. The action row that triggered the suspension carries a
+    "Rescued YYYY-MM-DD" badge (row.rescued_at) — this answers "what
+    happened to my mail"; the policy panel on /admin/senders answers "what
+    has the system stopped doing on my behalf".
+
+WHAT THE REASON SENTENCE CONTAINS (rescueSuspensionReason,
+server/mail/rescue/journal.ts) — all four things the operator needs to act
+on it, never just a date: the signal (opened or replied), the message
+subject, when the operator acted, when the rule acted, and a reminder the
+action is reversible. It reads like this:
+
+    rescued: you replied to "Re: invoice #4021" on 2026-08-21 09:14 UTC
+    after this rule archived it on 2026-08-20 22:03 UTC. The rule is
+    suspended until you clear it; the action is in the journal and can be
+    undone.
+
+A reply outranks an open when a message qualifies as both (Ruling 4): an
+open can be an accidental glance while triaging, a reply is unambiguous
+evidence the rule hid something wanted, and the reported signal is meant to
+be the more persuasive of the two.
+
+HOW TO CLEAR ONE: the "Clear suspension" button on /admin/senders calls
+clearPolicySuspension (server/mail/query/policies.ts) — unconditional, no
+gate, sets suspendedAt and suspensionReason back to null. Clearing does NOT
+undo the action that triggered it; undo it separately from /admin/journal
+if the message should go back to where it was.
+
+
+-----------------------------------------------------------------------------
+HOW TO PROMOTE A POLICY, AND WHAT WILL REFUSE
+-----------------------------------------------------------------------------
+
+Promotion is per policy, from the Policies panel on /admin/senders, and
+dispatches on the policy's OWN action (server/mail/actions/autonomy.ts):
+
+  archive and file NEED a reviewed shadow record. The checkbox on the
+  panel sets reviewed_shadow_record: true; without it the button still
+  fires but the server refuses with gate "shadow_review" and a detail
+  naming exactly what is missing: "needs the operator to review this
+  policy's shadow record first (getShadowReport), then promote again with
+  reviewed_shadow_record: true."
+
+  auto_trash needs THREE things at once, all measured from
+  autonomyPromotedAt and reset by any rescue: 30 days elapsed
+  (SHADOW_CYCLE_DAYS), at least 20 decisions since promotion
+  (SHADOW_CYCLE_MIN_DECISIONS), and zero rescues in that window — PLUS
+  Mailbox.trashRetentionDays set on EVERY mailbox, not just the one the
+  policy runs against, because SenderPolicy carries no mailbox scope and a
+  rescue already suspends a policy everywhere for the same reason (§8.2).
+  trashRetentionDays is NULL on all four mailboxes today, so gate
+  "trash_retention" refuses every auto_trash promotion right now, with a
+  detail naming which mailboxes are missing it. NULL means unknown, never
+  unlimited — a trash that silently empties makes "reversible for the
+  retention window" false. That gate stays closed everywhere until the
+  operator records a real number of days on each mailbox.
+
+  purge is refused OUTRIGHT — gate "purge_not_allowed". It is never a
+  per-policy autonomy; the irreversible sweep is a separate scheduled job
+  reserved for Phase 8, with its own dwell and eligibility rules.
+
+  Demotion is UNCONDITIONAL and always available — the "Demote to shadow"
+  button, no gate, cannot fail. Making it cheap is deliberate: an operator
+  who cannot cheaply undo a promotion will not make one, and one who cannot
+  stop a misbehaving rule has no recourse between "leave it running" and
+  "delete the policy".
+
+One more property worth knowing before promoting anything: editing an
+already-promoted policy silently demotes it back to shadow (Ruling 9). A
+promotion rests entirely on the shadow record as it was when reviewed;
+change the rule and that record describes something no longer running, so
+the system requires it to earn trust again rather than carrying the old
+promotion forward on a changed rule.
+
+
+-----------------------------------------------------------------------------
+WHAT THE RESCUE NET DOES NOT CATCH — STATED, NOT DISCOVERED LATER
+-----------------------------------------------------------------------------
+
+A safety net whose holes are undocumented is worse than a smaller net whose
+holes are known. Three gaps, each accepted deliberately rather than missed:
+
+STARRING A RESCUED MESSAGE IS NOT DETECTED. Message.isFlagged records that a
+message IS starred, never WHEN it became starred, so "you starred it after
+the rule hid it" is not expressible without a new flaggedAt column mirroring
+openedAt. An operator who rescues a message purely by starring it, and never
+opens or replies to it, produces no detection at all. RESCUE_SIGNALS is
+"opened" and "replied" only (server/mail/rescue/signals.ts).
+
+A MESSAGE THE OPERATOR MOVES A SECOND TIME BECOMES UNDETECTABLE. The
+detector locates a message by the address the executor's own move recorded
+in Action.to_state_json — folder, uid, uidValidity (messageAddressForAction,
+server/mail/rescue/locate.ts). Move that message again yourself and, on
+generic IMAP, the sync retires that row (disappearedAt) and writes a new
+one at the new address; the recorded address now points at a dead row whose
+openedAt can never change again. The next rescue pass finds nothing to
+judge and reports it as "unresolved", not as a false negative it can name.
+
+RESCUES ARE ONLY LOOKED FOR WITHIN 30 DAYS OF THE ACTION. RESCUE_WINDOW_DAYS
+= 30 (server/mail/rescue/journal.ts), tied deliberately to the same 30 days
+the auto_trash gate requires: a detector window shorter than the promotion
+gate would let a policy accrue rescue-free days out of rows the detector had
+already stopped watching, so the gate would measure silence rather than
+safety. The cost: a message opened or replied to on day 31 or later after
+the rule touched it is not detected as a rescue. Strictly smaller than the
+starring gap above, but real.
+
+
+-----------------------------------------------------------------------------
+WHAT HAS NOT BEEN VERIFIED
+-----------------------------------------------------------------------------
+
+In the same register as Phase 4's and Phase 5's ceremonies: nothing in
+Phase 6 has run against a live database or a real mailbox. Rescue detection
+has never read a real openedAt or a real reply against the production
+Message table; promotion has never actually flipped a real policy to auto;
+the unattended executor path inside the scheduled sync has never issued a
+single real IMAP mutation, because no policy has ever reached auto to
+trigger it. The admin routes that render a suspension, its reason, and the
+promote/demote controls have no component tests in this repository —
+verification for all of it was bun run tsc, bun test (over fake ports and
+recording providers), bun run build, and reading. There is no ceremony
+below the way Phase 4 and Phase 5 have one, because there is nothing to
+click yet: the guard above keeps the executor from ever being reached until
+the operator deliberately promotes a policy, and that first promotion — not
+this write-up — is what will actually exercise any of this against real
+mail.
