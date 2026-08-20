@@ -520,7 +520,8 @@ Grep 1 — every mutating imapflow call, and where it lives:
 
     grep -rn 'messageMove\|messageCopy\|messageDelete\|messageFlagsAdd\|messageFlagsRemove\|messageFlagsSet\|mailboxCreate' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-20, all nine lines in one file:
+Output on 2026-08-20, RE-RUN after Phase 5 landed, all nine lines in one file
+and unchanged from the first recording of this grep:
 
     server/mail/providers/imap.ts:198:    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
     server/mail/providers/imap.ts:206:    requireApplied(await client.messageDelete(uids, { uid: true }), `UID EXPUNGE ${uids.join(",")}`, folder);
@@ -539,7 +540,9 @@ Grep 2 — the write lock, which must stay a population of exactly one:
 
     grep -rn 'getMailboxLock' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-20:
+Output on 2026-08-20, RE-RUN after Phase 5 (line number below moved from :138 to
+:141 versus the first recording of this grep, because Phase 5 added lines to
+types.ts above the comment — content and count are unchanged):
 
     server/mail/providers/imap.ts:186:    const lock = await client.getMailboxLock(folder, { readOnly: false });
     server/mail/providers/imap.ts:225:      const lock = await client.getMailboxLock(folder, { readOnly: true });
@@ -547,7 +550,7 @@ Output on 2026-08-20:
     server/mail/providers/imap.ts:258:      const lock = await client.getMailboxLock(folder, { readOnly: true });
     server/mail/providers/imap.ts:285:      const lock = await client.getMailboxLock(folder, { readOnly: true });
     server/mail/providers/imap.ts:302:      const lock = await client.getMailboxLock(folder, { readOnly: true });
-    server/mail/providers/types.ts:138:  // therefore no write lock, which is why imap.ts still holds exactly one non-read-only getMailboxLock.
+    server/mail/providers/types.ts:141:  // therefore no write lock, which is why imap.ts still holds exactly one non-read-only getMailboxLock.
 
 The last line is the doc comment on MailboxProvider.createFolder naming the
 literal string "getMailboxLock" as prose — grep cannot tell code from a
@@ -559,12 +562,25 @@ Grep 3 — who calls the mutation methods. Only three files may appear:
 
     grep -rn 'provider\.moveMessages\|provider\.setLabels\|provider\.createFolder' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-20:
+Output on 2026-08-20, RE-RUN after Phase 5 landed server/mail/filing/resolver.ts
+(the note directly below was written when that file did not exist yet; this is
+the update it told you to come back for):
 
-    server/mail/actions/executor.ts:176:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
-    server/mail/actions/executor.ts:193:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
-    server/mail/actions/undo.ts:191:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
-    server/mail/actions/undo.ts:208:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/actions/executor.ts:224:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:241:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:203:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:220:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
+
+Three files — executor.ts, undo.ts, resolver.ts — exactly the set the contract
+above names, and exactly one createFolder call site, inside resolver.ts's
+resolve(), memoised per run. No fourth file appears. Had one appeared, that
+would be a breach of the invariant, not a documentation update, and this
+runbook would say so instead of recording a clean grep.
+
+The paragraph below is left as it was written during Phase 4, for the record:
+it is what the previous grep looked like BEFORE resolver.ts existed, and why
+that absence was correct at the time rather than stale.
 
 executor.ts and undo.ts, nothing else — no createFolder caller appears.
 That is correct and expected, not a stale grep: server/mail/filing/resolver.ts,
@@ -684,3 +700,132 @@ RESCUE DETECTION IS PHASE 6. Until then, a policy that makes a mistake stays
 active until YOU suspend it, and the Action Journal is the only mechanism
 that will show you it happened. Read the journal after a batch, not just the
 counters.
+
+
+=============================================================================
+PHASE 5 — FILING TO CLIENT FOLDERS (added 2026-08-20)
+=============================================================================
+
+Phase 5 makes the `file` action real. A `file`-classed message is now filed
+into a folder derived from its sender policy's client/topic mapping, rendered
+with the destination mailbox's own hierarchy delimiter, and created on first
+use if it does not already exist. Anything that cannot be resolved or is not
+trustworthy enough to file automatically lands in a `filing_queue` instead,
+with a reason attached.
+
+Nothing in Phase 5 has ever run against a real IMAP server. Every mutating
+path — the resolver's createFolder call, the executor's file mutation, undo's
+filing-aware resolution — was verified by typecheck, by unit tests over a fake
+provider, and by reading. Those tests assert which calls get issued; they
+cannot prove a real server folder list, delimiter, or CREATE response behaves
+the way the code expects. So, exactly as Phase 4's ceremony was the real
+acceptance test for the executor and undo, the sequence below — specifically
+steps 5 through 7 — is the first time filing touches real mail. Do it once,
+deliberately, on one message and one sender whose destination is obvious.
+
+
+-----------------------------------------------------------------------------
+THE ORDER — EACH STEP DEPENDS ON THE ONE BEFORE IT
+-----------------------------------------------------------------------------
+
+  1. Apply migrations 0005 and 0006:
+
+         bun run db:migrate
+
+     Both are pending as of this write-up; neither has been applied. 0005
+     adds Action.mailboxId (see the Phase 4 section above — if you are doing
+     Phase 4's and Phase 5's migrations in the same sitting, one db:migrate
+     run applies both in order). 0006 (server/db/migrations/0006_confused_fenris.sql)
+     adds the FilingBinding table — the operator's "this logical path already
+     has a home" bindings — and Action.targetPath, the column filing writes
+     its proposed destination into. Nothing below works until both exist.
+
+  2. Dry run the mapping seed:
+
+         bun --env-file=.env scripts/seed-filing-mapping.ts
+
+     Read the output. Expect 41 senders mapped, 1 unmapped
+     (contact-form@tellmann.co.za, deliberately — it is inbound leads from the
+     operator's own site and the triage doc calls it "worth a look before
+     filing", a destination the operator has not decided yet), and 8
+     FilingBinding rows proposed for felix@tellmann.co.za, none for the three
+     Gmail mailboxes (they have no user labels to preserve, so every logical
+     path renders fresh there).
+
+  3. Apply the seed:
+
+         bun --env-file=.env scripts/seed-filing-mapping.ts --apply
+
+     The script preflights that FilingBinding actually exists and refuses
+     with a named error if step 1 has not happened — it will not commit a
+     mapping half of the write with no binding half to match it. All of its
+     writes (both the SenderPolicy updates and the FilingBinding inserts) run
+     inside one transaction, so a failure partway through leaves the database
+     exactly as it was.
+
+  4. Run a FRESH shadow pass:
+
+         bun --env-file=.env tmp/run-shadow.ts
+
+     REQUIRED, not optional. Action.targetPath is written at decision time —
+     the shadow runner computes and stores the proposed folder path the
+     moment it journals a `file` decision, not later when the row is
+     approved. Every Action row minted BEFORE step 3 landed the mapping was
+     computed against a sender policy with no client/topic set, so it carries
+     no proposal and resolves to `no_mapping` in the filing queue. Skipping
+     this step means every visible `file` decision queues instead of files,
+     for a reason that looks like a bug and is actually stale data.
+
+  5. Review the shadow report at /admin/shadow and approve exactly ONE `file`
+     decision, on a sender whose destination is obvious (one of the 41 mapped
+     senders, ideally one bound to an existing tellmann folder rather than one
+     that will mint a brand-new one on the first try).
+
+  6. Apply it from /admin/mail. THIS CREATES A FOLDER ON A REAL SERVER if the
+     resolved path is not already bound to an existing one. Check the folder
+     appeared where expected: right name, right delimiter. On
+     felix@tellmann.co.za that is `.` (so a `Clients/Listify` mapping with no
+     binding renders as `INBOX.Clients.Listify`); on any of the three Gmail
+     mailboxes it is `/`. If the sender is one of the 8 bound paths, confirm
+     the message landed in the operator's existing folder rather than a new
+     one beside it.
+
+  7. Undo it. Check the message went back to where it started. Undo does NOT
+     remove the folder step 6 created, and does not try to: it restores the
+     message, and an empty folder it leaves behind is not a mutation worth
+     reversing. Undo also never CREATES a folder, on purpose — it resolves
+     the filing destination the same way the executor did, but only to find
+     where the message should return to, never to manufacture a place for it
+     that did not already exist.
+
+  8. Only then look at /admin/filing, the queue. Every message the DKIM gate
+     held back, every unmapped sender, and anything else that could not
+     resolve lands here with a reason attached (`no_mapping`,
+     `dkim_unaligned`, `ambiguous_client`, or `unresolvable_folder`). Approve
+     a batch from here only after steps 5 through 7 have proven the single-
+     message path works end to end.
+
+
+-----------------------------------------------------------------------------
+WHAT WAS MEASURED, AND WHAT WAS NOT
+-----------------------------------------------------------------------------
+
+MEASURED, against the live database, before any live IMAP mutation: the 41/1
+mapping split above, the 8 FilingBinding rows for felix@tellmann.co.za, the
+DKIM alignment rates by mailbox that motivated amending §6's gate to
+address-scope-only (recorded in server/mail/filing/paths.ts), and that 40 of
+the 41 seeded `file` policies are address-scoped so the amended gate applies
+to nearly all of them.
+
+NOT MEASURED, until an operator runs steps 5 through 7 above: whether
+createFolder's CREATE actually lands where findNamespaceRoot's INBOX-rooted
+detection predicts on felix@tellmann.co.za; whether a Gmail label created via
+mailboxCreate behaves the way the resolver assumes (a top-level label, not
+INBOX-rooted); whether a bound path's folder name — e.g. "INBOX.Finances -
+Ref", with a space and a hyphen — round-trips through the IMAP LIST/CREATE
+cycle without being mangled; and whether undo's filing-aware resolution
+actually finds the message back in its origin folder rather than declining,
+the same class of risk the Phase 4 section above documents for the archive
+and trash paths. Every one of these is reasoned about in code comments in
+server/mail/filing/resolver.ts, render.ts and paths.ts; none of them has met a
+real server. The ceremony above is what proves or disproves that reasoning.
