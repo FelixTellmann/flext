@@ -354,6 +354,12 @@ export const action = mysqlTable(
     // restore it exactly rather than reconstruct it from later, possibly-incomplete sync data.
     from_state_json: text("fromStateJson"),
     to_state_json: text("toStateJson"),
+    // The logical path §6 chose for a `file` action — "Clients/KidsLiving", never a server-native folder
+    // name. Written by the shadow runner as the proposal and by filing-queue resolution as the operator's
+    // confirmation; server/mail/filing/render.ts is the only thing that turns it into a real folder.
+    // Nullable for the same reason mailboxId is: 29,375 rows predate it, and it is meaningless on the
+    // archive and trash kinds.
+    target_path: varchar("targetPath", { length: 191 }),
     run_id: varchar("runId", { length: 191 }).notNull(),
     decided_at: datetime("decidedAt", { fsp: 3 }),
     applied_at: datetime("appliedAt", { fsp: 3 }),
@@ -364,5 +370,32 @@ export const action = mysqlTable(
     senderPolicyIdIndex: index("Action_senderPolicyId_idx").on(table.sender_policy_id),
     mailboxIdStatusIndex: index("Action_mailboxId_status_idx").on(table.mailbox_id, table.status),
     messageIdKindRunIdUnique: uniqueIndex("Action_messageId_kind_runId_key").on(table.message_id, table.kind, table.run_id),
+  }),
+);
+
+// ─── FilingBinding ───────────────────────────────────────────────────────────
+// One mailbox's answer to "where does this logical path actually live?". §6 says filing paths are
+// logical; this is what makes that true across servers that disagree about names. felix@tellmann.co.za
+// carries thirteen hand-built folders flat under INBOX ("INBOX.KidsLiving", "INBOX.Finances - Ref") and
+// the three Gmail mailboxes carry no user labels at all, so the same logical path has to reach an
+// existing folder on one server and a folder created on first use on another.
+//
+// A logical path with no binding is not an error: render.ts derives a folder from its segments and the
+// resolver creates it. A binding exists to override that, which is why `folder` is stored verbatim,
+// delimiter already applied, and never re-rendered.
+export const filingBinding = mysqlTable(
+  "FilingBinding",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    mailbox_id: varchar("mailboxId", { length: 191 }).notNull(),
+    // 191 to match the `client` and `topic` columns a path is derived from.
+    logical_path: varchar("logicalPath", { length: 191 }).notNull(),
+    // 512 to match Message.folder: a server-native path, delimiter already applied.
+    folder: varchar("folder", { length: 512 }).notNull(),
+  },
+  (table) => ({
+    mailboxLogicalPathUnique: uniqueIndex("FilingBinding_mailboxId_logicalPath_key").on(table.mailbox_id, table.logical_path),
   }),
 );
