@@ -9,6 +9,7 @@ import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import { encryptCredential } from "@server/mail/crypto/credentials";
 import { classifyMailboxError } from "@server/mail/errors";
+import { CLIENT_SEGMENT_RULE } from "@server/mail/filing/paths";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FETCH_SPEC } from "@server/mail/providers/headers";
@@ -356,15 +357,7 @@ export const mailProcedures = {
         // retyped, so "purge" (the irreversible sweep action reserved for the separate Phase 8 job) has
         // exactly one place it could ever be added back.
         action: z.enum(POLICY_ACTIONS),
-        client: z
-          .string()
-          .max(191)
-          .refine((value) => !value.includes("/"), {
-            message:
-              'a client name may not contain "/": it is one segment of a logical path, and a separator here would let a policy inject folder hierarchy that logicalPathFor never sees.',
-          })
-          .nullable()
-          .default(null),
+        client: z.string().max(191).refine(CLIENT_SEGMENT_RULE.test, { message: CLIENT_SEGMENT_RULE.message }).nullable().default(null),
         topic: z.string().max(191).nullable().default(null),
         autonomy: policy_autonomy_schema,
         source: z.string().min(1).max(191),

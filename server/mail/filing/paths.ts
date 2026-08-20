@@ -7,6 +7,18 @@ export const LOGICAL_SEPARATOR = "/";
 
 export const CLIENTS_ROOT = "Clients";
 
+// The write-side half of logicalPathFor's contract, exported as data rather than as a Zod schema so this
+// module stays dependency-free and both validators can share one spelling. A client is ONE segment of a
+// logical path; a separator inside it would inject folder hierarchy that logicalPathFor never sees and
+// renderFolderPath would then refuse at execution time, after the policy was already stored. Two Zod
+// schemas validate this input on the live path (the ORPC boundary and upsert_policy_schema), and a
+// literal "/" in each is three spellings of one rule with nothing forcing them to agree — the exact
+// shape that cost Phase 3 five fix rounds.
+export const CLIENT_SEGMENT_RULE = {
+  test: (value: string): boolean => !value.includes(LOGICAL_SEPARATOR),
+  message: `a client name may not contain "${LOGICAL_SEPARATOR}": it is one segment of a logical path, and a separator here would let a policy inject folder hierarchy that logicalPathFor never sees.`,
+} as const;
+
 // The closed set of reasons a message reaches the filing queue instead of a folder. Exported as a tuple
 // so the admin route and the Zod boundary can both derive from it rather than restating four strings.
 export const FILING_QUEUE_REASONS = ["no_mapping", "dkim_unaligned", "ambiguous_client", "unresolvable_folder"] as const;

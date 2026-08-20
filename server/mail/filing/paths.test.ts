@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { filingDecisionFor, logicalPathFor } from "@server/mail/filing/paths";
+import { CLIENT_SEGMENT_RULE, filingDecisionFor, LOGICAL_SEPARATOR, logicalPathFor } from "@server/mail/filing/paths";
 
 describe("logicalPathFor", () => {
   test("composes client and topic under the Clients root", () => {
@@ -50,5 +50,26 @@ describe("filingDecisionFor", () => {
   test("queues a policy with no mapping before it looks at DKIM at all", () => {
     const decision = filingDecisionFor({ logical_path: null, policy_scope: "domain", dkim_aligned: true });
     expect(decision).toMatchObject({ outcome: "queue", reason: "no_mapping" });
+  });
+
+  // The branch the module argues cannot occur — rules.ts step 5 can only derive archive, keep_inbox or
+  // needs_action, so no derived decision is ever `file`. Pinned anyway: the argument lives in a comment,
+  // and a later caller reaching this branch some other way would otherwise change behaviour silently.
+  test("leaves a decision with no policy behind it ungated rather than queued", () => {
+    const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: null });
+    expect(decision).toEqual({ outcome: "file", logical_path: "Finances" });
+  });
+});
+
+describe("CLIENT_SEGMENT_RULE", () => {
+  // The rule is shared by two Zod schemas that both validate on the live path. Pinning it here is what
+  // stops the separator acquiring a third spelling as a literal inside one of them.
+  test("rejects a client name carrying the logical separator", () => {
+    expect(CLIENT_SEGMENT_RULE.test("Clients/Listify")).toBe(false);
+    expect(CLIENT_SEGMENT_RULE.test("Listify")).toBe(true);
+  });
+
+  test("names the separator it rejects, so the message cannot drift from the rule", () => {
+    expect(CLIENT_SEGMENT_RULE.message).toContain(LOGICAL_SEPARATOR);
   });
 });
