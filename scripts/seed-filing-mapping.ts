@@ -1,9 +1,9 @@
 import { db } from "@server/db/drizzle";
-import { filingBinding, mailbox } from "@server/db/schema";
+import { filingBinding, mailbox, senderPolicy } from "@server/db/schema";
 import type { PolicyScope } from "@server/mail/classify/rules";
-import { CLIENTS_ROOT, LOGICAL_SEPARATOR, logicalPathFor } from "@server/mail/filing/paths";
+import { CLIENT_SEGMENT_RULE, CLIENTS_ROOT, LOGICAL_SEPARATOR, logicalPathFor } from "@server/mail/filing/paths";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
-import { loadPolicyIndex, upsertPolicy } from "@server/mail/query/policies";
+import { loadPolicyIndex } from "@server/mail/query/policies";
 import { eq } from "drizzle-orm";
 
 // Seeds `client`/`topic` on the 103 sender policies (from tmp/2026-08-18-mail-triage-run-1.md), and the
@@ -25,6 +25,21 @@ import { eq } from "drizzle-orm";
 // `INBOX.Finances - Ref`, so `Finances/Tax` would render as `INBOX.Finances.Tax`, a folder under a
 // different parent than the one the operator's Finances binding points at. The design spec splits by
 // topic only where volume earns it, and two senders don't.
+//
+// `contact-form@tellmann.co.za` is `file`-classed but deliberately NOT mapped anywhere below: it's
+// inbound leads from the operator's own site, and the triage doc calls it "worth a look before filing" —
+// the one `file` policy whose destination is a judgement call the operator hasn't made yet. It queues as
+// `no_mapping`, which is the correct, visible outcome. Do not add a mapping for it without that decision
+// being made first.
+//
+// APPLY SAFETY: migration 0006 (which creates FilingBinding) is not applied in the live database as of
+// this writing. Nothing in this repo uses db.transaction (grep confirms), and this script writes two
+// kinds of row — a SenderPolicy mapping and a FilingBinding — that only make sense together: a mapped
+// logical path with no binding renders fresh and CREATES a new folder next to the operator's real one
+// (e.g. `INBOX.Finances` beside the real `INBOX.Finances - Ref`, which holds 99 messages). So `--apply`
+// (a) preflights that FilingBinding actually exists before writing anything, and (b) wraps every write in
+// one transaction, so a failure partway through leaves the database exactly as it was rather than half
+// the mapping committed with no bindings to match it.
 
 type MappingSender = { scope: PolicyScope; value: string };
 
@@ -54,9 +69,11 @@ const CLIENTS_KIDSLIVING: readonly MappingSender[] = [address("support@bobgo.co.
 
 const OPS_SHOPIFY: readonly MappingSender[] = [address("mailer@shopify.com"), address("store+26179660@t.shopifyemail.com")];
 
-// The sixteen Group E senders (financial records: banking, payments, vendor invoices) plus the two tax
-// senders that would otherwise want a Finances/Tax split — see the file-level comment on why they land
-// here instead.
+// The sixteen Group E senders (financial records: banking, payments, vendor invoices) plus all six
+// Group H tax/banking/legal senders — SARS and the US visa fee join Carta, Deel, DKB and Wise, because a
+// cap table, contractor payments, a German bank and an international payments provider belong with FNB,
+// PayPal and Stripe for the same reason: a filed, never-archived accounting trail. None of them get a
+// Finances/Tax split — see the file-level comment.
 const FINANCES: readonly MappingSender[] = [
   address("incontact@fnb.co.za"),
   address("fnbcheque@fnbstatements.co.za"),
@@ -76,6 +93,10 @@ const FINANCES: readonly MappingSender[] = [
   address("invoice+statements@mail.anthropic.com"),
   address("noreply@sars.gov.za"),
   address("donotreply@usvisa-info.com"),
+  address("noreply@wise.com"),
+  address("no-reply@carta.com"),
+  address("no-reply@deel.support"),
+  address("noreply@dkb.de"),
 ];
 
 const PERSONAL_TENNIS: readonly MappingSender[] = [address("no-reply@booknplay.co.za")];
@@ -251,34 +272,72 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  console.log("");
-  for (const mapping of resolved) {
-    const existing = mapping.existing as PolicyRow;
-    const row = await upsertPolicy({
-      scope: mapping.scope,
-      value: mapping.value,
-      action: existing.action,
-      client: mapping.client,
-      topic: mapping.topic,
-      autonomy: existing.autonomy,
-      source: existing.source,
-      suspended_at: existing.suspended_at,
-      suspension_reason: existing.suspension_reason,
-    });
-    console.log(`updated ${row.scope}:${row.value} -> client=${row.client ?? "null"} topic=${row.topic ?? "null"}`);
+  // Preflight, before the first write: FilingBinding (migration 0006) must exist, or a mapping commits
+  // with no binding to match it and filing renders a brand-new folder next to the operator's real one.
+  // Runs before the policy loop below, not between the policy and binding loops — the whole point is to
+  // never let the mapping half land without the binding half able to follow it.
+  try {
+    await db.select({ id: filingBinding.id }).from(filingBinding).limit(1);
+  } catch (error) {
+    throw new Error(
+      `FilingBinding does not exist yet (migration 0006 is unapplied), so --apply would commit all ${resolved.length} policy mappings and then fail on the first binding insert — mapped-but-unbound paths render into fresh folders next to the operator's real ones. Run "bun run db:migrate" first, then re-run with --apply. Underlying error: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   console.log("");
-  for (const binding of BINDINGS) {
-    const now = new Date();
-    await db
-      .insert(filingBinding)
-      .values({ mailbox_id: tellmann.id, logical_path: binding.logical_path, folder: binding.folder, updatedAt: now })
-      .onDuplicateKeyUpdate({ set: { folder: binding.folder, updatedAt: now } });
-    console.log(`upserted binding ${binding.logical_path} -> ${binding.folder}`);
-  }
+  // Backstop for every other partial failure: policies and bindings only make sense written together, so
+  // both loops run inside one transaction and either both land or neither does.
+  await db.transaction(async (tx) => {
+    for (const mapping of resolved) {
+      const existing = mapping.existing as PolicyRow;
+      if (mapping.client !== null && !CLIENT_SEGMENT_RULE.test(mapping.client)) {
+        throw new Error(CLIENT_SEGMENT_RULE.message);
+      }
+      const now = new Date();
+      const values = {
+        scope: mapping.scope,
+        value: mapping.value,
+        action: existing.action,
+        client: mapping.client,
+        topic: mapping.topic,
+        autonomy: existing.autonomy,
+        source: existing.source,
+        suspended_at: existing.suspended_at,
+        suspension_reason: existing.suspension_reason,
+        updatedAt: now,
+      };
+      await tx
+        .insert(senderPolicy)
+        .values(values)
+        .onDuplicateKeyUpdate({
+          set: {
+            action: values.action,
+            client: values.client,
+            topic: values.topic,
+            autonomy: values.autonomy,
+            source: values.source,
+            suspended_at: values.suspended_at,
+            suspension_reason: values.suspension_reason,
+            updatedAt: values.updatedAt,
+          },
+        });
+      console.log(`updated ${mapping.scope}:${mapping.value} -> client=${mapping.client ?? "null"} topic=${mapping.topic ?? "null"}`);
+    }
 
-  console.log(`\ndone: ${resolved.length} policies updated, ${BINDINGS.length} bindings upserted for ${TELLMANN_MAILBOX_LABEL}.`);
+    console.log("");
+    for (const binding of BINDINGS) {
+      const now = new Date();
+      await tx
+        .insert(filingBinding)
+        .values({ mailbox_id: tellmann.id, logical_path: binding.logical_path, folder: binding.folder, updatedAt: now })
+        .onDuplicateKeyUpdate({ set: { folder: binding.folder, updatedAt: now } });
+      console.log(`upserted binding ${binding.logical_path} -> ${binding.folder}`);
+    }
+  });
+
+  console.log(
+    `\ndone: ${resolved.length} policies updated, ${BINDINGS.length} bindings upserted for ${TELLMANN_MAILBOX_LABEL}, all in one transaction.`,
+  );
   process.exit(0);
 }
 
