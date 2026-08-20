@@ -36,33 +36,33 @@ describe("logicalPathFor", () => {
 describe("filingDecisionFor", () => {
   test("files an address-scoped policy regardless of DKIM state", () => {
     for (const dkim_aligned of [true, false, null]) {
-      const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: "address", dkim_aligned });
+      const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: "address", dkim_aligned, filing_confirmed_at: null });
       expect(decision).toEqual({ outcome: "file", logical_path: "Finances" });
     }
   });
 
   test("files a domain-scoped policy only when DKIM is aligned", () => {
-    const aligned = filingDecisionFor({ logical_path: "Finances", policy_scope: "domain", dkim_aligned: true });
+    const aligned = filingDecisionFor({ logical_path: "Finances", policy_scope: "domain", dkim_aligned: true, filing_confirmed_at: null });
     expect(aligned.outcome).toBe("file");
   });
 
   test("queues a domain-scoped policy when DKIM fails or is absent", () => {
     for (const dkim_aligned of [false, null]) {
-      const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: "domain", dkim_aligned });
+      const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: "domain", dkim_aligned, filing_confirmed_at: null });
       expect(decision.outcome).toBe("queue");
       expect(decision).toMatchObject({ reason: "dkim_unaligned" });
     }
   });
 
   test("queues a policy with no mapping before it looks at DKIM at all", () => {
-    const decision = filingDecisionFor({ logical_path: null, policy_scope: "domain", dkim_aligned: true });
+    const decision = filingDecisionFor({ logical_path: null, policy_scope: "domain", dkim_aligned: true, filing_confirmed_at: null });
     expect(decision).toMatchObject({ outcome: "queue", reason: "no_mapping" });
   });
 
   // Fails CLOSED. Only an explicit `address` scope un-gates, so a decision whose provenance is unknown is
   // treated as the stricter case rather than the looser one.
   test("queues a decision with no policy behind it rather than filing it ungated", () => {
-    const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: null });
+    const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: null, filing_confirmed_at: null });
     expect(decision).toMatchObject({ outcome: "queue", reason: "dkim_unaligned" });
   });
 
@@ -70,7 +70,12 @@ describe("filingDecisionFor", () => {
   // deletePolicy hard-deletes and Action.senderPolicyId has an index but no foreign key, so the executor's
   // LEFT join hands this shape over for any `file` row whose policy was deleted after it was proposed.
   test("a deleted domain-scoped policy cannot file an unaligned message by losing its scope", () => {
-    const decision = filingDecisionFor({ logical_path: "Clients/Acme", policy_scope: null, dkim_aligned: false });
+    const decision = filingDecisionFor({
+      logical_path: "Clients/Acme",
+      policy_scope: null,
+      dkim_aligned: false,
+      filing_confirmed_at: null,
+    });
     expect(decision.outcome).toBe("queue");
     expect(decision).toMatchObject({ reason: "dkim_unaligned" });
     if (decision.outcome !== "queue") {
@@ -81,8 +86,33 @@ describe("filingDecisionFor", () => {
 
   // A null scope is gated on DKIM, not blocked outright: an aligned message still files.
   test("still files a scope-less decision when the message is DKIM-aligned", () => {
-    const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: true });
+    const decision = filingDecisionFor({ logical_path: "Finances", policy_scope: null, dkim_aligned: true, filing_confirmed_at: null });
     expect(decision).toEqual({ outcome: "file", logical_path: "Finances" });
+  });
+
+  // Without this the gate re-fires on every shape resolveFilingActions produces — it rewrites neither the
+  // policy scope nor the message's DKIM state — so a dkim_unaligned row would resolve, re-queue, resolve,
+  // re-queue forever while the operator was shown a green "resolved" banner each time.
+  test("an operator-confirmed destination files despite the DKIM gate", () => {
+    const confirmed_at = new Date("2026-08-20T10:00:00.000Z");
+    for (const policy_scope of ["domain", null] as const) {
+      for (const dkim_aligned of [false, null]) {
+        const decision = filingDecisionFor({ logical_path: "Finances", policy_scope, dkim_aligned, filing_confirmed_at: confirmed_at });
+        expect(decision).toEqual({ outcome: "file", logical_path: "Finances" });
+      }
+    }
+  });
+
+  // Confirmation supersedes the DKIM proxy and nothing else. A human can vouch for a destination; they
+  // cannot conjure one, so a row with no path still has nowhere to go.
+  test("a confirmation cannot substitute for a missing path", () => {
+    const decision = filingDecisionFor({
+      logical_path: null,
+      policy_scope: "domain",
+      dkim_aligned: null,
+      filing_confirmed_at: new Date("2026-08-20T10:00:00.000Z"),
+    });
+    expect(decision).toMatchObject({ outcome: "queue", reason: "no_mapping" });
   });
 });
 

@@ -43,12 +43,14 @@ export type PendingActionRow = {
   run_id: string;
   folder: string;
   uid: number;
-  // The three inputs §6's filing gate needs, carried on the row rather than fetched per message: the
-  // proposal (Action.targetPath), the scope of the policy that made it, and the message's DKIM state.
+  // The four inputs §6's filing gate needs, carried on the row rather than fetched per message: the
+  // proposal (Action.targetPath), the scope of the policy that made it, the message's DKIM state, and
+  // whether a human confirmed the destination out of the filing queue.
   // Joined in loadPendingActions so the gate stays one pure function over data the executor already has.
   target_path: string | null;
   policy_scope: PolicyScope | null;
   dkim_aligned: boolean | null;
+  filing_confirmed_at: Date | null;
 };
 
 // An applied row, read back so server/mail/actions/undo.ts can issue its inverse. `applied_at` rides
@@ -394,6 +396,7 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
       logical_path: row.target_path,
       policy_scope: row.policy_scope,
       dkim_aligned: row.dkim_aligned,
+      filing_confirmed_at: row.filing_confirmed_at,
     });
     if (decision.outcome === "queue") {
       // §6's filing queue: kind `file` at status `deferred`, with the reason in `error`. Nothing was sent

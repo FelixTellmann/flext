@@ -59,6 +59,7 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
       target_path: action.target_path,
       policy_scope: senderPolicy.scope,
       dkim_aligned: message.dkim_aligned,
+      filing_confirmed_at: action.filing_confirmed_at,
     })
     .from(action)
     .innerJoin(message, eq(message.id, action.message_id))
@@ -83,6 +84,7 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
             target_path: row.target_path,
             policy_scope: toPolicyScope(row.policy_scope),
             dkim_aligned: row.dkim_aligned,
+            filing_confirmed_at: row.filing_confirmed_at,
           },
         ]
       : [],
@@ -350,12 +352,18 @@ async function promoteShadowActions(entries: PromotedEntry[]): Promise<void> {
 //
 // `error: null` clears the queue reason: it explained why the row could not proceed, and status.ts reads a
 // non-null `error` on a `pending` row as an explanation that is no longer true once resolution runs.
+//
+// `filingConfirmedAt` is what stops the row coming straight back. The executor re-runs §6's gate over
+// every pending `file` row, and the policy scope and DKIM state it reads are unchanged by resolution — so
+// without a record that a HUMAN chose this destination the gate fires again and re-queues the row, with
+// the operator seeing a green "resolved" banner each time. filingDecisionFor reads this column and skips
+// the DKIM branch on it.
 async function resolveFilingActions(entries: FilingResolutionEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
     await db
       .update(action)
-      .set({ status: PENDING_STATUS, target_path: entry.target_path, error: null, updatedAt: now })
+      .set({ status: PENDING_STATUS, target_path: entry.target_path, filing_confirmed_at: now, error: null, updatedAt: now })
       .where(and(eq(action.id, entry.action_id), eq(action.status, DEFERRED_STATUS), eq(action.kind, FILE_KIND)));
   }
 }

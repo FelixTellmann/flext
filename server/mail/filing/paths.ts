@@ -80,6 +80,9 @@ export type FilingGateInput = {
   logical_path: string | null;
   policy_scope: PolicyScope | null;
   dkim_aligned: boolean | null;
+  // Action.filingConfirmedAt: non-null once the operator resolved this row out of the filing queue.
+  // Required rather than optional so no call site can forget it and silently re-gate a confirmed row.
+  filing_confirmed_at: Date | null;
 };
 
 export type FilingDecision = { outcome: "file"; logical_path: string } | { outcome: "queue"; reason: FilingQueueReason; detail: string };
@@ -100,6 +103,17 @@ export type FilingDecision = { outcome: "file"; logical_path: string } | { outco
 // left join that correctly keeps the row reportable is the same join that would otherwise strip its gate.
 // Unknown provenance is treated as the stricter case, because the gate exists to stop a spoofed From from
 // writing into a records folder and the operator can still confirm the destination to file it anyway.
+//
+// That last sentence is only true because `filing_confirmed_at` short-circuits the DKIM branch below.
+// DKIM alignment is a PROXY for "someone trustworthy vouched for this destination"; a human who read the
+// sender and chose the folder is the thing that proxy stands in for, so the confirmation supersedes it.
+// Without the short-circuit the gate re-reads the same scope and DKIM state on the next run and re-queues
+// the row the operator just resolved, which makes a dkim_unaligned row permanently unfilable.
+//
+// It supersedes the DKIM branch ONLY. Confirmation cannot conjure a path, so `no_mapping` still gates: a
+// confirmed row normally carries a target_path, and one that somehow does not still has nowhere to go.
+// Nor can it conjure a folder — `unresolvable_folder` is raised downstream by the resolver, and a server
+// that refuses to create the folder refuses no matter who asked for it.
 export function filingDecisionFor(input: FilingGateInput): FilingDecision {
   if (input.logical_path === null) {
     return {
@@ -110,7 +124,7 @@ export function filingDecisionFor(input: FilingGateInput): FilingDecision {
     };
   }
 
-  if (input.policy_scope !== "address" && input.dkim_aligned !== true) {
+  if (input.filing_confirmed_at === null && input.policy_scope !== "address" && input.dkim_aligned !== true) {
     const chooser = input.policy_scope === null ? "a policy that no longer exists" : "a domain-scoped policy";
     return {
       outcome: "queue",

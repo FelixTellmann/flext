@@ -1,0 +1,1 @@
+ALTER TABLE `Action` ADD `filingConfirmedAt` datetime(3);

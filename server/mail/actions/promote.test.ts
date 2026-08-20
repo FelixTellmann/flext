@@ -16,6 +16,7 @@ type FakeRow = {
   kind: string;
   error: string | null;
   target_path: string | null;
+  filing_confirmed_at: Date | null;
   from_state_json: string | null;
   to_state_json: string | null;
   applied_at: string | null;
@@ -32,6 +33,7 @@ function shadowRow(action_id: string, overrides: Partial<FakeRow> = {}): FakeRow
     kind: "archive",
     error: null,
     target_path: null,
+    filing_confirmed_at: null,
     from_state_json: null,
     to_state_json: null,
     applied_at: null,
@@ -83,8 +85,8 @@ function createFakeJournal(input: { events: string[]; seed: FakeRow[] }): FakeJo
     },
 
     // Mirrors journal.ts's `WHERE status = 'deferred' AND kind = FILE_KIND` guard (Task 9): only a
-    // `deferred` `file` row moves, target_path and status change, and error is cleared because the queue
-    // reason it held is no longer true once the row has resolved.
+    // `deferred` `file` row moves, target_path, filing_confirmed_at and status change, and error is
+    // cleared because the queue reason it held is no longer true once the row has resolved.
     resolveFilingActions: async (entries) => {
       input.events.push(`resolve_filing ${entries.map((entry) => entry.action_id).join(",")}`);
       for (const entry of entries) {
@@ -95,6 +97,7 @@ function createFakeJournal(input: { events: string[]; seed: FakeRow[] }): FakeJo
         if (row.status === "deferred" && row.kind === "file") {
           row.status = "pending";
           row.target_path = entry.target_path;
+          row.filing_confirmed_at = new Date();
           row.error = null;
         }
       }
@@ -279,6 +282,9 @@ describe("resolveFilingActions — the path out of `deferred` (Task 9)", () => {
     expect(row?.status).toBe("pending");
     expect(row?.target_path).toBe("Clients/Acme/Ops");
     expect(row?.error).toBeNull();
+    // The record that a HUMAN chose this destination. Without it the executor re-runs §6's DKIM gate over
+    // the same unchanged policy scope and message and re-queues the row on the very next apply run.
+    expect(row?.filing_confirmed_at).not.toBeNull();
   });
 
   test("does not touch a deferred auto_trash row — the kind guard stops it un-deferring destruction", async () => {

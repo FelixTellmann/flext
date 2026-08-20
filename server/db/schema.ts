@@ -360,6 +360,11 @@ export const action = mysqlTable(
     // Nullable for the same reason mailboxId is: 29,375 rows predate it, and it is meaningless on the
     // archive and trash kinds.
     target_path: varchar("targetPath", { length: 191 }),
+    // When a human confirmed `targetPath` from the filing queue, and null on every row that reached its
+    // destination automatically. §6's DKIM gate is a proxy for "did a person vouch for this destination?",
+    // so the confirmation supersedes it — without this column the gate re-reads the same policy scope and
+    // DKIM state on the next run and re-queues the row the operator just resolved, forever.
+    filing_confirmed_at: datetime("filingConfirmedAt", { fsp: 3 }),
     run_id: varchar("runId", { length: 191 }).notNull(),
     decided_at: datetime("decidedAt", { fsp: 3 }),
     applied_at: datetime("appliedAt", { fsp: 3 }),

@@ -275,6 +275,7 @@ function pendingRow(input: {
   target_path?: string | null;
   policy_scope?: PolicyScope | null;
   dkim_aligned?: boolean | null;
+  filing_confirmed_at?: Date | null;
 }): PendingActionRow {
   return {
     action_id: input.action_id ?? `action-${input.uid}`,
@@ -289,6 +290,9 @@ function pendingRow(input: {
     // case under test — the deleted-policy shape — and must not be quietly defaulted back to "address".
     policy_scope: input.policy_scope === undefined ? "address" : input.policy_scope,
     dkim_aligned: input.dkim_aligned ?? null,
+    // Unconfirmed by default: this is the shape the shadow runner proposes, and the confirmed one is what
+    // filing-queue resolution produces.
+    filing_confirmed_at: input.filing_confirmed_at ?? null,
   };
 }
 
@@ -776,7 +780,7 @@ describe("executeActions filing (§6)", () => {
     });
   });
 
-  test("a domain-scoped row that is not DKIM-aligned is queued, and nothing reaches the mailbox", async () => {
+  test("an unconfirmed domain-scoped row that is not DKIM-aligned is queued, and nothing reaches the mailbox", async () => {
     const events: string[] = [];
     const pending = [pendingRow({ uid: 104, kind: "file", target_path: CLIENT_PATH, policy_scope: "domain", dkim_aligned: null })];
     const journal = createFakeJournal({ events, pending });
@@ -799,6 +803,70 @@ describe("executeActions filing (§6)", () => {
     // touched the server at all — not a move, not a label write, not even the folder it would file into.
     expect(mutationEvents(events)).toEqual([]);
     expect(row?.from_state_json).toBeNull();
+  });
+
+  // The row shape resolveFilingActions produces: `pending` again, with the operator's path AND the
+  // timestamp recording that they chose it. Resolution rewrites neither the policy scope nor the message's
+  // DKIM state, so without filingConfirmedAt this is byte-for-byte the queued shape above and the gate
+  // re-fires — resolve, re-queue, resolve, re-queue, with a green "Resolved" banner every time.
+  test("an operator-confirmed row files instead of being re-queued by the same gate", async () => {
+    const events: string[] = [];
+    const pending = [
+      pendingRow({
+        uid: 117,
+        kind: "file",
+        target_path: CLIENT_PATH,
+        policy_scope: "domain",
+        dkim_aligned: null,
+        filing_confirmed_at: new Date("2026-08-20T10:00:00.000Z"),
+      }),
+    ];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 117, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
+    expect(journal.rows.get("action-117")?.status).toBe("applied");
+    expect(mutationEvents(events)).toEqual([`create_folder ${CLIENT_FOLDER}`, `move INBOX 117 -> ${CLIENT_FOLDER}`]);
+  });
+
+  // Confirmation supersedes the DKIM proxy and nothing else: a human vouching for a destination cannot
+  // invent one, so a confirmed row that still has no path stays queued as no_mapping.
+  test("a confirmed row with no path is still queued, because confirmation cannot conjure a destination", async () => {
+    const events: string[] = [];
+    const pending = [
+      pendingRow({
+        uid: 118,
+        kind: "file",
+        target_path: null,
+        policy_scope: "domain",
+        dkim_aligned: null,
+        filing_confirmed_at: new Date("2026-08-20T10:00:00.000Z"),
+      }),
+    ];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 118, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 0, failed: 0, deferred: 1 } satisfies ExecuteActionsResult);
+    expect(journal.rows.get("action-118")?.error).toContain("no_mapping");
+    expect(mutationEvents(events)).toEqual([]);
   });
 
   // The live shape the LEFT join produces: deletePolicy hard-deletes and Action.senderPolicyId has no
