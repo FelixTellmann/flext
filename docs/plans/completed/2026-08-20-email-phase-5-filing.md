@@ -1523,3 +1523,26 @@ That is the only intentional red gate in the sequence, and Task 6 says so in its
 **Task interface conflicts to watch:** Tasks 8 and 9 both edit `server/mail/actions/executor.ts` (the
 port type) and `server/orpc/mail.ts`. Task 9 must be dispatched after Task 8, never in parallel.
 Tasks 1, 9 and 10 all edit `server/orpc/mail.ts`. Sequential dispatch throughout, as the skill requires.
+
+---
+
+**Completed: 2026-08-20**
+- Verified: `bun run tsc` 0 errors · `bun test` 415 pass / 0 fail across 26 files · `bun run build`
+  succeeded · `bunx biome check` 0 errors. All three read-only-invariant greps re-run and byte-identical
+  to what `docs/runbooks/2026-08-17-mail-sync-schedules.txt` records: one non-read-only `getMailboxLock`,
+  and exactly three files reaching a mutation method — `executor.ts`, `undo.ts`, `filing/resolver.ts`.
+  Twelve tasks, each individually reviewed; a whole-branch review found eight further defects, all fixed,
+  and a scoped re-review returned SHIP. The seed script's dry run reports 41 senders mapped and 1
+  deliberately unmapped.
+- Open: **nothing in this phase has ever run against a real IMAP server or a migrated database.** Every
+  check was typecheck, tests over fakes, and reading. Three migrations are generated and unapplied —
+  `0005` (Action.mailboxId), `0006_confused_fenris` (Action.targetPath + FilingBinding),
+  `0007_overjoyed_cargill` (Action.filingConfirmedAt) — and the seed script has not been applied. The
+  first time filing touches real mail is steps 5-7 of the runbook's PHASE 5 ceremony, which is the
+  operator's to run. Folder creation on a live server, the delimiter rendering on xneelo's dot-delimited
+  namespace, and undo of a real filing are all unproven until then. Silence = confirmed.
+- Deferred, recorded in the SDD ledger: `PolicyIndex.by_id` (three call sites derive "which policy fired"
+  from a scope plus a normalized key rather than reading `decision.policy_id` — no divergence is
+  constructible today); `ambiguous_client` is a defined, rendered queue reason that nothing yet produces,
+  because thread-level client detection does not exist; and there is no UI that writes a `FilingBinding`,
+  so a binding change means editing and re-running the seed script.
