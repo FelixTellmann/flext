@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ActionJournal, ExecuteActionsResult, PendingActionRow } from "@server/mail/actions/executor";
 import { executeActions } from "@server/mail/actions/executor";
-import { FILE_DEFERRED_REASON, GMAIL_INBOX_LABEL, inverseOf, planFor } from "@server/mail/actions/kinds";
+import { GMAIL_INBOX_LABEL, inverseOf, planFor } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, serializeActionState } from "@server/mail/actions/state";
 import type {
@@ -368,6 +368,7 @@ describe("executeActions ordering (§7.1)", () => {
       source_folder: GMAIL_CANONICAL_FOLDER,
       archive_folder: null,
       trash_folder: GMAIL_TRASH_FOLDER,
+      file_folder: null,
     });
     if (plan.outcome !== "planned") {
       throw new Error("a Gmail archive must produce a planned action");
@@ -540,7 +541,10 @@ describe("executeActions outcomes", () => {
     expect(journal.rows.get("action-52")?.from_state_json).toBeNull();
   });
 
-  test("file is deferred, not failed, and issues no command", async () => {
+  // planFor("file") now produces a real plan (kinds.ts §6), but executeActions still passes a hardcoded
+  // `file_folder: null` — Task 8 resolves the destination from a provider + database read and replaces
+  // this stopgap. Until then a `file` row fails the same way a missing \Archive or \Trash folder does.
+  test("file fails under the stopgap file_folder, and issues no command", async () => {
     const events: string[] = [];
     const pending = [pendingRow({ uid: 61, kind: "file" })];
     const journal = createFakeJournal({ events, pending });
@@ -548,13 +552,12 @@ describe("executeActions outcomes", () => {
 
     const result = await executeActions({ mailbox_id: "mailbox-1", flavor: "generic", provider, journal, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, applied: 0, failed: 0, deferred: 1 } satisfies ExecuteActionsResult);
-    expect(journal.rows.get("action-61")).toEqual({
-      status: "deferred",
-      from_state_json: null,
-      to_state_json: null,
-      error: FILE_DEFERRED_REASON,
-    });
+    expect(result).toEqual({ examined: 1, applied: 0, failed: 1, deferred: 0 } satisfies ExecuteActionsResult);
+    const row = journal.rows.get("action-61");
+    expect(row?.status).toBe("failed");
+    expect(row?.error).toContain("filing destination");
+    expect(row?.from_state_json).toBeNull();
+    expect(row?.to_state_json).toBeNull();
     expect(events.some((event) => event.startsWith("move ") || event.startsWith("set_labels "))).toBe(false);
   });
 

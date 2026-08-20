@@ -121,6 +121,10 @@ function requirePlan(
     source_folder: from_state.folder,
     archive_folder: folders.archive_folder,
     trash_folder: folders.trash_folder,
+    // Stopgap: no `file` row can be `applied` yet (executor.ts's own planFor call refuses filing with the
+    // same null), so this branch is unreachable today. Task 8 resolves the real destination folder and
+    // replaces this.
+    file_folder: null,
   });
   if (plan.outcome === "deferred") {
     throw new Error(

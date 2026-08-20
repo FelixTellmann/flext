@@ -20,8 +20,13 @@ import { GMAIL_CANONICAL_FOLDER } from "@server/mail/types";
 // module must work with whatever a server calls its Archive and Trash. Deliberately not "Archive".
 const GENERIC_ARCHIVE = "Archives/2026";
 const GENERIC_TRASH = "Deleted Items";
+const GENERIC_FILE = "Clients/Acme";
 const GMAIL_ARCHIVE = "[Gmail]/All Mail";
 const GMAIL_TRASH = "[Gmail]/Trash";
+// Deliberately not "Clients/Acme": gmail_states[3] already carries that label, and a fixture that
+// collides with an existing label would make the round trip for that state a no-op instead of a real
+// add-then-remove.
+const GMAIL_FILE = "Clients/Beta";
 
 // Sorts and de-duplicates independently of the module, so a fixture is already in the canonical form
 // applyToState returns and a round trip can be compared with plain deep equality.
@@ -48,12 +53,12 @@ function statesFor(flavor: MailboxFlavor): MailboxState[] {
 
 function contextFor(flavor: MailboxFlavor, from_state: MailboxState): PlanContext {
   if (flavor === "gmail") {
-    return { source_folder: from_state.folder, archive_folder: GMAIL_ARCHIVE, trash_folder: GMAIL_TRASH };
+    return { source_folder: from_state.folder, archive_folder: GMAIL_ARCHIVE, trash_folder: GMAIL_TRASH, file_folder: GMAIL_FILE };
   }
-  return { source_folder: from_state.folder, archive_folder: GENERIC_ARCHIVE, trash_folder: GENERIC_TRASH };
+  return { source_folder: from_state.folder, archive_folder: GENERIC_ARCHIVE, trash_folder: GENERIC_TRASH, file_folder: GENERIC_FILE };
 }
 
-function plannedFor(kind: "archive" | "auto_trash", flavor: MailboxFlavor, from_state: MailboxState): PlannedAction {
+function plannedFor(kind: "archive" | "auto_trash" | "file", flavor: MailboxFlavor, from_state: MailboxState): PlannedAction {
   const plan = planFor(kind, flavor, contextFor(flavor, from_state));
   if (plan.outcome !== "planned") {
     throw new Error(`expected ${flavor} ${kind} to produce a planned action`);
@@ -81,10 +86,8 @@ describe("every action round-trips through its inverse", () => {
       for (const [index, from_state] of statesFor(flavor).entries()) {
         test(`${flavor} ${kind} on state ${index} restores the original state`, () => {
           const plan = planFor(kind, flavor, contextFor(flavor, from_state));
-
-          if (plan.outcome === "deferred") {
-            expect(kind).toBe("file");
-            return;
+          if (plan.outcome !== "planned") {
+            throw new Error(`expected ${flavor} ${kind} to produce a planned action`);
           }
 
           const to_state = applyToState(plan.mutation, from_state);
@@ -103,7 +106,7 @@ describe("every action round-trips through its inverse", () => {
         ),
       ),
     );
-    expect(planned.length).toBe((gmail_states.length + generic_states.length) * 2);
+    expect(planned.length).toBe((gmail_states.length + generic_states.length) * EXECUTABLE_ACTION_KINDS.length);
   });
 });
 
@@ -197,7 +200,12 @@ describe("archive means one thing per flavor", () => {
   });
 
   test("the inverse of a generic archive moves back to the folder from_state recorded, not to the plan's source", () => {
-    const plan = planFor("archive", "generic", { source_folder: "INBOX", archive_folder: GENERIC_ARCHIVE, trash_folder: null });
+    const plan = planFor("archive", "generic", {
+      source_folder: "INBOX",
+      archive_folder: GENERIC_ARCHIVE,
+      trash_folder: null,
+      file_folder: null,
+    });
     if (plan.outcome !== "planned") {
       throw new Error("expected a planned action");
     }
@@ -211,41 +219,67 @@ describe("archive means one thing per flavor", () => {
   });
 });
 
-describe("file is deferred to Phase 5 rather than executed or thrown", () => {
-  for (const flavor of flavors) {
-    test(`${flavor} file returns a deferred plan the executor can skip and report`, () => {
-      const plan = planFor("file", flavor, contextFor(flavor, statesFor(flavor)[0]));
-      expect(plan.outcome).toBe("deferred");
-      if (plan.outcome !== "deferred") {
-        return;
-      }
-      expect(plan.kind).toBe("file");
-      expect(plan.reason).toContain("Phase 5");
-    });
-  }
+describe("file means one thing per flavor", () => {
+  test("Gmail file adds the destination label and drops \\Inbox, and is never a move", () => {
+    const plan = plannedFor("file", "gmail", gmail_states[0]);
+    expect(plan.mutation).toEqual({ verb: "set_labels", add_labels: [GMAIL_FILE], remove_labels: [GMAIL_INBOX_LABEL] });
+  });
 
-  test("file is still deferred when a folder is available, so no target can be silently assumed", () => {
-    const plan = planFor("file", "generic", { source_folder: "INBOX", archive_folder: GENERIC_ARCHIVE, trash_folder: GENERIC_TRASH });
-    expect(plan.outcome).toBe("deferred");
+  test("generic file moves from the source folder to the destination the caller resolved", () => {
+    expect(planFor("file", "generic", contextFor("generic", generic_states[0]))).toEqual({
+      outcome: "planned",
+      kind: "file",
+      flavor: "generic",
+      mutation: { verb: "move", source_folder: "INBOX", target_folder: GENERIC_FILE },
+    });
+  });
+
+  test("a Gmail file round-trips: the inverse restores the label set the message had before filing", () => {
+    const from_state = gmail_states[1];
+    const plan = plannedFor("file", "gmail", from_state);
+    const to_state = applyToState(plan.mutation, from_state);
+    expect(undo(plan, from_state, to_state)).toEqual(from_state);
+  });
+
+  test("a generic file round-trips: the inverse moves the message back to its source folder", () => {
+    const from_state = generic_states[0];
+    const plan = plannedFor("file", "generic", from_state);
+    const to_state = applyToState(plan.mutation, from_state);
+    expect(undo(plan, from_state, to_state)).toEqual(from_state);
   });
 });
 
 describe("a missing target folder is rejected, never guessed", () => {
   test("generic archive without an \\Archive folder throws and names SPECIAL-USE", () => {
-    expect(() => planFor("archive", "generic", { source_folder: "INBOX", archive_folder: null, trash_folder: GENERIC_TRASH })).toThrow(
-      /SPECIAL-USE/,
-    );
+    expect(() =>
+      planFor("archive", "generic", { source_folder: "INBOX", archive_folder: null, trash_folder: GENERIC_TRASH, file_folder: null }),
+    ).toThrow(/SPECIAL-USE/);
   });
 
   test("an empty string is treated as no folder at all", () => {
-    expect(() => planFor("archive", "generic", { source_folder: "INBOX", archive_folder: "", trash_folder: null })).toThrow(/SPECIAL-USE/);
+    expect(() =>
+      planFor("archive", "generic", { source_folder: "INBOX", archive_folder: "", trash_folder: null, file_folder: null }),
+    ).toThrow(/SPECIAL-USE/);
   });
 
   for (const flavor of flavors) {
     test(`${flavor} auto_trash without a \\Trash folder throws`, () => {
-      expect(() => planFor("auto_trash", flavor, { source_folder: "INBOX", archive_folder: GENERIC_ARCHIVE, trash_folder: null })).toThrow(
-        /SPECIAL-USE/,
-      );
+      expect(() =>
+        planFor("auto_trash", flavor, { source_folder: "INBOX", archive_folder: GENERIC_ARCHIVE, trash_folder: null, file_folder: null }),
+      ).toThrow(/SPECIAL-USE/);
+    });
+  }
+
+  for (const flavor of flavors) {
+    test(`${flavor} file without a destination folder throws`, () => {
+      expect(() =>
+        planFor("file", flavor, {
+          source_folder: "INBOX",
+          archive_folder: GENERIC_ARCHIVE,
+          trash_folder: GENERIC_TRASH,
+          file_folder: null,
+        }),
+      ).toThrow(/SPECIAL-USE/);
     });
   }
 

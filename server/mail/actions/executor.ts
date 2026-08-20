@@ -338,6 +338,10 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
         source_folder: row.folder,
         archive_folder: folders.archive_folder,
         trash_folder: folders.trash_folder,
+        // Stopgap: Task 8 resolves the real filing destination from a provider + database read and
+        // replaces this. Until then a `file` row throws in planFor's requireTargetFolder and is recorded
+        // as unplannable, same as a missing \Archive or \Trash folder.
+        file_folder: null,
       });
     } catch (error) {
       // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a

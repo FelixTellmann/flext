@@ -18,9 +18,6 @@ import type { MailboxFlavor } from "@server/mail/types";
 // \Sent token server/mail/query/signal-sql.ts already tests Message.labels against.
 export const GMAIL_INBOX_LABEL = "\\Inbox";
 
-export const FILE_DEFERRED_REASON =
-  "filing is deferred to Phase 5: §6 picks the destination from the client axis with a DKIM-alignment gate, and neither exists yet";
-
 // What a caller may ask for: PolicyAction (rules.ts, which already excludes the sweep kind) plus the `needs_action`
 // outcome decide() can return. Derived from rules.ts rather than restated so a new policy action cannot
 // appear there without the exhaustiveness check at the bottom of planFor failing to compile.
@@ -29,6 +26,10 @@ export type PlanRequestKind = PolicyAction | "needs_action";
 export type ExecutableActionKind = Exclude<PlanRequestKind, "keep_inbox" | "needs_action">;
 
 export const EXECUTABLE_ACTION_KINDS = ["archive", "file", "auto_trash"] as const satisfies readonly ExecutableActionKind[];
+
+// The one spelling of the filing kind. Task 9's transition out of `deferred` is guarded on it, and a
+// literal in that WHERE clause is exactly the two-spellings shape this module exists to prevent.
+export const FILE_KIND = "file" as const satisfies ExecutableActionKind;
 
 // Not "actions that happen to do nothing" — decisions to leave the message exactly where it is. Asking
 // for a plan for one is a caller bug, so planFor throws rather than handing back a no-op the executor
@@ -56,6 +57,10 @@ export type PlanContext = {
   source_folder: string;
   archive_folder: string | null;
   trash_folder: string | null;
+  // The destination for `file`, already resolved to a real folder on this server by
+  // server/mail/filing/resolver.ts. Null carries the same meaning the other two do: the caller could not
+  // name it, so planFor refuses rather than guessing — this module never learns what a client is.
+  file_folder: string | null;
 };
 
 export type PlannedAction = {
@@ -112,8 +117,42 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
     );
   }
 
+  // §6: filing means the message leaves the inbox and lands in its destination. On a generic server a
+  // move out of the source folder does both at once.
+  //
+  // On Gmail it must NOT be a move. The canonical folder is [Gmail]/All Mail, which a message cannot
+  // meaningfully be moved out of, and applyToState models a Gmail move as a label rewrite that discards
+  // every user label — so a move would file the message by destroying the labels the operator filed it
+  // under. Adding the destination label and dropping \Inbox is the same semantic with a stable UID,
+  // which matters because `message` rows and undo are keyed on folder plus UID.
+  //
+  // The inverse needs no new code: inverseOf's set_labels branch computes
+  // add_labels = mutation.remove_labels ∩ original and remove_labels = mutation.add_labels \ original,
+  // which removes the destination label and restores \Inbox exactly.
+  if (kind === "file" && flavor === "gmail") {
+    return {
+      outcome: "planned",
+      kind,
+      flavor,
+      mutation: {
+        verb: "set_labels",
+        add_labels: [requireTargetFolder(context.file_folder, kind, "filing destination")],
+        remove_labels: [GMAIL_INBOX_LABEL],
+      },
+    };
+  }
+
   if (kind === "file") {
-    return { outcome: "deferred", kind, flavor, reason: FILE_DEFERRED_REASON };
+    return {
+      outcome: "planned",
+      kind,
+      flavor,
+      mutation: {
+        verb: "move",
+        source_folder: context.source_folder,
+        target_folder: requireTargetFolder(context.file_folder, kind, "filing destination"),
+      },
+    };
   }
 
   // §7.2: on Gmail, archive is not a move. Dropping \Inbox leaves the message in [Gmail]/All Mail with a
