@@ -183,6 +183,10 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
       return { folder: path, uids: written, added_labels: change.add_labels, removed_labels: change.remove_labels };
     },
 
+    createFolder: async (folder: string): Promise<void> => {
+      events.push(`create_folder ${folder}`);
+    },
+
     fetchHeaders: async (): Promise<FetchedMessage[]> => unsupported("fetchHeaders"),
     fetchIdentities: async (): Promise<MessageIdentity[]> => unsupported("fetchIdentities"),
     fetchFlagChanges: async (): Promise<FlagChangeResult> => unsupported("fetchFlagChanges"),

@@ -3,7 +3,7 @@ import type { CopyResponseObject, ImapFlow } from "imapflow";
 import { buildImapProvider } from "./imap";
 import type { MailboxCapabilities } from "./types";
 
-type FailurePoint = "move" | "copy" | "expunge" | "add_labels" | "remove_labels";
+type FailurePoint = "move" | "copy" | "expunge" | "add_labels" | "remove_labels" | "create_folder";
 
 type FakeOptions = {
   uidplus?: boolean;
@@ -14,6 +14,7 @@ type FakeOptions = {
   copyuid_uid_validity?: number | null;
   copyuid_omit?: number[];
   fail?: FailurePoint;
+  create_folder_error?: unknown;
 };
 
 type LockRecord = { folder: string; read_only: boolean; released: boolean };
@@ -116,6 +117,14 @@ function createFake(options: FakeOptions = {}) {
         return false;
       }
       return true;
+    },
+
+    mailboxCreate: async (path: string) => {
+      commands.push(`CREATE ${path}`);
+      if (options.fail === "create_folder") {
+        throw options.create_folder_error ?? new Error("CREATE failed");
+      }
+      return { path, created: true };
     },
 
     list: async () => {
@@ -445,13 +454,15 @@ describe("locking", () => {
 // The interface enumerates what can happen to a mailbox, so an unreachable member is a lie about the
 // blast radius rather than dead weight: `copyMessages` and `expungeUids` sat here through Phase 4 with no
 // caller, and a public expunge was the only way this contract could delete mail. Adding either back needs
-// a caller and this list edited on purpose.
-test("the provider exposes exactly two mutating methods, and neither deletes", () => {
+// a caller and this list edited on purpose. `createFolder` joined in Phase 5 (§6) as the narrowest
+// possible addition: it creates, and it cannot delete, rename, unsubscribe or move anything.
+test("the provider exposes exactly three mutating methods, and none deletes", () => {
   const { provider } = createFake();
 
   const members = Object.keys(provider).sort();
   expect(members).toEqual([
     "capabilities",
+    "createFolder",
     "disconnect",
     "fetchFlagChanges",
     "fetchHeaders",
@@ -465,4 +476,42 @@ test("the provider exposes exactly two mutating methods, and neither deletes", (
   expect(members.some((member) => member.toLowerCase().includes("purge"))).toBe(false);
   expect(members).not.toContain("expungeUids");
   expect(members).not.toContain("copyMessages");
+});
+
+describe("createFolder", () => {
+  test("issues CREATE and takes no lock at all — it needs no selected mailbox", async () => {
+    const { provider, commands, locks } = createFake();
+
+    await provider.createFolder("Archives/2026");
+
+    expect(commands).toEqual(["CREATE Archives/2026"]);
+    expect(locks).toEqual([]);
+  });
+
+  test("a folder that already exists resolves rather than throwing, per the ALREADYEXISTS response code", async () => {
+    const { provider } = createFake({
+      fail: "create_folder",
+      create_folder_error: Object.assign(new Error("Mailbox already exists"), { responseCode: "ALREADYEXISTS" }),
+    });
+
+    await expect(provider.createFolder("Archives/2026")).resolves.toBeUndefined();
+  });
+
+  test("a folder that already exists resolves on a server predating ALREADYEXISTS, matched by the NO text instead", async () => {
+    const { provider } = createFake({
+      fail: "create_folder",
+      create_folder_error: Object.assign(new Error("NO [CANNOT] Mailbox already exists"), { responseText: "Mailbox already exists" }),
+    });
+
+    await expect(provider.createFolder("Archives/2026")).resolves.toBeUndefined();
+  });
+
+  test("any other failure propagates", async () => {
+    const { provider } = createFake({
+      fail: "create_folder",
+      create_folder_error: Object.assign(new Error("NO Permission denied"), { responseCode: "CANNOT" }),
+    });
+
+    await expect(provider.createFolder("Archives/2026")).rejects.toThrow(/Permission denied/);
+  });
 });

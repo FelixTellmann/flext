@@ -500,68 +500,87 @@ THE READ-ONLY INVARIANT, REDEFINED — RUN THESE GREPS IN THE NEXT PHASE
 -----------------------------------------------------------------------------
 
 Phases 1-3 held a flat rule: nothing under server/mail may mutate a mailbox.
-Phase 4 did not remove that rule, it NARROWED it. The live contract is now
-four clauses:
+Phase 4 narrowed that rule rather than removing it. Phase 5 (§6) widens it
+again, deliberately, in the same commit that adds the third mutation:
+filing needs to create a destination folder on first use. The live contract
+is now:
 
   - mutating IMAP calls exist ONLY in server/mail/providers/imap.ts
   - they are reached ONLY through the MailboxProvider mutation methods —
-    moveMessages and setLabels, which are the only two the interface has
-  - those are called ONLY from server/mail/actions/executor.ts and undo.ts
+    moveMessages, setLabels and createFolder, which are the only three the
+    interface has
+  - those are called ONLY from server/mail/actions/executor.ts,
+    server/mail/actions/undo.ts and server/mail/filing/resolver.ts
   - read paths still pass { readOnly: true }; exactly ONE non-read-only
-    getMailboxLock exists, inside withWriteLock
+    getMailboxLock exists, inside withWriteLock — createFolder needs no
+    selected mailbox and therefore takes no lock at all, so it does not
+    add a second one
 
 Grep 1 — every mutating imapflow call, and where it lives:
 
-    grep -rn 'messageMove\|messageCopy\|messageDelete\|messageFlagsAdd\|messageFlagsRemove\|messageFlagsSet' server --include='*.ts' | grep -v '\.test\.ts'
+    grep -rn 'messageMove\|messageCopy\|messageDelete\|messageFlagsAdd\|messageFlagsRemove\|messageFlagsSet\|mailboxCreate' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-19, all eight lines in one file:
+Output on 2026-08-20, all nine lines in one file:
 
-    server/mail/providers/imap.ts:183:    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
-    server/mail/providers/imap.ts:191:    requireApplied(await client.messageDelete(uids, { uid: true }), `UID EXPUNGE ${uids.join(",")}`, folder);
-    server/mail/providers/imap.ts:306:        // Branching on MOVE here rather than leaving it to imapflow is deliberate: its `messageMove`
-    server/mail/providers/imap.ts:307:        // silently emulates a move with COPY + messageDelete when the server lacks MOVE, and that
-    server/mail/providers/imap.ts:308:        // messageDelete is the call that degrades to a bare EXPUNGE. The emulation stays ours.
-    server/mail/providers/imap.ts:310:          return toCopyUidResult(await client.messageMove(uids, target_folder, { uid: true }), "UID MOVE", target_folder, uids);
-    server/mail/providers/imap.ts:345:          const applied = await client.messageFlagsAdd(uids, add_labels, { uid: true, useLabels: true });
-    server/mail/providers/imap.ts:349:          const applied = await client.messageFlagsRemove(uids, remove_labels, { uid: true, useLabels: true });
+    server/mail/providers/imap.ts:198:    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
+    server/mail/providers/imap.ts:206:    requireApplied(await client.messageDelete(uids, { uid: true }), `UID EXPUNGE ${uids.join(",")}`, folder);
+    server/mail/providers/imap.ts:321:        // Branching on MOVE here rather than leaving it to imapflow is deliberate: its `messageMove`
+    server/mail/providers/imap.ts:322:        // silently emulates a move with COPY + messageDelete when the server lacks MOVE, and that
+    server/mail/providers/imap.ts:323:        // messageDelete is the call that degrades to a bare EXPUNGE. The emulation stays ours.
+    server/mail/providers/imap.ts:325:          return toCopyUidResult(await client.messageMove(uids, target_folder, { uid: true }), "UID MOVE", target_folder, uids);
+    server/mail/providers/imap.ts:360:          const applied = await client.messageFlagsAdd(uids, add_labels, { uid: true, useLabels: true });
+    server/mail/providers/imap.ts:364:          const applied = await client.messageFlagsRemove(uids, remove_labels, { uid: true, useLabels: true });
+    server/mail/providers/imap.ts:376:        await client.mailboxCreate(folder);
 
-Three of those eight are the comment at 306-308, which is prose, not a call.
+Three of those nine are the comment at 321-323, which is prose, not a call.
 Any path OUTSIDE server/mail/providers/imap.ts is a breach.
 
 Grep 2 — the write lock, which must stay a population of exactly one:
 
     grep -rn 'getMailboxLock' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-19:
+Output on 2026-08-20:
 
-    server/mail/providers/imap.ts:171:    const lock = await client.getMailboxLock(folder, { readOnly: false });
-    server/mail/providers/imap.ts:210:      const lock = await client.getMailboxLock(folder, { readOnly: true });
-    server/mail/providers/imap.ts:230:      const lock = await client.getMailboxLock(folder, { readOnly: true });
-    server/mail/providers/imap.ts:243:      const lock = await client.getMailboxLock(folder, { readOnly: true });
-    server/mail/providers/imap.ts:270:      const lock = await client.getMailboxLock(folder, { readOnly: true });
-    server/mail/providers/imap.ts:287:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:186:    const lock = await client.getMailboxLock(folder, { readOnly: false });
+    server/mail/providers/imap.ts:225:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:245:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:258:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:285:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:302:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/types.ts:138:  // therefore no write lock, which is why imap.ts still holds exactly one non-read-only getMailboxLock.
 
-One readOnly: false, at line 171, inside withWriteLock. Five read locks. A
-second readOnly: false anywhere is a breach.
+The last line is the doc comment on MailboxProvider.createFolder naming the
+literal string "getMailboxLock" as prose — grep cannot tell code from a
+comment that quotes code, so it is not a seventh call site. One
+readOnly: false, at line 186, inside withWriteLock. Five read locks in
+imap.ts. A second readOnly: false anywhere is a breach.
 
-Grep 3 — who calls the mutation methods. Only two files may appear:
+Grep 3 — who calls the mutation methods. Only three files may appear:
 
-    grep -rn 'provider\.moveMessages\|provider\.setLabels' server --include='*.ts' | grep -v '\.test\.ts'
+    grep -rn 'provider\.moveMessages\|provider\.setLabels\|provider\.createFolder' server --include='*.ts' | grep -v '\.test\.ts'
 
-Output on 2026-08-19:
+Output on 2026-08-20:
 
     server/mail/actions/executor.ts:176:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
     server/mail/actions/executor.ts:193:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
     server/mail/actions/undo.ts:191:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
     server/mail/actions/undo.ts:208:  const result = await provider.setLabels(address.folder, [address.uid], {
 
-executor.ts and undo.ts, nothing else. The interface used to carry two more
-mutating members, copyMessages and expungeUids, and the final review found
-neither had ever had a caller: the no-MOVE fallback uses private helpers
-inside imap.ts, not the public methods. Both were deleted. A public expunge
-was the only way this contract could delete mail, and an entry no one calls
-misstates the blast radius rather than merely sitting there — Phase 8 adds
-back whatever its sweep genuinely needs.
+executor.ts and undo.ts, nothing else — no createFolder caller appears.
+That is correct and expected, not a stale grep: server/mail/filing/resolver.ts,
+the third permitted caller, is Task 5 and does not exist yet at this commit.
+Re-run this grep once resolver.ts lands; it should then gain exactly one more
+line for provider.createFolder.
+
+The interface used to carry two more mutating members, copyMessages and
+expungeUids, and the final review found neither had ever had a caller: the
+no-MOVE fallback uses private helpers inside imap.ts, not the public
+methods. Both were deleted. A public expunge was the only way this contract
+could delete mail, and an entry no one calls misstates the blast radius
+rather than merely sitting there — Phase 8 adds back whatever its sweep
+genuinely needs. createFolder is held to the same standard: it creates, and
+it cannot delete, rename, unsubscribe or move anything, and a folder that
+already exists is success rather than an error.
 
 
 -----------------------------------------------------------------------------
@@ -580,7 +599,7 @@ is no UID EXPUNGE, only a bare EXPUNGE, and a bare EXPUNGE destroys EVERY
 in a mail client ten minutes earlier. imapflow's own messageMove emulates a
 move with COPY + messageDelete when the server lacks MOVE, and that is the
 path that degrades to a bare EXPUNGE, which is why imap.ts branches on MOVE
-itself instead of delegating (see the comment at imap.ts:307).
+itself instead of delegating (see the comment at imap.ts:322).
 
 A CRASH MID-BATCH LEAVES PENDING ROWS. The next run reconciles them; the
 pre-state was journalled before the mutation was issued, so nothing is lost.

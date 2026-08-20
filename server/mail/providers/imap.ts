@@ -60,6 +60,21 @@ function toInternalDate(raw: FetchMessageObject): Date {
   return new Date();
 }
 
+// ALREADYEXISTS (RFC 5530) is the tagged response code; servers that predate it answer with a NO whose
+// text says so. Matching the code first and the text second keeps the string test from being the only
+// thing standing between a real failure and a silently swallowed one.
+function isAlreadyExistsError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+  const response_code = "responseCode" in error ? String(error.responseCode) : "";
+  if (response_code.toUpperCase() === "ALREADYEXISTS") {
+    return true;
+  }
+  const text = "responseText" in error ? String(error.responseText) : "";
+  return /already exists/i.test(text);
+}
+
 function requireUidSet(uids: number[], operation: string): void {
   if (uids.length === 0) {
     throw new Error(
@@ -351,6 +366,19 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
         }
         return { folder, uids, added_labels: add_labels, removed_labels: remove_labels };
       });
+    },
+
+    createFolder: async (folder: string): Promise<void> => {
+      // imapflow resolves with { created: false } when the mailbox already exists on servers that report
+      // ALREADYEXISTS, and throws on those that return a plain NO. Both mean the folder is there, which is
+      // the postcondition this method promises, so neither is an error. Anything else propagates.
+      try {
+        await client.mailboxCreate(folder);
+      } catch (error) {
+        if (!isAlreadyExistsError(error)) {
+          throw error;
+        }
+      }
     },
 
     disconnect: async () => {

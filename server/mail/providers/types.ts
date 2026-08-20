@@ -131,5 +131,11 @@ export type MailboxProvider = {
   listUids: (folder: string) => Promise<number[]>;
   moveMessages: (folder: string, uids: number[], target_folder: string) => Promise<CopyUidResult>;
   setLabels: (folder: string, uids: number[], change: LabelChange) => Promise<LabelResult>;
+  // Phase 5 (§6): filing creates a destination folder on first use. Deliberately the narrowest possible
+  // mutation — it creates, and it cannot delete, rename, unsubscribe or move anything. A folder that
+  // already exists is success, not an error, so the create-then-use path is idempotent under a race with
+  // the operator's own mail client. Unlike moveMessages and setLabels this needs no selected mailbox and
+  // therefore no write lock, which is why imap.ts still holds exactly one non-read-only getMailboxLock.
+  createFolder: (folder: string) => Promise<void>;
   disconnect: () => Promise<void>;
 };
