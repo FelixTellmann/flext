@@ -281,12 +281,13 @@ FilingBinding                             -- new table
   updatedAt     datetime(3) NOT NULL
   mailboxId     varchar(191) NOT NULL
   logicalPath   varchar(191) NOT NULL
-  folder        varchar(512) NOT NULL     -- physical, server-native, delimiter already applied
+  folder        varchar(191) NOT NULL     -- physical, server-native, delimiter already applied
   UNIQUE (mailboxId, logicalPath)
 ```
 
-`folder` is 512 to match `Message.folder`. `logicalPath` is 191 to match the `client` and `topic`
-columns it is derived from.
+`folder` is 191, the width `Message.folder` already uses: a bound folder is one messages get stored
+under, so a binding wider than that column would fail at the next sync rather than at the binding.
+`logicalPath` is 191 to match the `client` and `topic` columns it is derived from.
 
 Generated with `bun run db:generate`; the operator applies it with `bun run db:migrate`. Migration
 `0005` is still unapplied as of this writing, so Phase 5's migration will be `0006` and both land

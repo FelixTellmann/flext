@@ -349,8 +349,10 @@ export const filingBinding = mysqlTable(
     mailbox_id: varchar("mailboxId", { length: 191 }).notNull(),
     // 191 to match the `client` and `topic` columns a path is derived from.
     logical_path: varchar("logicalPath", { length: 191 }).notNull(),
-    // 512 to match Message.folder: a server-native path, delimiter already applied.
-    folder: varchar("folder", { length: 512 }).notNull(),
+    // 191 because Message.folder is 191: a bound folder is one a message will actually be stored under,
+    // so a binding this column could hold and that one could not would fail at the next sync rather than
+    // here. A server-native path, delimiter already applied.
+    folder: varchar("folder", { length: 191 }).notNull(),
   },
   (table) => ({
     mailboxLogicalPathUnique: uniqueIndex("FilingBinding_mailboxId_logicalPath_key").on(table.mailbox_id, table.logical_path),

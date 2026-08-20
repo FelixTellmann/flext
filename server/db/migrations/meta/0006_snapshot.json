@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "3c95eba7-e4e5-49f7-93e4-f035dcbc5845",
+  "id": "3f6169cf-4e9c-469b-9fc9-a61482b7d79e",
   "prevId": "7aa720d7-a39b-4101-ac02-715b380a1259",
   "tables": {
     "Account": {
@@ -464,7 +464,7 @@
         },
         "folder": {
           "name": "folder",
-          "type": "varchar(512)",
+          "type": "varchar(191)",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false

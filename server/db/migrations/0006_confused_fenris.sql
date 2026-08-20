@@ -4,7 +4,7 @@ CREATE TABLE `FilingBinding` (
 	`updatedAt` datetime(3) NOT NULL,
 	`mailboxId` varchar(191) NOT NULL,
 	`logicalPath` varchar(191) NOT NULL,
-	`folder` varchar(512) NOT NULL,
+	`folder` varchar(191) NOT NULL,
 	CONSTRAINT `FilingBinding_id` PRIMARY KEY(`id`),
 	CONSTRAINT `FilingBinding_mailboxId_logicalPath_key` UNIQUE(`mailboxId`,`logicalPath`)
 );
