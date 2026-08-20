@@ -9,6 +9,7 @@ import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { createImapProvider } from "@server/mail/providers/imap";
 import type { MailboxProvider } from "@server/mail/providers/types";
+import { SCHEDULED_RUN_ID } from "@server/mail/query/shadow";
 import type { RescuePort } from "@server/mail/rescue/detect";
 import { detectRescues } from "@server/mail/rescue/detect";
 import { createDatabaseRescuePort } from "@server/mail/rescue/journal";
@@ -100,9 +101,8 @@ export type ClassifyAndExecuteInput = {
   hierarchy_delimiter: string;
   provider: MailboxProvider;
   journal: ActionJournal;
-  // ONE id for the whole sweep, minted in runSyncForAllMailboxes and threaded down rather than minted per
-  // mailbox: getShadowSummary scopes to the single latest run id, so four mailboxes minting four ids would
-  // leave the report describing whichever mailbox happened to finish last.
+  // SCHEDULED_RUN_ID on the scheduled path, never a fresh UUID: see the constant's own note in
+  // server/mail/query/shadow.ts for why the report must not be able to select it.
   run_id: string;
   // All three injected rather than called through their module imports so server/mail/sync/run.test.ts can
   // drive this pipeline over fakes. The shadow pass and the drizzle-backed journal both open the
@@ -196,12 +196,7 @@ export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExec
   return notes.length === 0 ? null : notes.join("; ");
 }
 
-async function runMode(input: {
-  provider: MailboxProvider;
-  mailbox_row: MailboxRow;
-  mode: SyncMode;
-  shadow_run_id: string;
-}): Promise<RunTotals> {
+async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxRow; mode: SyncMode }): Promise<RunTotals> {
   if (input.mode === "backfill") {
     const result = await backfillMailbox({ provider: input.provider, mailbox_row: input.mailbox_row });
     return { folders: result.folders, new_messages: result.messages, flag_updates: 0, vanished: 0, note: null };
@@ -271,7 +266,8 @@ async function runMode(input: {
       hierarchy_delimiter: input.mailbox_row.hierarchy_delimiter ?? "",
       provider: input.provider,
       journal: createDatabaseJournal(),
-      run_id: input.shadow_run_id,
+      // Every scheduled classification shares this one constant id — see server/mail/query/shadow.ts.
+      run_id: SCHEDULED_RUN_ID,
       shadowPass: runNewMailShadowPass,
       promoteAutoActions,
       executePendingActions: executeActions,
@@ -283,11 +279,7 @@ async function runMode(input: {
   return totals;
 }
 
-export async function runMailboxSync(input: {
-  mailbox_row: MailboxRow;
-  mode: SyncMode;
-  shadow_run_id?: string;
-}): Promise<MailboxRunSummary> {
+export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: SyncMode }): Promise<MailboxRunSummary> {
   const started_at = new Date();
   // The id defaults to UUID() server-side, and drizzle's $returningId only reports ids it generated
   // itself — an autoincrement column or a JS defaultFn (mysql2/session.js:61-71). It returns an empty
@@ -306,14 +298,7 @@ export async function runMailboxSync(input: {
   let provider: MailboxProvider | null = null;
   try {
     provider = await createImapProvider(mailboxConnection(input.mailbox_row));
-    const totals = await runMode({
-      provider,
-      mailbox_row: input.mailbox_row,
-      mode: input.mode,
-      // Optional so a single-mailbox caller need not mint one; a sweep passes its own so all of its
-      // mailboxes land under one shadow run id.
-      shadow_run_id: input.shadow_run_id ?? crypto.randomUUID(),
-    });
+    const totals = await runMode({ provider, mailbox_row: input.mailbox_row, mode: input.mode });
     const finished_at = new Date();
 
     await db
@@ -463,13 +448,9 @@ export async function runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id
     .from(mailbox)
     .where(input.mailbox_id ? and(eq(mailbox.enabled, true), eq(mailbox.id, input.mailbox_id)) : eq(mailbox.enabled, true));
 
-  // One shadow run id for the whole sweep. getShadowSummary reads the single latest run id, so a run id
-  // per mailbox would leave the report showing only whichever mailbox finished last.
-  const shadow_run_id = crypto.randomUUID();
-
   const summaries: MailboxRunSummary[] = [];
   for (const row of rows) {
-    summaries.push(await runMailboxSync({ mailbox_row: row, mode: input.mode, shadow_run_id }));
+    summaries.push(await runMailboxSync({ mailbox_row: row, mode: input.mode }));
   }
   return summaries;
 }
