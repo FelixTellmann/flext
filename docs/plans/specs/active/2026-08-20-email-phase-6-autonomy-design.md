@@ -235,14 +235,28 @@ Generated with `bun run db:generate`; the operator applies it. It will be `0008`
 
 ---
 
-## 8. Open questions for the plan
+## 8. Questions §8 left open, and how this document answers them
 
-1. **What counts as "a full shadow cycle"** for the `auto_trash` gate — a wall-clock window, a number of
-   sync runs, or a number of decisions? §8 does not say. It needs a definition that cannot be satisfied
-   in an afternoon by running the shadow pass in a loop.
-2. **Whether a rescue should suspend the policy or only the policy-on-that-mailbox.** A rule that is
-   right on three mailboxes and wrong on one currently has no way to express that, because `SenderPolicy`
-   has no mailbox scope. Suspending globally is the safe reading and probably correct, but it should be a
-   decision rather than a default.
-3. **How the operator sees a suspension.** §9's dashboard is the natural home, but the journal already
-   renders per-action state and `rescuedAt` belongs there too.
+**8.1 "A full shadow cycle" means 30 days AND at least 20 decisions since promotion, with zero
+rescues.** §8 does not define it, and the definition has to resist being satisfied in an afternoon: a
+count alone falls to running the shadow pass in a loop, and a wall-clock window alone passes a policy
+that decided nothing. Both, measured from `autonomyPromotedAt`, and reset by any rescue.
+
+Note this gate is **unreachable today and that is fine** — no policy has action `auto_trash` (the 103
+are 55 archive, 41 file, 7 keep_inbox), so nothing can currently request it. It is specified now so the
+first `auto_trash` policy meets a gate that already exists rather than one written to fit it.
+
+**8.2 A rescue suspends the policy everywhere, not per mailbox.** `SenderPolicy` has no mailbox scope,
+so per-mailbox suspension would need a new table, and the safe reading does not need one: a rule that
+guessed wrong once has lost the argument for acting unattended anywhere.
+
+The cost is real and worth naming: a rule that is right on three mailboxes and wrong on one is suspended
+on all four, and the operator has to split it into narrower policies to recover the three. That is the
+correct direction to fail — a suspension the operator must actively clear, rather than a rule that keeps
+acting somewhere after being shown to be wrong.
+
+**8.3 A suspension appears in both surfaces, because they answer different questions.** The journal
+renders `rescuedAt` on the action — *this specific message was rescued* — and the policy list renders
+`suspendedAt` with its reason — *this rule is no longer running, and why*. Neither substitutes for the
+other: the action answers "what happened to my mail", the policy answers "what has the system stopped
+doing on my behalf".
