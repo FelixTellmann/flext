@@ -103,11 +103,13 @@ export type LabelChange = {
   remove_labels: string[];
 };
 
-// The mutating contract, opened in Phase 4 (§7.2). Phases 1-3 held this type strictly read-only and
-// nothing under `server/mail` could change a mailbox at all. `moveMessages` and `setLabels` are the ONLY
-// members that may, they exist for `server/mail/actions/executor.ts` and `undo.ts`, and they are
+// The mutating contract, opened in Phase 4 (§7.2) and widened in Phase 5 (§6). Phases 1-3 held this type
+// strictly read-only and nothing under `server/mail` could change a mailbox at all. `moveMessages`,
+// `setLabels` and `createFolder` are the ONLY members that may, they exist for
+// `server/mail/actions/executor.ts`, `undo.ts` and `server/mail/filing/resolver.ts`, and they are
 // implemented only in `server/mail/providers/imap.ts` — which is also the only file where a write lock
-// may appear. Every other method here, and every other file under `server/mail`, stays read-only.
+// may appear. `createFolder` is the narrowest of the three and takes no lock at all — see its own comment
+// below for why. Every other method here, and every other file under `server/mail`, stays read-only.
 //
 // Each mutation resolves with the UIDs it actually confirmed, or throws. There is no partial-success
 // return: the executor issues an ordered sequence per message and must be able to tell a wholly
