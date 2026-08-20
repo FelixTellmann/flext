@@ -23,43 +23,48 @@ export type PromoteAutoPoliciesInput = {
 };
 
 // The Task 7 step: for one mailbox, every shadow row whose sender policy sits at autonomy `auto` moves to
-// `pending`. Returns exactly the ids it moved, and nothing else — that id list is the executor's entire
-// input on the scheduled path (see run.ts's TASK 7 SEAM comment), and is what keeps a row an operator
-// approved by hand from ever being picked up by a timer.
+// `pending`. Returns exactly the ids THIS CALL flipped, and nothing else — that id list is the executor's
+// entire input on the scheduled path (see run.ts's safety-contract comment on promoteAutoActions), and is
+// what keeps a row an operator approved by hand from ever being picked up by a timer.
+//
+// The ids come out of promotePolicyActions, which derives them from each guarded UPDATE's affectedRows —
+// NOT from a read taken beforehand. The sync holds no lock and runs every fifteen minutes, so two
+// overlapping runs read the same shadow rows; if both returned what they read, both would hand the
+// executor the same ids and the mailbox would take the move twice. Only one run's UPDATE matches each
+// row, so only one run claims it. A per-id UPDATE rather than a per-mailbox lock: the batch is at most
+// `batch_size` rows, which makes the cost of claiming precisely bearable, and precision beats a lock
+// here — a lock would also have to be released correctly after a crash, whereas an unclaimed row simply
+// stays `shadow` and is promoted by the next run.
 //
 // The suspension check lives in `port.loadAutoPolicies` (a SQL `WHERE suspendedAt IS NULL`, see
 // createDatabaseAutonomyPort below) rather than here. Rescue detection runs earlier in the same sync and
 // may have just suspended a policy; that suspension must take effect in this run, not the next one, and a
 // check performed in this function is a check a second caller of it could skip.
 //
-// Builds on promotePolicyActions for the actual shadow -> pending transition rather than issuing a second
-// UPDATE: that function already owns the guarded move (WHERE status = 'shadow') plus the mailbox-ownership
-// and batch-size checks. It reports only counts, not ids, so the shadow rows are read once here first —
-// with the identical scope (mailbox, policy, batch size) promotePolicyActions itself reads with — purely
-// to know which ids to hand back; the read that actually decides what moves, and the write itself, both
-// stay inside promotePolicyActions.
+// `batch_size` is the TOTAL budget for the call, spent down across policies — not a per-policy limit.
+// The caller passes the executor's batch size, and the executor applies at most that many rows in one
+// run, so promoting more than the budget would strand the surplus: promotion only ever reads `shadow`
+// rows, so a row left `pending` and unexecuted is never re-promoted, never appears in a future id list,
+// and is by then indistinguishable from one the operator approved by hand — which the scheduled sync is
+// forbidden to touch. Spending one shared budget keeps promotion and execution the same size.
 export async function promoteAutoPolicies(input: PromoteAutoPoliciesInput): Promise<string[]> {
   const eligible_policies = await input.port.loadAutoPolicies();
   const promoted_action_ids: string[] = [];
 
   for (const policy of eligible_policies) {
-    const rows = await input.journal.loadShadowActionsByPolicy({
-      mailbox_id: input.mailbox_id,
-      sender_policy_id: policy.sender_policy_id,
-      batch_size: input.batch_size,
-    });
-    if (rows.length === 0) {
-      continue;
+    const remaining = input.batch_size - promoted_action_ids.length;
+    if (remaining <= 0) {
+      break;
     }
 
-    await promotePolicyActions({
+    const result = await promotePolicyActions({
       sender_policy_id: policy.sender_policy_id,
       mailbox_id: input.mailbox_id,
-      batch_size: input.batch_size,
+      batch_size: remaining,
       journal: input.journal,
     });
 
-    promoted_action_ids.push(...rows.map((row) => row.action_id));
+    promoted_action_ids.push(...result.promoted_action_ids);
   }
 
   return promoted_action_ids;

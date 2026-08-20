@@ -213,8 +213,9 @@ function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: str
     },
     loadActionForPromotion: async (): Promise<ActionPromotionLookup | null> => null,
     loadShadowActionsByPolicy: async (): Promise<ActionPromotionLookup[]> => [],
-    promoteShadowActions: async () => {
+    promoteShadowActions: async (): Promise<string[]> => {
       writes.push("promoteShadowActions");
+      return [];
     },
     resolveFilingActions: async () => {
       writes.push("resolveFilingActions");

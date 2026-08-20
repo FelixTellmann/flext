@@ -148,7 +148,11 @@ export type ActionJournal = {
   // belong to the executor's own steps 1-4; promotion only approves a shadow decision for the executor to
   // pick up, and journal.ts's UPDATE is guarded on `WHERE status = 'shadow'` so this can never move a row
   // that is not one, applied included.
-  promoteShadowActions: (entries: PromotedEntry[]) => Promise<void>;
+  //
+  // Returns the ids it actually flipped — the subset of `entries` whose guarded UPDATE matched. The
+  // scheduled sync executes against that list and nothing else, so "read them" and "moved them" must not
+  // be confused: two concurrent syncs read the same rows, and only one of them moves each.
+  promoteShadowActions: (entries: PromotedEntry[]) => Promise<string[]>;
   // Moves ONE deferred filing row to `pending` with the operator's confirmed destination. Guarded in the
   // UPDATE's WHERE clause on both status and kind, not in the caller: a check the caller performs is a
   // check a second caller can skip, and this is the only transition that can un-defer a row.

@@ -352,14 +352,30 @@ async function loadShadowActionsByPolicy(input: {
 // Writes status "pending" and NOTHING else. The `WHERE status = 'shadow'` guard is the enforcement point
 // for Ruling 1: no row this statement touches can have been "applied" (or undone, deferred, or already
 // pending) a moment before, because any of those fails the guard and the row is left exactly as it was.
-async function promoteShadowActions(entries: PromotedEntry[]): Promise<void> {
+//
+// It returns the ids it ACTUALLY flipped, and that return value is a safety contract on the scheduled
+// path, not a convenience. The scheduled sync hands the executor an id list and nothing else; the sync
+// has no lock and fires every fifteen minutes, so two overlapping runs read the same shadow rows. A
+// caller that assumed "the ids I read" were "the ids I moved" would have both runs claim the same rows
+// and both call the executor on them — a double IMAP move on a live mailbox. The guard already protects
+// the WRITE; only affectedRows tells a caller which rows were its own. Every matched row does change,
+// because the guard requires status 'shadow' and the SET writes 'pending'.
+async function promoteShadowActions(entries: PromotedEntry[]): Promise<string[]> {
+  const promoted_action_ids: string[] = [];
+
   for (const entry of entries) {
     const now = new Date();
-    await db
+    const [header] = await db
       .update(action)
       .set({ status: PENDING_STATUS, updatedAt: now })
       .where(and(eq(action.id, entry.action_id), eq(action.status, SHADOW_STATUS)));
+
+    if (header.affectedRows === 1) {
+      promoted_action_ids.push(entry.action_id);
+    }
   }
+
+  return promoted_action_ids;
 }
 
 // Moves one queued filing row back to `pending` with the operator-confirmed destination. Guarded on BOTH

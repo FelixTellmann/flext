@@ -69,10 +69,12 @@ function createFakeJournal(input: { events: string[]; seed: FakeRow[] }): FakeJo
       return matches.slice(0, query.batch_size);
     },
 
-    // Mirrors journal.ts's `WHERE status = 'shadow'` guard: only a row still at "shadow" moves, and
-    // nothing but `status` changes.
+    // Mirrors journal.ts's `WHERE status = 'shadow'` guard AND its return value: only a row still at
+    // "shadow" moves, nothing but `status` changes, and only the ids that moved come back — the
+    // fixture's stand-in for affectedRows.
     promoteShadowActions: async (entries) => {
       input.events.push(`promote ${entries.map((entry) => entry.action_id).join(",")}`);
+      const promoted_action_ids: string[] = [];
       for (const entry of entries) {
         const row = rows.get(entry.action_id);
         if (row === undefined) {
@@ -80,8 +82,10 @@ function createFakeJournal(input: { events: string[]; seed: FakeRow[] }): FakeJo
         }
         if (row.status === "shadow") {
           row.status = "pending";
+          promoted_action_ids.push(entry.action_id);
         }
       }
+      return promoted_action_ids;
     },
 
     // Mirrors journal.ts's `WHERE status = 'deferred' AND kind = FILE_KIND` guard (Task 9): only a
@@ -226,7 +230,11 @@ describe("promotePolicyActions — all decisions for one policy (Task 8)", () =>
 
     const result = await promotePolicyActions({ sender_policy_id: POLICY_ID, mailbox_id: MAILBOX_ID, batch_size: 100, journal });
 
-    expect(result).toEqual({ examined: 2, promoted: 2 } satisfies PromotePolicyActionsResult);
+    expect(result).toEqual({
+      examined: 2,
+      promoted: 2,
+      promoted_action_ids: ["action-1", "action-2"],
+    } satisfies PromotePolicyActionsResult);
     expect(journal.rows.get("action-1")?.status).toBe("pending");
     expect(journal.rows.get("action-2")?.status).toBe("pending");
     expect(journal.rows.get("action-3")?.status).toBe("shadow");
@@ -240,7 +248,7 @@ describe("promotePolicyActions — all decisions for one policy (Task 8)", () =>
 
     const result = await promotePolicyActions({ sender_policy_id: POLICY_ID, mailbox_id: MAILBOX_ID, batch_size: 100, journal });
 
-    expect(result).toEqual({ examined: 0, promoted: 0 } satisfies PromotePolicyActionsResult);
+    expect(result).toEqual({ examined: 0, promoted: 0, promoted_action_ids: [] } satisfies PromotePolicyActionsResult);
     expect(events.some((event) => event.startsWith("promote "))).toBe(false);
   });
 
@@ -250,7 +258,11 @@ describe("promotePolicyActions — all decisions for one policy (Task 8)", () =>
 
     const result = await promotePolicyActions({ sender_policy_id: POLICY_ID, mailbox_id: MAILBOX_ID, batch_size: 2, journal });
 
-    expect(result).toEqual({ examined: 2, promoted: 2 } satisfies PromotePolicyActionsResult);
+    expect(result).toEqual({
+      examined: 2,
+      promoted: 2,
+      promoted_action_ids: ["action-1", "action-2"],
+    } satisfies PromotePolicyActionsResult);
   });
 
   test("rejects an empty policy id — an unscoped promote would approve every shadow decision in the mailbox", async () => {

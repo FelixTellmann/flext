@@ -45,9 +45,11 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
       return matches.slice(0, query.batch_size);
     },
 
-    // Mirrors journal.ts's `WHERE status = 'shadow'` guard: only a row still at "shadow" moves.
+    // Mirrors journal.ts's `WHERE status = 'shadow'` guard AND its return value: only a row still at
+    // "shadow" moves, and only the ids that moved come back — the fixture's stand-in for affectedRows.
     promoteShadowActions: async (entries) => {
       input.events.push(`promote ${entries.map((entry) => entry.action_id).join(",")}`);
+      const promoted_action_ids: string[] = [];
       for (const entry of entries) {
         const row = rows.get(entry.action_id);
         if (row === undefined) {
@@ -55,8 +57,10 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
         }
         if (row.status === "shadow") {
           row.status = "pending";
+          promoted_action_ids.push(entry.action_id);
         }
       }
+      return promoted_action_ids;
     },
 
     loadPendingActions: async () => unsupported("loadPendingActions"),
@@ -178,6 +182,75 @@ describe("promoteAutoPolicies (Task 7)", () => {
     expect(journal.rows.get("action-1")?.status).toBe("shadow");
     // No promotion write, and no read either: with zero eligible policies the loop over them never runs.
     expect(events).toEqual(["load_auto_policies"]);
+  });
+
+  // batch_size was spent PER POLICY while the executor spends it as a TOTAL, so two auto policies with
+  // more rows between them than the batch promoted more than one run could ever execute. The surplus
+  // stranded permanently: promotion reads only `shadow` rows, so a row left `pending` and unexecuted is
+  // never re-promoted, never appears in a future id list, and by then looks exactly like a row the
+  // operator approved by hand — which the scheduled sync must never touch.
+  test("the batch is a TOTAL budget across policies, not a per-policy one", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("a-1", "policy-a"), shadowRow("a-2", "policy-a"), shadowRow("b-1", "policy-b"), shadowRow("b-2", "policy-b")],
+    });
+    const port = createFakePort({
+      events,
+      policies: [
+        { sender_policy_id: "policy-a", autonomy: "auto", suspended_at: null },
+        { sender_policy_id: "policy-b", autonomy: "auto", suspended_at: null },
+      ],
+    });
+
+    const promoted = await promoteAutoPolicies({ ...promoteInput({ batch_size: 3 }), port, journal });
+
+    expect(promoted).toHaveLength(3);
+    const still_shadow = ["a-1", "a-2", "b-1", "b-2"].filter((id) => journal.rows.get(id)?.status === "shadow");
+    expect(still_shadow).toHaveLength(1);
+  });
+
+  test("a policy whose rows would exceed what is left of the budget promotes only the remainder", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("a-1", "policy-a"), shadowRow("b-1", "policy-b"), shadowRow("b-2", "policy-b")],
+    });
+    const port = createFakePort({
+      events,
+      policies: [
+        { sender_policy_id: "policy-a", autonomy: "auto", suspended_at: null },
+        { sender_policy_id: "policy-b", autonomy: "auto", suspended_at: null },
+      ],
+    });
+
+    const promoted = await promoteAutoPolicies({ ...promoteInput({ batch_size: 2 }), port, journal });
+
+    expect(promoted).toEqual(["a-1", "b-1"]);
+    expect(journal.rows.get("b-2")?.status).toBe("shadow");
+  });
+
+  // THE DOUBLE-MOVE CASE. The sync takes no lock and fires every fifteen minutes, so two runs overlap and
+  // both read the same shadow rows. The returned ids are the executor's entire input, so if both runs
+  // returned what they READ, both would move the same messages on a live IMAP server. Only the run whose
+  // guarded UPDATE actually matched may claim a row — which is what makes these two sets disjoint.
+  test("two concurrent promotions return disjoint id sets, and between them claim every row exactly once", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("action-1", "policy-auto"), shadowRow("action-2", "policy-auto")],
+    });
+    const port = createFakePort({ events, policies: [{ sender_policy_id: "policy-auto", autonomy: "auto", suspended_at: null }] });
+
+    const [first, second] = await Promise.all([
+      promoteAutoPolicies({ ...promoteInput(), port, journal }),
+      promoteAutoPolicies({ ...promoteInput(), port, journal }),
+    ]);
+
+    expect(first.filter((id) => second.includes(id))).toEqual([]);
+    expect([...first, ...second].sort()).toEqual(["action-1", "action-2"]);
+    expect(journal.rows.get("action-1")?.status).toBe("pending");
+    expect(journal.rows.get("action-2")?.status).toBe("pending");
   });
 });
 

@@ -33,6 +33,10 @@ export type PromotePolicyActionsInput = {
 export type PromotePolicyActionsResult = {
   examined: number;
   promoted: number;
+  // The ids whose guarded UPDATE actually matched — never merely the ids that were read. The scheduled
+  // sync feeds this straight to the executor, and two overlapping runs read the same shadow rows, so
+  // handing back the read set would let both runs execute the same actions against a live mailbox.
+  promoted_action_ids: string[];
 };
 
 // A lookup by id alone, classified here rather than filtered away in SQL, so "no such action", "that
@@ -97,11 +101,13 @@ export async function promotePolicyActions(input: PromotePolicyActionsInput): Pr
     batch_size: input.batch_size,
   });
   if (rows.length === 0) {
-    return { examined: 0, promoted: 0 };
+    return { examined: 0, promoted: 0, promoted_action_ids: [] };
   }
 
-  await input.journal.promoteShadowActions(rows.map((row) => ({ action_id: row.action_id })));
-  return { examined: rows.length, promoted: rows.length };
+  // `promoted` counts what the write moved, not what the read found: a row another caller advanced
+  // between the two fails the `WHERE status = 'shadow'` guard and is correctly absent from both numbers.
+  const promoted_action_ids = await input.journal.promoteShadowActions(rows.map((row) => ({ action_id: row.action_id })));
+  return { examined: rows.length, promoted: promoted_action_ids.length, promoted_action_ids };
 }
 
 export type ResolveFilingActionInput = {
