@@ -108,13 +108,14 @@ export const upsert_policy_schema = z.object({
     // that would let an edit silently keep unattended write access to a mailbox instead of asking the
     // operator to promote it again through the dedicated procedure (autonomy.ts's promotePolicyAutonomy).
     .default("shadow")
-    // §8: every policy is born in shadow, without exception, until Phase 4 gives the executor something
-    // to promote into. A caller asking for "auto" made a mistake that must surface, not be silently
-    // downgraded to "shadow" — hence a rejecting refine rather than a coercing default.
+    // §8/§4.3: every policy is born in shadow, without exception, and this general-purpose write is never
+    // the place autonomy is granted — promotePolicyAutonomy is, after §4.2's gates. A caller asking for
+    // "auto" made a mistake that must surface, not be silently downgraded to "shadow" — hence a rejecting
+    // refine rather than a coercing default.
     .refine(
       (value): value is "shadow" => value === "shadow",
       (value) => ({
-        message: `policy autonomy must be "shadow" in this phase; every policy is born in shadow (§8) — got "${value}"`,
+        message: `policy autonomy must be "shadow" here; promotion is promotePolicyAutonomy's job, not an edit's (§8) — got "${value}"`,
       }),
     ),
   source: z.string().min(1).max(191),

@@ -166,10 +166,11 @@ export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExec
   try {
     const promoted_action_ids = await input.promoteAutoActions({ mailbox_id: input.mailbox_id, run_id: input.run_id });
 
-    // The inert state, and an early return rather than an executor call with an empty filter: with the
-    // Task 7 seam empty this run promoted nothing, so there is nothing for it to execute and the provider
-    // is not touched at all. Calling the executor here instead would put the operator's approved backlog
-    // one wrong predicate away from being applied by a timer.
+    // An early return rather than an executor call with an empty filter. This is the state every run is
+    // in until a policy is promoted to `auto`, and the state a run returns to whenever no auto policy has
+    // new shadow rows: nothing was promoted, so there is nothing to execute and the provider is not
+    // touched at all. Calling the executor here instead would put the operator's approved backlog one
+    // wrong predicate away from being applied by a timer.
     if (promoted_action_ids.length === 0) {
       return notes.length === 0 ? null : notes.join("; ");
     }

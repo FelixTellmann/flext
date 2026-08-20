@@ -48,14 +48,16 @@ const thread_target_schema = z.object({
   thread_key: z.string().min(1).max(512),
 });
 
-// §8: every policy is born in shadow; nothing may promote to "auto" until Phase 4 gives the executor
-// something to promote into. upsertPolicy in the query layer already rejects it, but rejecting it here
-// too means the caller sees a clear message instead of that layer's opaque throw.
+// §8/§4.3: every policy is born in shadow, and a general-purpose policy edit may never grant autonomy.
+// The executor does now run unattended (Phase 6), which is exactly why this stays closed: a caller who
+// can rename a policy must not thereby give it write access to a mailbox. Promotion has its own
+// procedure and its own gates (promotePolicyAutonomy). upsertPolicy in the query layer rejects "auto"
+// too, but rejecting it here means the caller sees this message instead of that layer's opaque throw.
 const policy_autonomy_schema = z
   .enum(["shadow", "auto"])
   .default("shadow")
   .refine((value): value is "shadow" => value === "shadow", {
-    message: 'policy autonomy must be "shadow" in this phase — auto has no executor yet (§8)',
+    message: 'policy autonomy must be "shadow" here — promote it through promotePolicyAutonomy, which runs §4.2\'s gates (§8)',
   });
 
 // Phase 4's mutating procedures are bounded on both axes: an explicit mailbox, and a batch size that can
