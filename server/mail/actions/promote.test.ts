@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ActionJournal, ActionPromotionLookup } from "@server/mail/actions/executor";
-import type { PromoteActionResult, PromotePolicyActionsResult } from "@server/mail/actions/promote";
-import { promoteAction, promotePolicyActions } from "@server/mail/actions/promote";
+import type { PromoteActionResult, PromotePolicyActionsResult, ResolveFilingActionResult } from "@server/mail/actions/promote";
+import { promoteAction, promotePolicyActions, resolveFilingAction } from "@server/mail/actions/promote";
 
 const MAILBOX_ID = "mailbox-1";
 const OTHER_MAILBOX_ID = "mailbox-2";
@@ -325,5 +325,131 @@ describe("resolveFilingActions — the path out of `deferred` (Task 9)", () => {
     const row = journal.rows.get("action-1");
     expect(row?.status).toBe("pending");
     expect(row?.target_path).toBe("Clients/Acme/Ops");
+  });
+});
+
+describe("resolveFilingAction — ownership guard before resolution (Task 9 fix round 1)", () => {
+  test("resolves a deferred file row that belongs to the named mailbox", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("action-1", { status: "deferred", kind: "file", error: "no_mapping: the sender policy sets no client or topic." })],
+    });
+
+    const result = await resolveFilingAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      target_path: "Clients/Acme/Ops",
+      journal,
+    });
+
+    expect(result).toEqual({ outcome: "resolved" } satisfies ResolveFilingActionResult);
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("pending");
+    expect(row?.target_path).toBe("Clients/Acme/Ops");
+    expect(row?.error).toBeNull();
+  });
+
+  // journal.ts's resolveFilingActions UPDATE has no mailbox predicate, so before this guard existed the
+  // write below would have silently succeeded — the whole reason this describe block exists.
+  test("refuses to resolve an action belonging to a different mailbox, and the row is unchanged", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        shadowRow("action-1", {
+          mailbox_id: OTHER_MAILBOX_ID,
+          status: "deferred",
+          kind: "file",
+          error: "no_mapping: the sender policy sets no client or topic.",
+        }),
+      ],
+    });
+
+    const result = await resolveFilingAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      target_path: "Clients/Acme/Ops",
+      journal,
+    });
+
+    expect(result).toEqual({
+      outcome: "refused",
+      detail: `no action action-1 exists in mailbox ${MAILBOX_ID}.`,
+    } satisfies ResolveFilingActionResult);
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("deferred");
+    expect(row?.target_path).toBeNull();
+    expect(row?.error).toBe("no_mapping: the sender policy sets no client or topic.");
+    expect(events).not.toContain("resolve_filing action-1");
+  });
+
+  // The motivating case: naming a DIFFERENT, otherwise-legitimate mailbox must not let a caller resolve a
+  // row whose real mailbox is the disabled one — requireEnabledMailbox alone (checked separately, against
+  // the mailbox table, before this function ever runs) validated the wrong mailbox, since journal.ts's
+  // guard has no mailbox predicate to fall back on. The ownership check here is what closes that gap: it
+  // reads the row's OWN mailbox column, never what the caller asserts is enabled.
+  test("refuses to resolve a row whose real (disabled) mailbox differs from the mailbox named on the call, and the row is unchanged", async () => {
+    const events: string[] = [];
+    const DISABLED_MAILBOX_ID = "mailbox-disabled";
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        shadowRow("action-1", {
+          mailbox_id: DISABLED_MAILBOX_ID,
+          status: "deferred",
+          kind: "file",
+          error: "no_mapping: the sender policy sets no client or topic.",
+        }),
+      ],
+    });
+
+    // MAILBOX_ID stands in for "some other, enabled mailbox" — the one requireEnabledMailbox would pass in
+    // the real handler. The row itself belongs to DISABLED_MAILBOX_ID and must stay untouched regardless.
+    const result = await resolveFilingAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      target_path: "Clients/Acme/Ops",
+      journal,
+    });
+
+    expect(result).toEqual({
+      outcome: "refused",
+      detail: `no action action-1 exists in mailbox ${MAILBOX_ID}.`,
+    } satisfies ResolveFilingActionResult);
+    const row = journal.rows.get("action-1");
+    expect(row?.status).toBe("deferred");
+    expect(row?.target_path).toBeNull();
+    expect(events).not.toContain("resolve_filing action-1");
+  });
+
+  test("refuses when no such action exists", async () => {
+    const journal = createFakeJournal({ events: [], seed: [] });
+
+    const result = await resolveFilingAction({
+      action_id: "missing-action",
+      mailbox_id: MAILBOX_ID,
+      target_path: "Clients/Acme/Ops",
+      journal,
+    });
+
+    expect(result).toEqual({
+      outcome: "refused",
+      detail: `no action missing-action exists in mailbox ${MAILBOX_ID}.`,
+    } satisfies ResolveFilingActionResult);
+  });
+
+  test("rejects an empty action id", async () => {
+    const journal = createFakeJournal({ events: [], seed: [] });
+    await expect(resolveFilingAction({ action_id: "", mailbox_id: MAILBOX_ID, target_path: "Clients/Acme/Ops", journal })).rejects.toThrow(
+      /needs an action id/,
+    );
+  });
+
+  test("rejects an empty mailbox id", async () => {
+    const journal = createFakeJournal({ events: [], seed: [] });
+    await expect(resolveFilingAction({ action_id: "action-1", mailbox_id: "", target_path: "Clients/Acme/Ops", journal })).rejects.toThrow(
+      /needs a mailbox id/,
+    );
   });
 });

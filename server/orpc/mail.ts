@@ -3,7 +3,7 @@ import { db } from "@server/db/drizzle";
 import { mailbox, mailboxObservedAddress, syncRun } from "@server/db/schema";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
-import { promoteAction, promotePolicyActions } from "@server/mail/actions/promote";
+import { promoteAction, promotePolicyActions, resolveFilingAction } from "@server/mail/actions/promote";
 import type { UndoResult } from "@server/mail/actions/undo";
 import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
@@ -460,9 +460,7 @@ export const mailProcedures = {
       }),
     )
     .handler(async ({ input }) => {
-      await requireEnabledMailbox(input.mailbox_id);
-
-      // Rejected here, before the journal ever sees it: a path whose segments do not round-trip through
+      // Rejected here, before either guard below: a path whose segments do not round-trip through
       // logicalPathFor's normalization (trim, drop empty segments) is one the filing resolver would only
       // refuse later, after the row was already moved back to pending — reusing the write-side normalizer
       // so this stays the one place that decides what a canonical logical path looks like.
@@ -473,7 +471,24 @@ export const mailProcedures = {
         });
       }
 
-      await createDatabaseJournal().resolveFilingActions([{ action_id: input.action_id, target_path: input.target_path }]);
+      // Two different questions, and both must be answered before resolveFilingAction is allowed to write:
+      // requireEnabledMailbox asks "may I act on this mailbox at all" against the mailbox table; the
+      // ownership check inside resolveFilingAction asks "is this row actually mailbox_id's" against the
+      // row itself. Neither implies the other — journal.ts's UPDATE carries no mailbox predicate, so
+      // skipping the ownership check would let a row belonging to a DISABLED mailbox be resolved just by
+      // naming a different, unrelated, enabled one. Order between the two doesn't matter for correctness;
+      // this one runs first only because it needs no lookup beyond the mailbox table.
+      await requireEnabledMailbox(input.mailbox_id);
+
+      const result = await resolveFilingAction({
+        action_id: input.action_id,
+        mailbox_id: input.mailbox_id,
+        target_path: input.target_path,
+        journal: createDatabaseJournal(),
+      });
+      if (result.outcome === "refused") {
+        throw new ORPCError("NOT_FOUND", { message: result.detail });
+      }
       return { ok: true };
     }),
 

@@ -103,3 +103,38 @@ export async function promotePolicyActions(input: PromotePolicyActionsInput): Pr
   await input.journal.promoteShadowActions(rows.map((row) => ({ action_id: row.action_id })));
   return { examined: rows.length, promoted: rows.length };
 }
+
+export type ResolveFilingActionInput = {
+  action_id: string;
+  mailbox_id: string;
+  target_path: string;
+  journal: ActionJournal;
+};
+
+export type ResolveFilingActionResult = { outcome: "resolved" } | { outcome: "refused"; detail: string };
+
+// Task 9 fix round 1: journal.ts's resolveFilingActions UPDATE carries no mailbox predicate, on purpose —
+// loadPendingActions re-scopes EXECUTION by the row's real mailbox column, so a mis-scoped row can never
+// be executed against the wrong mailbox no matter what happens here. But nothing stopped RESOLUTION itself
+// from being granted by naming any enabled mailbox, including one that has nothing to do with the row,
+// which would silently move a row belonging to a DISABLED mailbox to pending. loadActionForPromotion is
+// the same unfiltered lookup promoteAction already uses for the identical question ("is this action
+// mine"), reused here rather than re-derived. A single refusal, not classifyLookup's three-way
+// NotPromotableReason: nothing renders a distinction between "no such action" and "wrong mailbox" yet, and
+// a second copy of that classification would be the kind of duplication this phase has been trimming.
+export async function resolveFilingAction(input: ResolveFilingActionInput): Promise<ResolveFilingActionResult> {
+  if (input.action_id.length === 0) {
+    throw new Error("resolveFilingAction needs an action id.");
+  }
+  if (input.mailbox_id.length === 0) {
+    throw new Error("resolveFilingAction needs a mailbox id: resolution must reach the mailbox the row belongs to.");
+  }
+
+  const lookup = await input.journal.loadActionForPromotion({ action_id: input.action_id });
+  if (lookup === null || lookup.mailbox_id !== input.mailbox_id) {
+    return { outcome: "refused", detail: `no action ${input.action_id} exists in mailbox ${input.mailbox_id}.` };
+  }
+
+  await input.journal.resolveFilingActions([{ action_id: input.action_id, target_path: input.target_path }]);
+  return { outcome: "resolved" };
+}
