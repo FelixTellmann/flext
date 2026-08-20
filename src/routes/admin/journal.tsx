@@ -425,6 +425,14 @@ const JournalTableRow: FC<{
     <td className="py-2 pr-3">
       <span className={clsx("block w-fit rounded px-1.5 py-0.5 text-xs", neutral_chip)}>{kind_label[row.kind] ?? row.kind}</span>
       <span className={clsx("mt-1 block", muted_text)}>{source_label[row.source] ?? row.source}</span>
+      {row.rescued_at !== null && (
+        <span
+          className="mt-1 block w-fit max-w-48 rounded bg-warning/10 px-1.5 py-0.5 text-warning text-xs"
+          title="The operator opened or answered this message after this action landed. That suspended the sender policy behind it — see the policy's suspension on the Senders page."
+        >
+          Rescued {row.rescued_at.slice(0, 10)}
+        </span>
+      )}
     </td>
     <td className="py-2 pr-3">
       <span className={clsx("block w-fit rounded px-1.5 py-0.5 text-xs", statusStyle(row))}>{statusLabel(row)}</span>
