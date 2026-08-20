@@ -618,6 +618,23 @@ Still three files, still five call sites, still no fourth file — the moved
 lines are a side effect of an earlier task's own edit to executor.ts, not
 anything Phase 6 added to the invariant's reach.
 
+Re-run once more after the Phase 6 FINAL FIX ROUND, same day. Greps 1 and 2
+came back byte-identical to their blocks above. Grep 3 moved again, by the
+same kind of cause: executor.ts's ActionJournal gained four comment lines
+documenting promoteShadowActions's new return value (the ids a run actually
+claimed), pushing both of its mutation calls down by +4. undo.ts and
+resolver.ts did not move.
+
+    server/mail/actions/executor.ts:238:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:255:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:197:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:214:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
+
+Three files, five call sites, one createFolder. The fix round adds no
+mutating call site anywhere — it only changes which rows reach the executor
+that already existed.
+
 The paragraph below is left as it was written during Phase 4, for the record:
 it is what the previous grep looked like BEFORE resolver.ts existed, and why
 that absence was correct at the time rather than stale.
@@ -897,24 +914,53 @@ APPLY MIGRATION 0008 — THE ONLY ONE OUTSTANDING
 
     bun run db:migrate
 
-server/db/migrations/0008_supreme_flatman.sql adds two nullable columns and
-one index:
+server/db/migrations/0008_marvelous_ben_grimm.sql adds three nullable columns
+and one index. It REPLACES the earlier 0008_supreme_flatman.sql, which was
+never applied — the final Phase 6 fix round regenerated it in place rather
+than adding an 0009, so if you have that filename written down anywhere,
+this is the one to run:
 
     ALTER TABLE `Action` ADD `rescuedAt` datetime(3);
     ALTER TABLE `SenderPolicy` ADD `autonomyPromotedAt` datetime(3);
+    ALTER TABLE `SyncRun` ADD `note` text;
     CREATE INDEX `Action_mailboxId_status_appliedAt_idx`
       ON `Action` (`mailboxId`,`status`,`appliedAt`);
 
+Additive only: three ADD COLUMN, all nullable, and one CREATE INDEX. Nothing
+is dropped, renamed or narrowed, so it cannot lose data on the live table.
+
 `rescuedAt` is the stamp that makes rescue detection idempotent — a rescued
 action never comes back as a candidate. `autonomyPromotedAt` is the clock
-the auto_trash gate measures a shadow cycle from. The index serves the
-rescue pass's `(mailboxId, status, appliedAt)` scan and its keyset
-pagination on appliedAt; without it every pass filesorts.
+the auto_trash gate measures a shadow cycle from. `note` is where a sync run
+records what a stage reported without failing the run — read the paragraph
+below, because until this migration is applied that note is the only thing
+that will tell you anything is wrong. The index serves the rescue pass's
+`(mailboxId, status, appliedAt)` scan and its keyset pagination on
+appliedAt; without it every pass filesorts.
 
 0005, 0006 and 0007 are applied — the operator applied them during Phase 4
-and Phase 5. 0008 is the only one outstanding. Nothing in this phase's sync
-changes below has any effect until it is applied: rescue detection reads and
-writes `rescuedAt`, and promotion reads and writes `autonomyPromotedAt`.
+and Phase 5. 0008 is the only one outstanding.
+
+WHAT ACTUALLY HAPPENS WHILE 0008 IS UNAPPLIED. An earlier draft of this
+runbook said "nothing in this phase's sync changes below has any effect
+until it is applied". That was wrong in both directions, and the correction
+is the reason to apply it promptly:
+
+  - NEW MAIL CLASSIFICATION WORKS FINE UNMIGRATED. It touches none of the
+    three new columns, so every scheduled sync classifies arriving mail and
+    writes Action rows exactly as described below, today, migration or not.
+
+  - RESCUE DETECTION DOES NOT MERELY "HAVE NO EFFECT" — IT THROWS, on every
+    single run, with `Unknown column 'Action.rescuedAt'`. The promotion pass
+    throws the same way on `SenderPolicy.autonomyPromotedAt`. Both throws are
+    caught on purpose (a broken safety net must not cost you your mail), so
+    the run still finishes with status `ok` and exit code 0.
+
+    That is what `SyncRun.note` is for: the caught failure is written there
+    and shown in "Recent sync runs" on /admin/mail. Applying 0008 is what
+    makes both the failure and its fix visible — before it, the message has
+    nowhere to land and the sync reports healthy while two safety nets are
+    down.
 
 
 -----------------------------------------------------------------------------
