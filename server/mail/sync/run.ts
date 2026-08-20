@@ -1,5 +1,8 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, syncRun } from "@server/db/schema";
+import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
+import { executeActions } from "@server/mail/actions/executor";
+import { createDatabaseJournal } from "@server/mail/actions/journal";
 import { classifyMailboxError } from "@server/mail/errors";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
@@ -8,13 +11,15 @@ import type { MailboxProvider } from "@server/mail/providers/types";
 import type { RescuePort } from "@server/mail/rescue/detect";
 import { detectRescues } from "@server/mail/rescue/detect";
 import { createDatabaseRescuePort } from "@server/mail/rescue/journal";
+import type { RunShadowPassInput, RunShadowPassResult } from "@server/mail/shadow/run";
+import { runShadowPass } from "@server/mail/shadow/run";
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
 import { reclassifyMailbox } from "@server/mail/sync/reclassify";
 import { reconcileFolder } from "@server/mail/sync/reconcile";
 import { repairSenderLinks } from "@server/mail/sync/repair";
-import type { SyncMode } from "@server/mail/types";
+import type { MailboxFlavor, SyncMode } from "@server/mail/types";
 import { DATABASE_WIDE_RUN_MAILBOX_ID, parseMailboxFlavor } from "@server/mail/types";
 import { and, eq } from "drizzle-orm";
 
@@ -68,7 +73,108 @@ export async function runRescuePassForMailbox(input: { port: RescuePort; mailbox
   }
 }
 
-async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxRow; mode: SyncMode }): Promise<RunTotals> {
+// The ORPC path lets the operator pick a shadow batch; a scheduled sync has nobody to ask, so this picks
+// the same 500 the ORPC procedure defaults to and tmp/run-shadow.ts uses. Like RESCUE_BATCH_SIZE and
+// unlike EXECUTOR_BATCH_SIZE below, this is a CHUNK size and not a cap: runShadowPass walks the mailbox's
+// live messages with a keyset cursor until they are exhausted, reading this many rows per round trip, so
+// every message is classified on every pass regardless of what this is set to.
+const SHADOW_BATCH_SIZE = 500;
+
+// The scheduled sync's executor batch — and unlike the two chunk sizes above, this one IS a cap on the
+// work a single run does. executeActions issues ONE loadPendingActions query, executes those rows and
+// returns; it does not loop until the queue drains. So a run that finds more than this many pending rows
+// leaves the remainder for the next run, and a queue that grows faster than the schedule drains it is
+// never fully executed. That is the intended trade rather than a limitation to remove: the incremental
+// sync is on */15 (docs/runbooks/2026-08-17-mail-sync-schedules.txt), which drains 4 * EXECUTOR_BATCH_SIZE
+// rows an hour, whereas an unbounded batch would let one unattended run fire an arbitrary number of IMAP
+// mutations at a live mailbox with no ceiling on the blast radius of a mistaken promotion. 200 is the
+// ORPC path's operator-facing maximum (MAX_ACTION_BATCH_SIZE) rather than its default of 25, because
+// nobody is here to press the button a second time.
+const EXECUTOR_BATCH_SIZE = 200;
+
+export type ClassifyAndExecuteInput = {
+  mailbox_id: string;
+  flavor: MailboxFlavor;
+  // Mailbox.hierarchyDelimiter, the same value applyPending hands the executor.
+  hierarchy_delimiter: string;
+  provider: MailboxProvider;
+  journal: ActionJournal;
+  // ONE id for the whole sweep, minted in runSyncForAllMailboxes and threaded down rather than minted per
+  // mailbox: getShadowSummary scopes to the single latest run id, so four mailboxes minting four ids would
+  // leave the report describing whichever mailbox happened to finish last.
+  run_id: string;
+  // Both injected rather than called through their module imports so server/mail/sync/run.test.ts can
+  // drive this pipeline over fakes. runShadowPass and the drizzle-backed journal both open the production
+  // database on import, and executeActions is the one function here that can mutate a real mailbox.
+  shadowPass: (input: RunShadowPassInput) => Promise<RunShadowPassResult>;
+  executePendingActions: (input: ExecuteActionsInput) => Promise<ExecuteActionsResult>;
+};
+
+// Classification and execution, unattended. Until this existed both halves ran only when the operator
+// clicked a button in /admin; §8's `auto` promises that an auto policy "executes on the next sync run",
+// and this is the only thing that keeps that promise.
+//
+// Failures on either half become a note on the run summary, never a thrown error: fetching mail is the
+// sync's job, and a classifier or an executor that breaks must not cost the operator their mail. Same
+// reasoning and the same `${kind}: ${message}` shape as runRescuePassForMailbox above.
+export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExecuteInput): Promise<string | null> {
+  const notes: string[] = [];
+
+  try {
+    // Every live message in the mailbox is re-decided here, not just the ones this run fetched — that is
+    // what runShadowPass does, and it writes one Action row per message per run id. On a mailbox of any
+    // size that is a substantial write per pass; see the report for Task 6 for the cost note.
+    const shadow = await input.shadowPass({ mailbox_id: input.mailbox_id, batch_size: SHADOW_BATCH_SIZE, run_id: input.run_id });
+    notes.push(`shadow: examined ${shadow.examined}, journaled ${shadow.journaled}`);
+  } catch (error) {
+    const failure = classifyMailboxError(error);
+    notes.push(`shadow pass failed: ${failure.kind}: ${failure.message}`);
+  }
+
+  // ---------------------------------------------------------------------------------------------------
+  // TASK 7 SEAM — auto promotion goes HERE, between the shadow pass above and the executor below.
+  //
+  // It promotes the shadow rows whose sender policy sits at autonomy `auto` from `shadow` to `pending`,
+  // so the executor below picks them up on this same run. Nothing else belongs at this seam.
+  //
+  // While the seam is empty this pipeline promotes nothing. No policy can be at `auto` yet — all 103 are
+  // at `shadow`, and Task 8 builds the procedure that could change one — so loadPendingActions returns no
+  // row this pipeline created and the run issues no mailbox mutation whatsoever. That is the guard that
+  // makes calling the executor from an unattended run safe to ship, and run.test.ts asserts it against a
+  // provider that records every mutating call.
+  // ---------------------------------------------------------------------------------------------------
+
+  try {
+    // Reached on every run, promotions or not. With none, executeActions finds no pending rows and
+    // returns before it touches the provider at all — resolveActionFolders is below its empty-batch
+    // early return, so not even a LIST is issued.
+    const executed = await input.executePendingActions({
+      mailbox_id: input.mailbox_id,
+      flavor: input.flavor,
+      provider: input.provider,
+      journal: input.journal,
+      batch_size: EXECUTOR_BATCH_SIZE,
+      hierarchy_delimiter: input.hierarchy_delimiter,
+    });
+    if (executed.examined > 0) {
+      notes.push(
+        `execute: examined ${executed.examined}, applied ${executed.applied}, failed ${executed.failed}, deferred ${executed.deferred}`,
+      );
+    }
+  } catch (error) {
+    const failure = classifyMailboxError(error);
+    notes.push(`execution failed: ${failure.kind}: ${failure.message}`);
+  }
+
+  return notes.length === 0 ? null : notes.join("; ");
+}
+
+async function runMode(input: {
+  provider: MailboxProvider;
+  mailbox_row: MailboxRow;
+  mode: SyncMode;
+  shadow_run_id: string;
+}): Promise<RunTotals> {
   if (input.mode === "backfill") {
     const result = await backfillMailbox({ provider: input.provider, mailbox_row: input.mailbox_row });
     return { folders: result.folders, new_messages: result.messages, flag_updates: 0, vanished: 0, note: null };
@@ -112,19 +218,48 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
   // transitions (openedAt is only fresh once that happens), and before anything else new is added to this
   // mode. It must not run any earlier — a pass before the fetch reads stale rows and silently
   // under-reports, which for a safety net is worse than an error.
-  totals.note = await runRescuePassForMailbox({
-    port: createDatabaseRescuePort(),
-    mailbox_id: input.mailbox_row.id,
-    batch_size: RESCUE_BATCH_SIZE,
-  });
+  const notes = [
+    await runRescuePassForMailbox({
+      port: createDatabaseRescuePort(),
+      mailbox_id: input.mailbox_row.id,
+      batch_size: RESCUE_BATCH_SIZE,
+    }),
+  ];
 
   for (const folder of selectSentFolders(folders)) {
     await scanSentFolder({ provider: input.provider, mailbox_row: input.mailbox_row, folder });
   }
+
+  // Classification and execution close the incremental pipeline, and only the incremental one: backfill,
+  // reclassify and reconcile all return above. They run last rather than beside the rescue pass because
+  // the shadow pass decides on stored rows — this run's new messages and this run's sent-folder scan are
+  // both already written by the time it reads, so a message that arrives and is replied to between two
+  // syncs is classified with the reply visible instead of a pass late.
+  notes.push(
+    await runClassifyAndExecutePassForMailbox({
+      mailbox_id: input.mailbox_row.id,
+      flavor: parseMailboxFlavor(input.mailbox_row.flavor),
+      // Empty means this mailbox was never synced, and renderFolderPath is where that must surface — the
+      // same value and the same reasoning as the applyPending procedure's.
+      hierarchy_delimiter: input.mailbox_row.hierarchy_delimiter ?? "",
+      provider: input.provider,
+      journal: createDatabaseJournal(),
+      run_id: input.shadow_run_id,
+      shadowPass: runShadowPass,
+      executePendingActions: executeActions,
+    }),
+  );
+
+  const reported = notes.filter((note): note is string => note !== null);
+  totals.note = reported.length === 0 ? null : reported.join("; ");
   return totals;
 }
 
-export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: SyncMode }): Promise<MailboxRunSummary> {
+export async function runMailboxSync(input: {
+  mailbox_row: MailboxRow;
+  mode: SyncMode;
+  shadow_run_id?: string;
+}): Promise<MailboxRunSummary> {
   const started_at = new Date();
   // The id defaults to UUID() server-side, and drizzle's $returningId only reports ids it generated
   // itself — an autoincrement column or a JS defaultFn (mysql2/session.js:61-71). It returns an empty
@@ -143,7 +278,14 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
   let provider: MailboxProvider | null = null;
   try {
     provider = await createImapProvider(mailboxConnection(input.mailbox_row));
-    const totals = await runMode({ provider, mailbox_row: input.mailbox_row, mode: input.mode });
+    const totals = await runMode({
+      provider,
+      mailbox_row: input.mailbox_row,
+      mode: input.mode,
+      // Optional so a single-mailbox caller need not mint one; a sweep passes its own so all of its
+      // mailboxes land under one shadow run id.
+      shadow_run_id: input.shadow_run_id ?? crypto.randomUUID(),
+    });
     const finished_at = new Date();
 
     await db
@@ -293,9 +435,13 @@ export async function runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id
     .from(mailbox)
     .where(input.mailbox_id ? and(eq(mailbox.enabled, true), eq(mailbox.id, input.mailbox_id)) : eq(mailbox.enabled, true));
 
+  // One shadow run id for the whole sweep. getShadowSummary reads the single latest run id, so a run id
+  // per mailbox would leave the report showing only whichever mailbox finished last.
+  const shadow_run_id = crypto.randomUUID();
+
   const summaries: MailboxRunSummary[] = [];
   for (const row of rows) {
-    summaries.push(await runMailboxSync({ mailbox_row: row, mode: input.mode }));
+    summaries.push(await runMailboxSync({ mailbox_row: row, mode: input.mode, shadow_run_id }));
   }
   return summaries;
 }
