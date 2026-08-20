@@ -18,6 +18,12 @@ export type PolicyRow = {
   client: string | null;
   topic: string | null;
   autonomy: PolicyAutonomy;
+  // When the operator promoted this policy to `auto` (Task 8's `promotePolicyAutonomy`, the only writer of
+  // this field besides a demotion, which leaves it untouched). Null on every policy that has never been
+  // promoted, or that was promoted and then demoted — the promotion history stays on the row rather than
+  // being erased by a demotion, which matters for §8.1's "measured from autonomyPromotedAt" if the same
+  // policy is promoted again later.
+  autonomy_promoted_at: Date | null;
   source: string;
   suspended_at: Date | null;
   suspension_reason: string | null;
@@ -124,6 +130,7 @@ function toPolicyRow(raw: typeof senderPolicy.$inferSelect): PolicyRow {
     client: raw.client,
     topic: raw.topic,
     autonomy: raw.autonomy as PolicyAutonomy,
+    autonomy_promoted_at: raw.autonomy_promoted_at,
     source: raw.source,
     suspended_at: raw.suspended_at,
     suspension_reason: raw.suspension_reason,
@@ -224,6 +231,37 @@ export async function upsertPolicy(input: UpsertPolicyInput): Promise<PolicyRow>
 
 export async function deletePolicy(id: string): Promise<void> {
   await db.delete(senderPolicy).where(eq(senderPolicy.id, id));
+}
+
+// Task 8's gate check needs the raw row (action, autonomy_promoted_at) before it can decide anything;
+// this is that single read, kept here rather than duplicated in autonomy.ts because senderPolicy reads
+// belong with the rest of this module's senderPolicy access.
+export async function loadPolicyById(id: string): Promise<PolicyRow | null> {
+  const [row] = await db.select().from(senderPolicy).where(eq(senderPolicy.id, id)).limit(1);
+  return row === undefined ? null : toPolicyRow(row);
+}
+
+// The ONE write allowed to set autonomy to "auto" (§8, §4.3 of the Phase 6 design). upsertPolicy's Zod
+// boundary rejects "auto" unconditionally and stays that way — this function is reached only after
+// autonomy.ts's promotePolicyAutonomy has run its gate check, never from a general-purpose policy edit.
+// autonomyPromotedAt is set in the same write as autonomy, per Task 8: it is both the audit trail for
+// *when* this policy was trusted and the reference point §8.1's auto_trash gate measures a shadow cycle
+// from.
+export async function promotePolicyToAuto(input: { sender_policy_id: string; promoted_at: Date }): Promise<void> {
+  await db
+    .update(senderPolicy)
+    .set({ autonomy: "auto", autonomy_promoted_at: input.promoted_at, updatedAt: new Date() })
+    .where(eq(senderPolicy.id, input.sender_policy_id));
+}
+
+// Demotion is unconditional (§8 Task 8, Step 3): no gate, no precondition, and it can never fail — an
+// UPDATE against a missing or already-shadow id simply affects zero rows. autonomyPromotedAt is left
+// untouched deliberately: it stays the record of the last promotion rather than being erased, which is
+// what lets a re-promotion decide whether it is really starting a fresh shadow cycle or continuing one.
+// suspendedAt is likewise untouched — clearing a suspension is a separate, deliberate operator act (§3.4),
+// not a side effect of demoting autonomy.
+export async function demotePolicyToShadow(sender_policy_id: string): Promise<void> {
+  await db.update(senderPolicy).set({ autonomy: "shadow", updatedAt: new Date() }).where(eq(senderPolicy.id, sender_policy_id));
 }
 
 export async function listNeverTouchRules(): Promise<NeverTouchRow[]> {
