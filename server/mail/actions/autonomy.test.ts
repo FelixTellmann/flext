@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { AutonomyPort, AutoPolicyRow, PromoteAutoPoliciesInput } from "@server/mail/actions/autonomy";
-import { promoteAutoPolicies } from "@server/mail/actions/autonomy";
+import type { AutonomyPort, AutoPolicyRow, PolicyForGate, PromoteAutoPoliciesInput, PromotionPort } from "@server/mail/actions/autonomy";
+import { demotePolicyAutonomy, promoteAutoPolicies, promotePolicyAutonomy } from "@server/mail/actions/autonomy";
 import type { ActionJournal, ActionPromotionLookup } from "@server/mail/actions/executor";
 
 const MAILBOX_ID = "mailbox-1";
@@ -178,5 +178,184 @@ describe("promoteAutoPolicies (Task 7)", () => {
     expect(journal.rows.get("action-1")?.status).toBe("shadow");
     // No promotion write, and no read either: with zero eligible policies the loop over them never runs.
     expect(events).toEqual(["load_auto_policies"]);
+  });
+});
+
+// ─── Task 8: promotePolicyAutonomy / demotePolicyAutonomy ────────────────────
+
+type FakePromotedPolicy = { autonomy: "shadow" | "auto"; autonomy_promoted_at: Date | null };
+
+function createFakePromotionPort(input: {
+  events: string[];
+  policy: PolicyForGate | null;
+  decisions_since?: number;
+  rescues_since?: number;
+  mailboxes_missing_retention?: string[];
+  written: Map<string, FakePromotedPolicy>;
+}): PromotionPort {
+  return {
+    loadPolicy: async (sender_policy_id) => {
+      input.events.push(`load_policy ${sender_policy_id}`);
+      return input.policy;
+    },
+    countDecisionsSince: async ({ sender_policy_id }) => {
+      input.events.push(`count_decisions ${sender_policy_id}`);
+      return input.decisions_since ?? 0;
+    },
+    countRescuesSince: async ({ sender_policy_id }) => {
+      input.events.push(`count_rescues ${sender_policy_id}`);
+      return input.rescues_since ?? 0;
+    },
+    mailboxesMissingTrashRetention: async () => {
+      input.events.push("mailboxes_missing_retention");
+      return input.mailboxes_missing_retention ?? [];
+    },
+    promoteToAuto: async ({ sender_policy_id, promoted_at }) => {
+      input.events.push(`promote_to_auto ${sender_policy_id}`);
+      input.written.set(sender_policy_id, { autonomy: "auto", autonomy_promoted_at: promoted_at });
+    },
+    demoteToShadow: async (sender_policy_id) => {
+      input.events.push(`demote_to_shadow ${sender_policy_id}`);
+      const existing = input.written.get(sender_policy_id);
+      input.written.set(sender_policy_id, { autonomy: "shadow", autonomy_promoted_at: existing?.autonomy_promoted_at ?? null });
+    },
+  };
+}
+
+describe("promotePolicyAutonomy (Task 8)", () => {
+  test("an archive policy with a reviewed shadow record promotes, and autonomyPromotedAt is set", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({
+      events,
+      policy: { id: "policy-archive", action: "archive", autonomy_promoted_at: null },
+      written,
+    });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-archive", reviewed_shadow_record: true, port });
+
+    expect(result.outcome).toBe("promoted");
+    if (result.outcome !== "promoted") {
+      throw new Error("expected a promotion");
+    }
+    expect(result.autonomy_promoted_at).toBeInstanceOf(Date);
+    expect(written.get("policy-archive")).toEqual({ autonomy: "auto", autonomy_promoted_at: result.autonomy_promoted_at });
+  });
+
+  test("an archive policy WITHOUT a reviewed shadow record is refused, naming the review gate", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({
+      events,
+      policy: { id: "policy-archive", action: "archive", autonomy_promoted_at: null },
+      written,
+    });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-archive", reviewed_shadow_record: false, port });
+
+    expect(result).toEqual({ outcome: "refused", gate: "shadow_review", detail: expect.any(String) });
+    expect(written.size).toBe(0);
+  });
+
+  test("a file policy with a reviewed shadow record promotes the same way as archive", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({ events, policy: { id: "policy-file", action: "file", autonomy_promoted_at: null }, written });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-file", reviewed_shadow_record: true, port });
+
+    expect(result.outcome).toBe("promoted");
+    expect(written.get("policy-file")?.autonomy).toBe("auto");
+  });
+
+  test("an auto_trash policy on a mailbox with NULL trashRetentionDays is refused, naming that gate", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({
+      events,
+      policy: { id: "policy-trash", action: "auto_trash", autonomy_promoted_at: null },
+      mailboxes_missing_retention: ["felix@tellmann.co.za", "felix@flext.dev"],
+      written,
+    });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-trash", reviewed_shadow_record: true, port });
+
+    expect(result.outcome).toBe("refused");
+    if (result.outcome !== "refused") {
+      throw new Error("expected a refusal");
+    }
+    expect(result.gate).toBe("trash_retention");
+    expect(result.detail).toContain("felix@tellmann.co.za");
+    expect(written.size).toBe(0);
+    // Refused on retention alone: the shadow-cycle counts are never even queried.
+    expect(events).not.toContain("count_decisions policy-trash");
+  });
+
+  test("an auto_trash policy is refused even with retention set everywhere, because it has never been promoted", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({
+      events,
+      policy: { id: "policy-trash", action: "auto_trash", autonomy_promoted_at: null },
+      mailboxes_missing_retention: [],
+      written,
+    });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-trash", reviewed_shadow_record: true, port });
+
+    expect(result).toEqual({ outcome: "refused", gate: "shadow_cycle", detail: expect.any(String) });
+    expect(written.size).toBe(0);
+  });
+
+  test("purge is refused outright", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({ events, policy: { id: "policy-purge", action: "purge", autonomy_promoted_at: null }, written });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-purge", reviewed_shadow_record: true, port });
+
+    expect(result).toEqual({ outcome: "refused", gate: "purge_not_allowed", detail: expect.any(String) });
+    expect(written.size).toBe(0);
+    // Refused before any DB read beyond the policy lookup itself.
+    expect(events).toEqual(["load_policy policy-purge"]);
+  });
+
+  test("an unknown policy id is refused, naming the missing gate", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({ events, policy: null, written });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "does-not-exist", reviewed_shadow_record: true, port });
+
+    expect(result).toEqual({ outcome: "refused", gate: "missing", detail: expect.any(String) });
+  });
+});
+
+describe("demotePolicyAutonomy (Task 8)", () => {
+  test("demotion to shadow always succeeds, including for a suspended policy", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    // "suspended" lives on SenderPolicy.suspendedAt, outside this fake's shape — the point of this test is
+    // that demotion never gates on ANYTHING, so a fake with no suspension concept at all still proves it:
+    // demoteToShadow takes no policy row and cannot refuse.
+    written.set("policy-suspended", { autonomy: "auto", autonomy_promoted_at: new Date("2026-07-01T00:00:00Z") });
+    const port = createFakePromotionPort({ events, policy: null, written });
+
+    const result = await demotePolicyAutonomy({ sender_policy_id: "policy-suspended", port });
+
+    expect(result).toEqual({ outcome: "demoted" });
+    expect(written.get("policy-suspended")?.autonomy).toBe("shadow");
+    // autonomyPromotedAt survives a demotion: it is history, not cleared by stepping back to shadow.
+    expect(written.get("policy-suspended")?.autonomy_promoted_at).toEqual(new Date("2026-07-01T00:00:00Z"));
+  });
+
+  test("demoting a policy id that names nothing still succeeds", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({ events, policy: null, written });
+
+    const result = await demotePolicyAutonomy({ sender_policy_id: "does-not-exist", port });
+
+    expect(result).toEqual({ outcome: "demoted" });
   });
 });
