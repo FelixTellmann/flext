@@ -1,3 +1,4 @@
+import type { ConnectionOptions } from "node:tls";
 import type { MailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FIELDS, parseHeaderBlock } from "@server/mail/providers/headers";
 import { buildTlsOptions } from "@server/mail/providers/tls";
@@ -398,7 +399,27 @@ export async function createImapProvider(connection: MailboxConnection): Promise
     secure: true,
     servername: connection.host,
     auth: { user: connection.username, pass: connection.password },
-    tls: buildTlsOptions({ host: connection.host, tls_policy: connection.tls_policy, pinned_spki: connection.pinned_spki }),
+    // `autoSelectFamily` is a net socket option and node's TLS typings do not declare it, but tls.connect
+    // forwards socket options to the underlying connect — verified here by passing `family: 6` and
+    // watching the socket come back IPv6. The widening says exactly that and nothing more.
+    tls: {
+      ...buildTlsOptions({ host: connection.host, tls_policy: connection.tls_policy, pinned_spki: connection.pinned_spki }),
+      // Bun 1.3.6 kills the PROCESS during a dual-stack connect on a slow link, with a TypeError that no
+      // try/catch around this call can see because it is thrown from a timer callback:
+      //
+      //   Cannot destructure property 'subject' from null or undefined value
+      //     at checkServerIdentity (node:tls) ... at internalConnectMultipleTimeout (node:net)
+      //
+      // imap.gmail.com publishes both A and AAAA records, so Node races an IPv4 and an IPv6 socket and
+      // drops the loser after 250ms. On a slow link that timer fires mid-handshake, and Bun then runs the
+      // TLS completion path over the socket it just closed — where getPeerCertificate() returns nothing
+      // and node's own checkServerIdentity destructures null. Not racing is the only fix available from
+      // here, and it costs nothing: both families resolve, so the connection is simply deterministic.
+      //
+      // imapflow spreads this object straight into tls.connect (imap-flow.js: Object.assign with
+      // options.tls), which is why a socket-level option belongs in the TLS block.
+      autoSelectFamily: false,
+    } as ConnectionOptions & { autoSelectFamily: boolean },
     qresync: true,
     disableAutoIdle: true,
     logger: false,
