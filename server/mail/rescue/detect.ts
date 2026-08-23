@@ -1,7 +1,7 @@
 import type { MessageAddress } from "@server/mail/rescue/locate";
 import { messageAddressForAction } from "@server/mail/rescue/locate";
 import type { RescueSignal } from "@server/mail/rescue/signals";
-import { judgeRescue } from "@server/mail/rescue/signals";
+import { judgeRescue, seenAtApply } from "@server/mail/rescue/signals";
 
 // One `applied` action still awaiting judgement. `applied_at` is non-null by construction: the port's
 // query excludes rows without one, because §8's test is "after appliedAt" and a row with no apply moment
@@ -14,6 +14,10 @@ export type RescueCandidateRow = {
   sender_policy_id: string | null;
   kind: string;
   to_state_json: string | null;
+  // The message's state at the instant the rule moved it. Read for its flags only: an `opened` rescue
+  // requires \Seen to have been ABSENT here, because a message the operator had already read cannot be
+  // rescued by opening it. See seenAtApply in signals.ts.
+  from_state_json: string | null;
   applied_at: Date;
 };
 
@@ -197,7 +201,12 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
         continue;
       }
 
-      const verdict = judgeRescue({ applied_at: candidate.applied_at, opened_at: live.opened_at, last_reply_at: live.last_reply_at });
+      const verdict = judgeRescue({
+        applied_at: candidate.applied_at,
+        opened_at: live.opened_at,
+        last_reply_at: live.last_reply_at,
+        seen_at_apply: seenAtApply(candidate.from_state_json),
+      });
       if (!verdict.rescued) {
         continue;
       }

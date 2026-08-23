@@ -35,6 +35,9 @@ function toStateJson(overrides: Partial<ActionStateSnapshot> = {}): string {
   return serializeActionState(state);
 }
 
+const UNSEEN_AT_APPLY = JSON.stringify({ folder: "INBOX", flags: [], labels: null });
+const SEEN_AT_APPLY = JSON.stringify({ folder: "INBOX", flags: ["\\Seen"], labels: null });
+
 // Every nullable field tests `=== undefined` rather than using `??`: a fixture that defaults a
 // deliberately-passed null disarms the very test that passed it — the null-policy case here would
 // silently grow a policy and stop proving anything.
@@ -44,6 +47,7 @@ function candidate(input: {
   sender_policy_id?: string | null;
   kind?: string;
   to_state_json?: string | null;
+  from_state_json?: string | null;
   applied_at?: Date;
 }): RescueCandidateRow {
   return {
@@ -52,6 +56,9 @@ function candidate(input: {
     sender_policy_id: input.sender_policy_id === undefined ? "policy-1" : input.sender_policy_id,
     kind: input.kind === undefined ? "archive" : input.kind,
     to_state_json: input.to_state_json === undefined ? null : input.to_state_json,
+    // Unseen at apply time by default: the precondition an `opened` rescue requires, and what every
+    // pre-existing case in this file is implicitly about.
+    from_state_json: input.from_state_json === undefined ? UNSEEN_AT_APPLY : input.from_state_json,
     applied_at: input.applied_at === undefined ? APPLIED_AT : input.applied_at,
   };
 }
@@ -436,5 +443,35 @@ describe("detectRescues", () => {
     const port = createStuckFakePort(2);
 
     await expect(detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 2 })).rejects.toThrow("did not finish within 500 chunks of 2");
+  });
+
+  // The 2026-08-22 production cascade, end to end: a message the operator had read years earlier, whose
+  // openedAt the post-apply sync stamped later than appliedAt. Before the guard this stamped the action
+  // AND suspended the policy; 1,562 of them suspended 34 policies in one run.
+  test("a message already read when the rule moved it is examined but never rescued", async () => {
+    const port = createFakePort({
+      rows: [candidate({ action_id: "action-seen", from_state_json: SEEN_AT_APPLY })],
+      live: { [rowKey("message-action-seen")]: facts({ opened_at: OPENED_AFTER }) },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(port.stamps.size).toBe(0);
+    expect(port.policies.size).toBe(0);
+  });
+
+  // Unknown apply-time state must not be read as "was unseen" — that would reopen the cascade for every
+  // row whose state the executor could not record.
+  test("an action with no recorded apply-time state is not rescued by an open", async () => {
+    const port = createFakePort({
+      rows: [candidate({ action_id: "action-nostate", from_state_json: null })],
+      live: { [rowKey("message-action-nostate")]: facts({ opened_at: OPENED_AFTER }) },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(port.stamps.size).toBe(0);
   });
 });

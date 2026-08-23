@@ -119,6 +119,7 @@ async function loadRescueCandidates(input: {
       sender_policy_id: action.sender_policy_id,
       kind: action.kind,
       to_state_json: action.to_state_json,
+      from_state_json: action.from_state_json,
       applied_at: action.applied_at,
     })
     .from(action)
@@ -149,7 +150,12 @@ async function loadLastSentByMeByThread(input: { mailbox_id: string; config: Mai
   const group_key = threadGroupKeySql();
 
   const rows = await db
-    .select({ group_key: group_key.as("group_key"), last_reply_at: sql<Date | null>`MAX(${message.internal_date})` })
+    // Typed as it actually arrives, not as it would be convenient. Drizzle converts values for real
+    // column selects and passes a raw sql<> expression through untouched, so mysql2 returns this
+    // aggregate as a STRING. It was declared `sql<Date | null>` here, and that assertion is what sent a
+    // string into judgeRescue's .getTime() and aborted whole rescue passes with
+    // "candidate.getTime is not a function" (felix@listifyregistry.com, 2026-08-22).
+    .select({ group_key: group_key.as("group_key"), last_reply_at: sql<Date | string | null>`MAX(${message.internal_date})` })
     .from(message)
     .where(
       and(
@@ -162,9 +168,14 @@ async function loadLastSentByMeByThread(input: { mailbox_id: string; config: Mai
 
   const by_thread = new Map<string, Date>();
   for (const row of rows) {
-    if (row.last_reply_at !== null) {
-      by_thread.set(row.group_key, row.last_reply_at);
+    if (row.last_reply_at === null) {
+      continue;
     }
+    const last_reply_at = row.last_reply_at instanceof Date ? row.last_reply_at : new Date(row.last_reply_at);
+    if (Number.isNaN(last_reply_at.getTime())) {
+      continue;
+    }
+    by_thread.set(row.group_key, last_reply_at);
   }
   return by_thread;
 }

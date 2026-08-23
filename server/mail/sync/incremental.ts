@@ -61,14 +61,31 @@ async function applyFlagChanges(input: {
         .where(scope);
       continue;
     }
-    // opened_at is the first \Seen transition and never moves afterwards; §8's rescue detection compares it
-    // against the action's applied_at, which a bare is_read flag cannot express.
+    // opened_at is the first OBSERVED unseen→seen transition and never moves afterwards; §8's rescue
+    // detection compares it against the action's applied_at, which a bare is_read flag cannot express.
+    //
+    // The guard on the stored is_seen is what makes it a transition rather than a sighting. CONDSTORE
+    // reports everything above the stored MODSEQ, and applying an action mutates the message — a MOVE, or
+    // a Gmail label change — which bumps that MODSEQ. So the sync after a bulk apply is re-told about
+    // every message the apply touched, each carrying the \Seen it has held for years. Stamping on that
+    // sighting wrote openedAt = now for 1,562 already-read messages on 2026-08-22, every one of them
+    // later than its own appliedAt, and the rescue detector read the lot as "the operator rescued this"
+    // and suspended 34 policies.
+    //
+    // The consequence is deliberate: mail that was already read when it was backfilled never receives an
+    // openedAt, because there is no evidence of when it was opened and inventing one is what broke this.
+    // felix@tellmann.co.za shows the end state — 4 of 4,719 applied messages carry one — so `opened`
+    // detection there is near-blind, honestly, in the same way `starred` is absent in signals.ts.
     await db
       .update(message)
       .set({
+        // ORDER IS LOAD-BEARING and must stay above is_seen: MySQL evaluates an UPDATE's SET assignments
+        // left to right, and a column read after its own assignment yields the NEW value. is_seen is
+        // assigned in this same clause, so reading it below its own assignment would compare against the
+        // value this sync is writing (always 1 here) and the guard would never hold.
+        opened_at: sql`IF(${message.is_seen} = 0, COALESCE(${message.opened_at}, ${now}), ${message.opened_at})`,
         is_seen,
         is_flagged: change.flags.includes("\\Flagged"),
-        opened_at: sql`COALESCE(${message.opened_at}, ${now})`,
         updatedAt: now,
       })
       .where(scope);
