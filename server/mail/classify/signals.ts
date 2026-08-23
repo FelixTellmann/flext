@@ -21,6 +21,12 @@ export type MessageSignals = {
   addressed_to_me: boolean;
   cc_me: boolean;
   sender_known: boolean;
+  // The quarantine spec's first-contact test: nobody has written from here before and nothing has ever
+  // been sent back. Kept beside sender_known rather than derived at the call site because the two are
+  // easy to confuse — sender_known is "I have replied at least once", which a first contact also fails,
+  // but a sender who has written fifty times and never been answered fails it too and is NOT a first
+  // contact.
+  is_first_contact: boolean;
   dkim_aligned: boolean | null;
   volume_bucket: VolumeBucket;
   age_days: number;
@@ -79,6 +85,10 @@ export function deriveSignals(input: SignalInput): MessageSignals {
     addressed_to_me: input.to_me,
     cc_me: input.cc_me,
     sender_known: input.my_reply_count > 0,
+    // `<= 1`, not `=== 0`: sender_message_count is the Sender aggregate and already counts the message
+    // being classified, so a sender who has written exactly once reads as 1 here. Testing for 0 would
+    // make first contact unreachable and the whole rule dead code.
+    is_first_contact: input.sender_message_count <= 1 && input.my_reply_count === 0,
     dkim_aligned: input.dkim_aligned,
     volume_bucket: volumeBucket(input.sender_message_count),
     age_days: Math.max(0, Math.floor(elapsed_ms / 86_400_000)),

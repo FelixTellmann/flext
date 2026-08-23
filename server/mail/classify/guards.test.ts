@@ -10,6 +10,7 @@ const base_signals: MessageSignals = {
   addressed_to_me: true,
   cc_me: false,
   sender_known: false,
+  is_first_contact: false,
   dkim_aligned: true,
   volume_bucket: "low",
   age_days: 5,
@@ -27,7 +28,7 @@ const base_input: GuardInput = {
   never_touch_rules: [],
 };
 
-const ALL_ACTIONS: ActionClass[] = ["keep_inbox", "archive", "file", "auto_trash", "purge"];
+const ALL_ACTIONS: ActionClass[] = ["keep_inbox", "archive", "file", "quarantine", "auto_trash", "purge"];
 
 describe("flagged", () => {
   test("fires when flagged", () => {
@@ -140,10 +141,13 @@ describe("never_touch", () => {
 });
 
 describe("replied_in_thread", () => {
-  test("fires and blocks archive, auto_trash and purge but not file", () => {
+  // `quarantine` sits with archive here because both hide a message from the inbox. It cannot actually
+  // co-occur with a first contact — a reply makes the sender known — so this asserts the rule rather than
+  // a reachable path, and it is what would keep the rule true if first contact were ever loosened.
+  test("fires and blocks archive, quarantine, auto_trash and purge but not file", () => {
     const verdicts = evaluateGuards({ ...base_input, replied_in_thread: true });
     const verdict = verdicts.find((entry) => entry.name === "replied_in_thread");
-    expect(verdict).toEqual({ name: "replied_in_thread", blocks: ["archive", "auto_trash", "purge"], absolute: false });
+    expect(verdict).toEqual({ name: "replied_in_thread", blocks: ["archive", "quarantine", "auto_trash", "purge"], absolute: false });
   });
 
   test("does not fire when we have not replied", () => {

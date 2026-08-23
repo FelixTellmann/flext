@@ -1,5 +1,5 @@
 import type { ExecutableActionKind, MailboxMutation, MailboxState, PlannedAction } from "@server/mail/actions/kinds";
-import { applyToState, FILE_KIND, planFor } from "@server/mail/actions/kinds";
+import { applyToState, FILE_KIND, planFor, QUARANTINE_KIND, QUARANTINE_LOGICAL_PATH } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { captureFolderStates, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
 import type { PolicyScope } from "@server/mail/classify/rules";
@@ -403,6 +403,15 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
   const wanted_paths = new Set<string>();
 
   for (const row of rows) {
+    // Quarantine wants one folder for the whole batch and needs none of filing's gating — there is no
+    // policy to check a scope on and no DKIM question to ask, because the defining fact about a first
+    // contact is that nothing is known about the sender.
+    if (row.kind === QUARANTINE_KIND) {
+      wanted_paths.add(QUARANTINE_LOGICAL_PATH);
+      classified.push({ row, logical_path: QUARANTINE_LOGICAL_PATH });
+      continue;
+    }
+
     if (row.kind !== FILE_KIND) {
       classified.push({ row, logical_path: null });
       continue;
@@ -462,11 +471,17 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
 
     let plan: PlannedAction;
     try {
+      // Both destinations are gated on the row's own kind rather than merely on a resolved path being
+      // present. A quarantine row and a file row both carry a logical path by this point, and handing
+      // each other's destination to planFor would type-check perfectly while filing a message into
+      // Quarantine.
+      const resolved_path = entry.logical_path === null ? null : requireResolvedFolder(resolved_folders, entry.logical_path);
       plan = planFor(row.kind, input.flavor, {
         source_folder: row.folder,
         archive_folder: folders.archive_folder,
         trash_folder: folders.trash_folder,
-        file_folder: entry.logical_path === null ? null : requireResolvedFolder(resolved_folders, entry.logical_path),
+        file_folder: row.kind === FILE_KIND ? resolved_path : null,
+        quarantine_folder: row.kind === QUARANTINE_KIND ? resolved_path : null,
       });
     } catch (error) {
       // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a

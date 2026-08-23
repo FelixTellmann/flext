@@ -21,12 +21,14 @@ import { GMAIL_CANONICAL_FOLDER } from "@server/mail/types";
 const GENERIC_ARCHIVE = "Archives/2026";
 const GENERIC_TRASH = "Deleted Items";
 const GENERIC_FILE = "Clients/Acme";
+const GENERIC_QUARANTINE = "INBOX.Quarantine";
 const GMAIL_ARCHIVE = "[Gmail]/All Mail";
 const GMAIL_TRASH = "[Gmail]/Trash";
 // Deliberately not "Clients/Acme": gmail_states[3] already carries that label, and a fixture that
 // collides with an existing label would make the round trip for that state a no-op instead of a real
 // add-then-remove.
 const GMAIL_FILE = "Clients/Beta";
+const GMAIL_QUARANTINE = "Quarantine";
 
 // Sorts and de-duplicates independently of the module, so a fixture is already in the canonical form
 // applyToState returns and a round trip can be compared with plain deep equality.
@@ -53,9 +55,21 @@ function statesFor(flavor: MailboxFlavor): MailboxState[] {
 
 function contextFor(flavor: MailboxFlavor, from_state: MailboxState): PlanContext {
   if (flavor === "gmail") {
-    return { source_folder: from_state.folder, archive_folder: GMAIL_ARCHIVE, trash_folder: GMAIL_TRASH, file_folder: GMAIL_FILE };
+    return {
+      source_folder: from_state.folder,
+      archive_folder: GMAIL_ARCHIVE,
+      trash_folder: GMAIL_TRASH,
+      file_folder: GMAIL_FILE,
+      quarantine_folder: GMAIL_QUARANTINE,
+    };
   }
-  return { source_folder: from_state.folder, archive_folder: GENERIC_ARCHIVE, trash_folder: GENERIC_TRASH, file_folder: GENERIC_FILE };
+  return {
+    source_folder: from_state.folder,
+    archive_folder: GENERIC_ARCHIVE,
+    trash_folder: GENERIC_TRASH,
+    file_folder: GENERIC_FILE,
+    quarantine_folder: GENERIC_QUARANTINE,
+  };
 }
 
 function plannedFor(kind: "archive" | "auto_trash" | "file", flavor: MailboxFlavor, from_state: MailboxState): PlannedAction {
@@ -197,6 +211,7 @@ describe("archive means one thing per flavor", () => {
       archive_folder: GENERIC_ARCHIVE,
       trash_folder: null,
       file_folder: null,
+      quarantine_folder: null,
     });
     const recorded = state("INBOX/Clients", [], null);
     expect(inverseOf(plan, recorded)).toEqual([{ verb: "move", source_folder: GENERIC_ARCHIVE, target_folder: "INBOX/Clients" }]);
@@ -241,20 +256,38 @@ describe("file means one thing per flavor", () => {
 describe("a missing target folder is rejected, never guessed", () => {
   test("generic archive without an \\Archive folder throws and names SPECIAL-USE", () => {
     expect(() =>
-      planFor("archive", "generic", { source_folder: "INBOX", archive_folder: null, trash_folder: GENERIC_TRASH, file_folder: null }),
+      planFor("archive", "generic", {
+        source_folder: "INBOX",
+        archive_folder: null,
+        trash_folder: GENERIC_TRASH,
+        file_folder: null,
+        quarantine_folder: null,
+      }),
     ).toThrow(/SPECIAL-USE/);
   });
 
   test("an empty string is treated as no folder at all", () => {
     expect(() =>
-      planFor("archive", "generic", { source_folder: "INBOX", archive_folder: "", trash_folder: null, file_folder: null }),
+      planFor("archive", "generic", {
+        source_folder: "INBOX",
+        archive_folder: "",
+        trash_folder: null,
+        file_folder: null,
+        quarantine_folder: null,
+      }),
     ).toThrow(/SPECIAL-USE/);
   });
 
   for (const flavor of flavors) {
     test(`${flavor} auto_trash without a \\Trash folder throws`, () => {
       expect(() =>
-        planFor("auto_trash", flavor, { source_folder: "INBOX", archive_folder: GENERIC_ARCHIVE, trash_folder: null, file_folder: null }),
+        planFor("auto_trash", flavor, {
+          source_folder: "INBOX",
+          archive_folder: GENERIC_ARCHIVE,
+          trash_folder: null,
+          file_folder: null,
+          quarantine_folder: null,
+        }),
       ).toThrow(/SPECIAL-USE/);
     });
   }
@@ -267,6 +300,7 @@ describe("a missing target folder is rejected, never guessed", () => {
           archive_folder: GENERIC_ARCHIVE,
           trash_folder: GENERIC_TRASH,
           file_folder: null,
+          quarantine_folder: null,
         }),
       ).toThrow(/SPECIAL-USE/);
     });
@@ -355,4 +389,45 @@ describe("state model guards", () => {
     const every_kind: PlanRequestKind[] = ["keep_inbox", "archive", "file", "auto_trash", "needs_action"];
     expect(every_kind.filter(isExecutableActionKind)).toEqual(["archive", "file", "auto_trash"]);
   });
+});
+
+describe("quarantine", () => {
+  test("generic quarantine moves to the review folder", () => {
+    const plan = planFor("quarantine", "generic", {
+      source_folder: "INBOX",
+      archive_folder: GENERIC_ARCHIVE,
+      trash_folder: GENERIC_TRASH,
+      file_folder: null,
+      quarantine_folder: GENERIC_QUARANTINE,
+    });
+    expect(plan.mutation).toEqual({ verb: "move", source_folder: "INBOX", target_folder: GENERIC_QUARANTINE });
+  });
+
+  // Label swap, not a move — the same reasoning as filing. A move would change the UID and orphan the row.
+  test("gmail quarantine swaps labels and keeps the UID", () => {
+    const plan = planFor("quarantine", "gmail", {
+      source_folder: GMAIL_ARCHIVE,
+      archive_folder: GMAIL_ARCHIVE,
+      trash_folder: GMAIL_TRASH,
+      file_folder: null,
+      quarantine_folder: GMAIL_QUARANTINE,
+    });
+    expect(plan.mutation).toEqual({ verb: "set_labels", add_labels: [GMAIL_QUARANTINE], remove_labels: [GMAIL_INBOX_LABEL] });
+  });
+
+  // §D2: a quarantine with no destination must refuse, never fall back to Trash or Junk. Falling back is
+  // the one outcome that would turn "reviewable" into "deleted without telling anyone".
+  for (const flavor of flavors) {
+    test(`${flavor} quarantine without a destination throws rather than guessing`, () => {
+      expect(() =>
+        planFor("quarantine", flavor, {
+          source_folder: "INBOX",
+          archive_folder: GENERIC_ARCHIVE,
+          trash_folder: GENERIC_TRASH,
+          file_folder: null,
+          quarantine_folder: null,
+        }),
+      ).toThrow(/quarantine destination/);
+    });
+  }
 });

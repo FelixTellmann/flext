@@ -10,6 +10,7 @@ const base_signals: MessageSignals = {
   addressed_to_me: true,
   cc_me: false,
   sender_known: false,
+  is_first_contact: false,
   dkim_aligned: true,
   volume_bucket: "low",
   age_days: 5,
@@ -623,5 +624,64 @@ describe("a policy can never name purge", () => {
       policy_id: "policy-address-archive",
       suppressed_by: null,
     });
+  });
+});
+
+describe("first contact", () => {
+  const first_contact: DecisionInput = { ...base_input, signals: { ...base_signals, is_first_contact: true } };
+
+  test("a first contact with no policy is quarantined", () => {
+    const decision = decide(first_contact);
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
+    expect(decision.policy_id).toBeNull();
+    expect(decision.suppressed_by).toBeNull();
+  });
+
+  // The precedence in decide() is what enforces the spec's third condition: reaching the quarantine
+  // branch already proves no policy matched. This asserts it end to end rather than trusting the reading.
+  test("any policy naming the sender wins, whatever it says", () => {
+    for (const policy of [address_archive, address_trash]) {
+      const decision = decide({ ...first_contact, policies: [policy] });
+      expect(decision.action).not.toBe("quarantine");
+      expect(decision.policy_id).toBe(policy.id);
+    }
+  });
+
+  test("a sender with history is not a first contact and is not quarantined", () => {
+    const decision = decide({ ...first_contact, signals: { ...base_signals, is_first_contact: false } });
+    expect(decision.action).not.toBe("quarantine");
+  });
+
+  // An absolute guard outranks everything, so this never even reaches the branch — but a starred first
+  // contact being quarantined would be exactly the "it hid something I marked" failure the guards exist
+  // to prevent, so it is asserted rather than assumed.
+  test("a starred first contact is never quarantined", () => {
+    const decision = decide({ ...first_contact, is_starred: true });
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("guard");
+  });
+
+  test("a never_touch rule protects a first contact", () => {
+    const decision = decide({ ...first_contact, never_touch_rules: [{ kind: "domain", value: "example.com" }] });
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("never_touch");
+  });
+
+  test("a snoozed thread suppresses quarantine like every other action", () => {
+    const decision = decide({ ...first_contact, thread_state: "snoozed" satisfies ThreadStateValue });
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("thread_state");
+  });
+
+  // Quarantine sits ABOVE derived, so a first contact that also looks like unsolicited bulk is
+  // quarantined rather than archived. Both hide it; only quarantine puts it somewhere meant to be read.
+  test("quarantine outranks the derived rule", () => {
+    const decision = decide({
+      ...first_contact,
+      signals: { ...base_signals, is_first_contact: true, is_bulk: true, age_days: 400 },
+    });
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
   });
 });

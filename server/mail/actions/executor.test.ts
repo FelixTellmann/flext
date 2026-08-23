@@ -414,6 +414,7 @@ describe("executeActions ordering (§7.1)", () => {
     expect(recovered?.labels).toEqual(["Work", GMAIL_INBOX_LABEL]);
 
     const plan = planFor("archive", "gmail", {
+      quarantine_folder: null,
       source_folder: GMAIL_CANONICAL_FOLDER,
       archive_folder: null,
       trash_folder: GMAIL_TRASH_FOLDER,

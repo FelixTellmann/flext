@@ -1,6 +1,6 @@
 import type { MessageSignals } from "@server/mail/classify/signals";
 
-export type ActionClass = "keep_inbox" | "archive" | "file" | "auto_trash" | "purge";
+export type ActionClass = "keep_inbox" | "archive" | "file" | "quarantine" | "auto_trash" | "purge";
 
 export type GuardName = "flagged" | "too_recent" | "never_touch" | "replied_in_thread" | "derived_allowlist" | "human_attachment";
 
@@ -34,7 +34,7 @@ export type GuardInput = {
   never_touch_rules: NeverTouchRuleInput[];
 };
 
-const ALL_ACTION_CLASSES = ["keep_inbox", "archive", "file", "auto_trash", "purge"] as const satisfies readonly ActionClass[];
+const ALL_ACTION_CLASSES = ["keep_inbox", "archive", "file", "quarantine", "auto_trash", "purge"] as const satisfies readonly ActionClass[];
 
 function matchesNeverTouchRule(rule: NeverTouchRuleInput, input: SenderGuardInput): boolean {
   if (rule.kind === "address") {
@@ -97,7 +97,12 @@ export function evaluateGuards(input: GuardInput): GuardVerdict[] {
   // delete the record-keeping half of the product. They block trash/purge and, for replied_in_thread,
   // archive as well, but never `file`.
   if (input.replied_in_thread) {
-    verdicts.push({ name: "replied_in_thread", blocks: ["archive", "auto_trash", "purge"], absolute: false });
+    // `quarantine` rides with archive rather than with file: both hide a message from the inbox, and
+    // §D3 of the quarantine spec says every existing reason not to hide mail applies to it unchanged.
+    // It cannot actually co-occur with a first contact — replying in a thread makes the sender known —
+    // so this is a statement of the rule rather than a reachable branch, and it must stay true if the
+    // first-contact test is ever loosened.
+    verdicts.push({ name: "replied_in_thread", blocks: ["archive", "quarantine", "auto_trash", "purge"], absolute: false });
   }
   verdicts.push(...sender_verdicts.filter((verdict) => !verdict.absolute));
   if (input.has_attachment && !input.signals.is_automated && !input.signals.is_bulk) {

@@ -11,7 +11,12 @@ export type PolicyScope = "address" | "domain";
 // never inline with classification, so no path through decide() may emit it. The type states it and
 // POLICY_ACTIONS re-checks it at runtime, because `sender_policy.action` is a varchar with no database
 // enum behind it — a hand-written row must not be able to reach the executor with `purge` in it.
-export type PolicyAction = Exclude<ActionClass, "purge">;
+// `quarantine` joins `purge` in the exclusion, for the same reason and by a different route. A policy is
+// a statement about a sender the operator has already met; quarantine is what happens when there is no
+// such statement to make. A policy naming it would be self-cancelling — its own existence disqualifies
+// the message from the rule it names — so the type refuses it rather than leaving a rule that reads as
+// available and silently never fires.
+export type PolicyAction = Exclude<ActionClass, "purge" | "quarantine">;
 
 export const POLICY_ACTIONS = ["keep_inbox", "archive", "file", "auto_trash"] as const satisfies readonly PolicyAction[];
 
@@ -36,6 +41,7 @@ export const DECISION_SOURCES = [
   "address_policy",
   "domain_policy",
   "suspended_policy",
+  "first_contact",
   "derived",
   "fallback",
 ] as const;
@@ -256,6 +262,42 @@ export function decide(input: DecisionInput): Decision {
 
   if (policy_match !== null) {
     return policyDecision(input, verdicts, policy_match);
+  }
+
+  // Below every explicit rule and above `derived`, per §D3 of the quarantine spec.
+  //
+  // Reaching this line already proves no address or domain policy names this sender — matchPolicy
+  // returned null above — so the "no policy" third of the first-contact test needs no separate check and
+  // cannot drift out of agreement with the precedence that establishes it.
+  //
+  // `derived` sits below rather than above because a derived rule infers from behaviour with a sender,
+  // and a first contact has no behaviour to infer from. There is nothing here for the two to disagree
+  // about.
+  if (input.signals.is_first_contact) {
+    const suppressed_by = isBlocked(verdicts, "quarantine", false);
+    if (suppressed_by !== null) {
+      return {
+        action: "keep_inbox",
+        source: "first_contact",
+        policy_id: null,
+        suppressed_by,
+        reasons: [
+          `first message ever from ${input.from_address}, never replied to, named by no policy`,
+          `guard ${suppressed_by} blocks quarantining it`,
+        ],
+      };
+    }
+    return {
+      action: "quarantine",
+      source: "first_contact",
+      policy_id: null,
+      suppressed_by: null,
+      reasons: [
+        `first message ever from ${input.from_address}`,
+        "nothing has ever been sent back to this sender",
+        "no address or domain policy names them",
+      ],
+    };
   }
 
   const derived = derivedOutcome(input);

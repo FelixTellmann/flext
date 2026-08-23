@@ -21,11 +21,22 @@ export const GMAIL_INBOX_LABEL = "\\Inbox";
 // What a caller may ask for: PolicyAction (rules.ts, which already excludes the sweep kind) plus the `needs_action`
 // outcome decide() can return. Derived from rules.ts rather than restated so a new policy action cannot
 // appear there without the exhaustiveness check at the bottom of planFor failing to compile.
-export type PlanRequestKind = PolicyAction | "needs_action";
+// `quarantine` is listed explicitly rather than arriving through PolicyAction, and the difference is the
+// point: a policy can never name it (rules.ts excludes it), because quarantine is what happens when no
+// policy names the sender at all. It is still a plannable, executable kind — just one only decide() can
+// ask for.
+export type PlanRequestKind = PolicyAction | "quarantine" | "needs_action";
 
 export type ExecutableActionKind = Exclude<PlanRequestKind, "keep_inbox" | "needs_action">;
 
-export const EXECUTABLE_ACTION_KINDS = ["archive", "file", "auto_trash"] as const satisfies readonly ExecutableActionKind[];
+export const EXECUTABLE_ACTION_KINDS = ["archive", "file", "quarantine", "auto_trash"] as const satisfies readonly ExecutableActionKind[];
+
+// The one spelling of the quarantine kind and of the single logical path every quarantined message goes
+// to. A logical path rather than a SPECIAL-USE name because no such attribute exists for "review this":
+// the folder is resolved and created by the same resolver filing uses, under the same namespace root, so
+// a quarantine folder cannot land somewhere filing would not have been allowed to put one.
+export const QUARANTINE_KIND = "quarantine" as const satisfies ExecutableActionKind;
+export const QUARANTINE_LOGICAL_PATH = "Quarantine";
 
 // The one spelling of the filing kind. Task 9's transition out of `deferred` is guarded on it, and a
 // literal in that WHERE clause is exactly the two-spellings shape this module exists to prevent.
@@ -61,6 +72,10 @@ export type PlanContext = {
   // server/mail/filing/resolver.ts. Null carries the same meaning the other two do: the caller could not
   // name it, so planFor refuses rather than guessing — this module never learns what a client is.
   file_folder: string | null;
+  // Where a first contact goes to be reviewed. Null means the caller could not name it, and planFor then
+  // refuses exactly as it does for the others — a quarantine with no destination must not fall back to
+  // Trash or to Junk, which is the whole point of the spec's D2.
+  quarantine_folder: string | null;
 };
 
 export type PlannedAction = {
@@ -144,6 +159,35 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
         verb: "move",
         source_folder: context.source_folder,
         target_folder: requireTargetFolder(context.file_folder, kind, "filing destination"),
+      },
+    };
+  }
+
+  // Quarantine takes archive's shape, not trash's: on Gmail it is a label swap so the UID stays stable,
+  // and on a generic server it is a move. It is deliberately NOT modelled on auto_trash — §D2 keeps it a
+  // reviewable folder the operator reads, so it must round-trip through undo as cleanly as filing does.
+  if (kind === "quarantine" && flavor === "gmail") {
+    return {
+      outcome: "planned",
+      kind,
+      flavor,
+      mutation: {
+        verb: "set_labels",
+        add_labels: [requireTargetFolder(context.quarantine_folder, kind, "quarantine destination")],
+        remove_labels: [GMAIL_INBOX_LABEL],
+      },
+    };
+  }
+
+  if (kind === "quarantine") {
+    return {
+      outcome: "planned",
+      kind,
+      flavor,
+      mutation: {
+        verb: "move",
+        source_folder: context.source_folder,
+        target_folder: requireTargetFolder(context.quarantine_folder, kind, "quarantine destination"),
       },
     };
   }

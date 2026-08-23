@@ -1,7 +1,15 @@
 import type { ActionJournal, ActionUndoLookup, UndoableActionRow } from "@server/mail/actions/executor";
 import { APPLIED_STATUS } from "@server/mail/actions/executor";
 import type { MailboxMutation, MailboxState, PlannedAction } from "@server/mail/actions/kinds";
-import { applyToState, FILE_KIND, inverseOf, isExecutableActionKind, planFor } from "@server/mail/actions/kinds";
+import {
+  applyToState,
+  FILE_KIND,
+  inverseOf,
+  isExecutableActionKind,
+  planFor,
+  QUARANTINE_KIND,
+  QUARANTINE_LOGICAL_PATH,
+} from "@server/mail/actions/kinds";
 import type { ActionFolders, ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
 import { classifyMailboxError } from "@server/mail/errors";
@@ -117,7 +125,7 @@ function canonicalState(state: MailboxState): string {
   });
 }
 
-// `file_folder` arrives as a parameter, already resolved by the caller: this function is pure and stays
+// `destination_folder` arrives as a parameter, already resolved by the caller: this function is pure and stays
 // that way, so the plan it rebuilds is the same computation the executor ran rather than a second one
 // that happens to do IO.
 function requirePlan(
@@ -125,13 +133,17 @@ function requirePlan(
   flavor: MailboxFlavor,
   folders: ActionFolders,
   from_state: ActionStateSnapshot,
-  file_folder: string | null,
+  destination_folder: string | null,
 ): PlannedAction {
+  // Routed by the row's own kind, exactly as the executor does when it builds the forward plan. One
+  // resolved path arrives here and the two destinations are mutually exclusive, so handing it to both
+  // would let a quarantine undo be planned as a filing undo without any type complaining.
   return planFor(row.kind, flavor, {
     source_folder: from_state.folder,
     archive_folder: folders.archive_folder,
     trash_folder: folders.trash_folder,
-    file_folder,
+    file_folder: row.kind === FILE_KIND ? destination_folder : null,
+    quarantine_folder: row.kind === QUARANTINE_KIND ? destination_folder : null,
   });
 }
 
@@ -263,7 +275,7 @@ async function undoRow(input: {
   // The row's filing destination, already resolved by undoRows. Null for every other kind, and for a
   // `file` row carrying no logical path — planFor then refuses it with the same "filing destination"
   // error a missing \Archive folder produces, which is the report that row deserves.
-  file_folder: string | null;
+  destination_folder: string | null;
   live_address: LiveAddress | undefined;
   validities: Map<string, string>;
 }): Promise<RowResult> {
@@ -291,7 +303,7 @@ async function undoRow(input: {
   let states: MailboxState[];
   let first_index: number;
   try {
-    const plan = requirePlan(row, input.flavor, input.folders, from_state, input.file_folder);
+    const plan = requirePlan(row, input.flavor, input.folders, from_state, input.destination_folder);
     inverse = inverseOf(plan, from_state);
     states = replayStates(plan, from_state, inverse);
     first_index = resumeIndexFor(states, to_state);
@@ -377,6 +389,9 @@ async function resolveFilingDestinations(input: {
     if (row.kind === FILE_KIND && row.target_path !== null) {
       wanted_paths.add(row.target_path);
     }
+    if (row.kind === QUARANTINE_KIND) {
+      wanted_paths.add(QUARANTINE_LOGICAL_PATH);
+    }
   }
 
   const resolutions = new Map<string, FilingResolution>();
@@ -402,13 +417,14 @@ async function resolveFilingDestinations(input: {
 // Null means "this row needs no filing destination", which is every kind but `file` and a `file` row with
 // no logical path. The `?? failed` arm cannot fire — resolveFilingDestinations covers every path this
 // returns for — and exists so a future caller cannot turn a missing entry into a silent null destination.
-function filingResolutionFor(row: UndoableActionRow, resolutions: Map<string, FilingResolution>): FilingResolution | null {
-  if (row.kind !== FILE_KIND || row.target_path === null) {
+function destinationResolutionFor(row: UndoableActionRow, resolutions: Map<string, FilingResolution>): FilingResolution | null {
+  // Quarantine's path is a constant, not a stored target_path: every quarantined message goes to the one
+  // review folder, so there is nothing per-row to look up.
+  const logical_path = row.kind === QUARANTINE_KIND ? QUARANTINE_LOGICAL_PATH : row.kind === FILE_KIND ? row.target_path : null;
+  if (logical_path === null) {
     return null;
   }
-  return (
-    resolutions.get(row.target_path) ?? { outcome: "failed", error: `no resolution was attempted for the logical path ${row.target_path}.` }
-  );
+  return resolutions.get(logical_path) ?? { outcome: "failed", error: `no resolution was attempted for the logical path ${logical_path}.` };
 }
 
 async function undoRows(input: {
@@ -450,7 +466,7 @@ async function undoRows(input: {
 
     // A path that cannot be resolved fails this row and mutates nothing, and it takes the ordinary
     // failure route below so the reason is recorded exactly like every other refusal.
-    const resolution = filingResolutionFor(row, resolutions);
+    const resolution = destinationResolutionFor(row, resolutions);
 
     let result: RowResult;
     if (resolution !== null && resolution.outcome === "failed") {
@@ -462,7 +478,7 @@ async function undoRows(input: {
           flavor: input.flavor,
           provider: input.provider,
           folders,
-          file_folder: resolution === null ? null : resolution.folder,
+          destination_folder: resolution === null ? null : resolution.folder,
           live_address: live_addresses.get(row.message_id),
           validities,
         });
