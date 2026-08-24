@@ -1,6 +1,9 @@
 # Rescue Detector Correction — Design
 
-**Status:** active
+**Status:** D1-D3 implemented 2026-08-23 (`565fb58`). D4, the unwind of the 1,562 false stamps and 34
+suspensions, is staged as `tmp/repair-false-rescues.ts` and awaits the operator — it writes to production,
+which this project keeps out of the agent's hands. The corrected rule was replayed over all 1,562 rows and
+judged none of them a rescue, with a control proving it still fires on a genuinely unseen-at-apply message.
 **Date:** 2026-08-23
 **Amends:** `docs/plans/specs/completed/2026-08-20-email-phase-6-autonomy-design.md` §8 (rescue detection)
 

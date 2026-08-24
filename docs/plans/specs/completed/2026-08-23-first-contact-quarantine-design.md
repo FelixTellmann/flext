@@ -1,6 +1,10 @@
 # First-Contact Quarantine — Design
 
-**Status:** active
+**Status:** implemented 2026-08-24 (`be5e653`) — classification and execution complete, verified by a
+shadow pass over 10,198 real messages. No mail has been moved: the 324 promotions and the apply are
+staged as reviewed scripts for the operator. §5's notification half is delivered as the published inbox
+ledger and `tmp/create-ledger-policies.ts`, also awaiting the operator.
+**Plan:** `docs/plans/completed/2026-08-24-first-contact-quarantine.md`
 **Date:** 2026-08-23
 **Extends:** `docs/plans/specs/completed/2026-07-27-email-management-design.md` (classification, §5 decide)
 
