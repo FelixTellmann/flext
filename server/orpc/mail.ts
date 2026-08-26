@@ -1,7 +1,12 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
 import { mailbox, mailboxObservedAddress, syncRun } from "@server/db/schema";
-import { createDatabasePromotionPort, demotePolicyAutonomy, promotePolicyAutonomy } from "@server/mail/actions/autonomy";
+import {
+  createDatabasePromotionPort,
+  demotePolicyAutonomy,
+  promotePolicyAutonomy,
+  promotePolicyAutonomyBatch,
+} from "@server/mail/actions/autonomy";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
 import { promoteAction, promotePolicyActions, resolveFilingAction } from "@server/mail/actions/promote";
@@ -29,6 +34,7 @@ import {
   upsertNeverTouchRule,
   upsertPolicy,
 } from "@server/mail/query/policies";
+import { listPromotionCandidates } from "@server/mail/query/promotion";
 import { getDashboardSummary, getSenderProfile, listSenders } from "@server/mail/query/senders";
 import { getShadowReport, getShadowSummary } from "@server/mail/query/shadow";
 import { dismissThread, markThreadDone, snoozeThread } from "@server/mail/query/threads";
@@ -411,6 +417,33 @@ export const mailProcedures = {
     ),
 
   // Unconditional: no gate, cannot fail. Making it easy to stop is what makes it safe to start (§8 Task 8).
+  // The review sheet. Promotion is gated on the operator having reviewed a policy's shadow record, and
+  // reviewing 113 policies one screen at a time is a gate nobody passes — on 2026-08-26 not one policy in
+  // this system had ever been promoted. This puts the evidence for the biggest ones in one place.
+  listPromotionCandidates: authed
+    .input(z.object({ limit: z.number().int().positive().max(100).default(25) }))
+    .handler(async ({ input }) => listPromotionCandidates({ limit: input.limit })),
+
+  // Promoting several policies in one action, and NOT a bypass of the gate: it calls the same
+  // promotePolicyAutonomy per policy, with the same reviewed_shadow_record the operator asserted, and
+  // reports each outcome separately. auto_trash still meets its own gate and purge is still refused, so a
+  // batch can come back part promoted and part refused — which is the honest result and is why this
+  // returns per-policy outcomes rather than a count.
+  promotePolicyAutonomyBulk: authed
+    .input(
+      z.object({
+        sender_policy_ids: z.array(z.string().min(1)).min(1).max(50),
+        reviewed_shadow_record: z.boolean(),
+      }),
+    )
+    .handler(async ({ input }) =>
+      promotePolicyAutonomyBatch({
+        sender_policy_ids: input.sender_policy_ids,
+        reviewed_shadow_record: input.reviewed_shadow_record,
+        port: createDatabasePromotionPort(),
+      }),
+    ),
+
   demotePolicyAutonomy: authed
     .input(z.object({ sender_policy_id: z.string().min(1) }))
     .handler(async ({ input }) => demotePolicyAutonomy({ sender_policy_id: input.sender_policy_id, port: createDatabasePromotionPort() })),

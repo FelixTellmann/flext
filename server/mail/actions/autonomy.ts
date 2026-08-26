@@ -219,6 +219,46 @@ export async function promotePolicyAutonomy(input: PromotePolicyAutonomyInput): 
   return { outcome: "promoted", autonomy_promoted_at: promoted_at };
 }
 
+export type PromotePolicyAutonomyBatchResult = {
+  promoted: number;
+  refused: number;
+  results: ({ sender_policy_id: string } & PromotePolicyAutonomyResult)[];
+};
+
+// Several policies in one operator action, and NOT a bypass of anything. It calls promotePolicyAutonomy
+// per policy with the same reviewed_shadow_record the operator asserted, so auto_trash still meets its own
+// gate and purge is still refused outright.
+//
+// It does NOT stop at the first refusal, and that is the point: a batch is a review sheet the operator
+// ticked, so one policy that cannot be promoted must not silently discard the twenty that can. The result
+// is per-policy for the same reason — a count alone cannot tell the operator WHICH rule refused or why,
+// and "18 of 20 promoted" with no names is a worse answer than the list.
+export async function promotePolicyAutonomyBatch(input: {
+  sender_policy_ids: string[];
+  reviewed_shadow_record: boolean;
+  port: PromotionPort;
+}): Promise<PromotePolicyAutonomyBatchResult> {
+  const results: PromotePolicyAutonomyBatchResult["results"] = [];
+
+  // Sequential, not Promise.all: each promotion is a write, and the gates for auto_trash read counts off
+  // the same table. Concurrency here buys nothing a person waiting on a click would notice and makes the
+  // failure modes harder to reason about.
+  for (const sender_policy_id of input.sender_policy_ids) {
+    const result = await promotePolicyAutonomy({
+      sender_policy_id,
+      reviewed_shadow_record: input.reviewed_shadow_record,
+      port: input.port,
+    });
+    results.push({ sender_policy_id, ...result });
+  }
+
+  return {
+    promoted: results.filter((result) => result.outcome === "promoted").length,
+    refused: results.filter((result) => result.outcome === "refused").length,
+    results,
+  };
+}
+
 // Unconditional (§8 Task 8, Step 3): no gate, and it cannot fail — the underlying UPDATE has no
 // precondition beyond identity. Making it easy to stop is what makes it safe to start: an operator who
 // cannot cheaply undo a promotion will not make one, and one who cannot stop a misbehaving rule has no

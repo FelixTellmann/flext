@@ -5,6 +5,11 @@ const admin_links = [
   { to: "/admin/needs-action", label: "Needs Action", description: "Threads waiting on a reply from you." },
   { to: "/admin/senders", label: "Senders", description: "Who is writing in, and whether you've replied." },
   { to: "/admin/mail", label: "Mailboxes", description: "Connections, sync runs, and certificates." },
+  {
+    to: "/admin/promote",
+    label: "Turn rules on",
+    description: "Rules that have been watching and never allowed to act. Review the big ones and switch them on together.",
+  },
   { to: "/admin/shadow", label: "Shadow Report", description: "What each policy would have done — review before promoting it to auto." },
   {
     to: "/admin/journal",

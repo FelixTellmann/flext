@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AutonomyPort, AutoPolicyRow, PolicyForGate, PromoteAutoPoliciesInput, PromotionPort } from "@server/mail/actions/autonomy";
-import { demotePolicyAutonomy, promoteAutoPolicies, promotePolicyAutonomy } from "@server/mail/actions/autonomy";
+import {
+  demotePolicyAutonomy,
+  promoteAutoPolicies,
+  promotePolicyAutonomy,
+  promotePolicyAutonomyBatch,
+} from "@server/mail/actions/autonomy";
 import type { ActionJournal, ActionPromotionLookup } from "@server/mail/actions/executor";
 
 const MAILBOX_ID = "mailbox-1";
@@ -431,5 +436,121 @@ describe("demotePolicyAutonomy (Task 8)", () => {
     const result = await demotePolicyAutonomy({ sender_policy_id: "does-not-exist", port });
 
     expect(result).toEqual({ outcome: "demoted" });
+  });
+});
+
+// The review sheet's write half. Not a bypass: it calls promotePolicyAutonomy per policy with the same
+// assertion the operator made, so every gate still runs. These cases pin that, and pin that one refusal
+// does not discard the rest of the batch.
+describe("promotePolicyAutonomyBatch", () => {
+  function createMultiPolicyPort(input: {
+    events: string[];
+    policies: Record<string, PolicyForGate>;
+    written: Map<string, FakePromotedPolicy>;
+  }): PromotionPort {
+    return {
+      loadPolicy: async (sender_policy_id) => {
+        input.events.push(`load_policy ${sender_policy_id}`);
+        return input.policies[sender_policy_id] ?? null;
+      },
+      countDecisionsSince: async () => 0,
+      countRescuesSince: async () => 0,
+      mailboxesMissingTrashRetention: async () => [],
+      promoteToAuto: async ({ sender_policy_id, promoted_at }) => {
+        input.events.push(`promote_to_auto ${sender_policy_id}`);
+        input.written.set(sender_policy_id, { autonomy: "auto", autonomy_promoted_at: promoted_at });
+      },
+      demoteToShadow: async () => undefined,
+    };
+  }
+
+  test("promotes every reviewed policy in the sheet", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createMultiPolicyPort({
+      events,
+      written,
+      policies: {
+        "policy-a": { id: "policy-a", action: "archive", autonomy_promoted_at: null },
+        "policy-b": { id: "policy-b", action: "file", autonomy_promoted_at: null },
+      },
+    });
+
+    const result = await promotePolicyAutonomyBatch({
+      sender_policy_ids: ["policy-a", "policy-b"],
+      reviewed_shadow_record: true,
+      port,
+    });
+
+    expect(result.promoted).toBe(2);
+    expect(result.refused).toBe(0);
+    expect(written.get("policy-a")?.autonomy).toBe("auto");
+    expect(written.get("policy-b")?.autonomy).toBe("auto");
+  });
+
+  test("one refusal does not discard the rest of the batch", async () => {
+    // A sheet is a list the operator ticked. Stopping at the first policy that cannot be promoted would
+    // throw away every decision they made after it, and give no clue which one was the problem.
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createMultiPolicyPort({
+      events,
+      written,
+      policies: {
+        "policy-a": { id: "policy-a", action: "archive", autonomy_promoted_at: null },
+        "policy-purge": { id: "policy-purge", action: "purge", autonomy_promoted_at: null },
+        "policy-c": { id: "policy-c", action: "file", autonomy_promoted_at: null },
+      },
+    });
+
+    const result = await promotePolicyAutonomyBatch({
+      sender_policy_ids: ["policy-a", "policy-purge", "policy-c"],
+      reviewed_shadow_record: true,
+      port,
+    });
+
+    expect(result.promoted).toBe(2);
+    expect(result.refused).toBe(1);
+    expect(written.has("policy-purge")).toBe(false);
+
+    // And it names WHICH one refused and why. "2 of 3 promoted" with no names is a worse answer.
+    const refusal = result.results.find((entry) => entry.outcome === "refused");
+    expect(refusal?.sender_policy_id).toBe("policy-purge");
+    expect(refusal?.outcome === "refused" && refusal.gate).toBe("purge_not_allowed");
+  });
+
+  test("without the review assertion nothing is promoted at all", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createMultiPolicyPort({
+      events,
+      written,
+      policies: {
+        "policy-a": { id: "policy-a", action: "archive", autonomy_promoted_at: null },
+        "policy-b": { id: "policy-b", action: "file", autonomy_promoted_at: null },
+      },
+    });
+
+    const result = await promotePolicyAutonomyBatch({
+      sender_policy_ids: ["policy-a", "policy-b"],
+      reviewed_shadow_record: false,
+      port,
+    });
+
+    expect(result.promoted).toBe(0);
+    expect(result.refused).toBe(2);
+    expect(written.size).toBe(0);
+    expect(result.results.every((entry) => entry.outcome === "refused" && entry.gate === "shadow_review")).toBe(true);
+  });
+
+  test("a policy that no longer exists is refused, not skipped silently", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createMultiPolicyPort({ events, written, policies: {} });
+
+    const result = await promotePolicyAutonomyBatch({ sender_policy_ids: ["gone"], reviewed_shadow_record: true, port });
+
+    expect(result.refused).toBe(1);
+    expect(result.results[0]?.outcome === "refused" && result.results[0].gate).toBe("missing");
   });
 });
