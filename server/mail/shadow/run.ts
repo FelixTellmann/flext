@@ -207,6 +207,9 @@ function buildDecisionInput(
     last_in_thread_is_mine: thread_facts.last_in_thread_is_mine,
     sender_suppressed: params.policy_index.suppressed.has(from_address.toLowerCase()),
     policies: selectPolicies(params.policy_index, from_address, from_domain),
+    // Never the sweep. This pass classifies mail it has never seen before, where nothing has had time
+    // to settle; the sweep stage builds its own input and sets this itself.
+    settled_sweep_candidate: false,
   };
 }
 

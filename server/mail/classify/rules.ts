@@ -33,6 +33,13 @@ export type DecisionInput = GuardInput & {
   last_in_thread_is_mine: boolean;
   sender_suppressed: boolean;
   policies: readonly SenderPolicyInput[];
+  // Inbox-dwell 1.8/1.9. Computed by the CALLER from stored columns — in the inbox, is_seen, older than
+  // the mailbox's dwell_settled_days — never in here. decide() stays pure over its input and gains no
+  // notion of "now" beyond the age_days it is already handed.
+  //
+  // False on every classification path. The scheduled classify pass looks at mail it has never seen
+  // before, where nothing has had time to settle; only the sweep stage sets this.
+  settled_sweep_candidate: boolean;
 };
 
 export const DECISION_SOURCES = [
@@ -43,6 +50,7 @@ export const DECISION_SOURCES = [
   "suspended_policy",
   "first_contact",
   "derived",
+  "sweep_settled",
   "fallback",
 ] as const;
 
@@ -301,6 +309,42 @@ export function decide(input: DecisionInput): Decision {
   }
 
   const derived = derivedOutcome(input);
+
+  // Step 6.5, and its POSITION is the whole rule. Every step above either returns or declines before
+  // reaching here, so each of them beats a sweep without a single explicit check, and only step 7's
+  // fallback is displaced. The first draft of this design had the sweep "honour the ladder's verdict",
+  // which for essentially every candidate is that fallback — it would have archived nothing, ever.
+  //
+  // A derived outcome that NAMES an action (archive, or needs_action) keeps it; a derived keep_inbox
+  // means "bulk mail, evidence still accruing", which is not an opinion worth defending against a
+  // message that has demonstrably sat read in the inbox for a week. needs_action winning here is what
+  // protects the Needs Action queue in Branch A, with no special case written anywhere.
+  if (input.settled_sweep_candidate && (derived === null || derived.action === "keep_inbox")) {
+    // 1.10: the Settled sweep, and ONLY the Settled sweep, is exempt from replied_in_thread. That guard
+    // stops a SENDER POLICY archiving live client correspondence; this is a different claim — this
+    // message has been in the inbox a week and has demonstrably been read. A thread answered a week ago
+    // and untouched since is the textbook settled thread, the best candidate rather than the worst.
+    // Every other guard, absolute and scoped, applies unchanged.
+    const sweep_verdicts = verdicts.filter((verdict) => verdict.name !== "replied_in_thread");
+    const suppressed_by = isBlocked(sweep_verdicts, "archive", false);
+    if (suppressed_by !== null) {
+      return {
+        action: "keep_inbox",
+        source: "sweep_settled",
+        policy_id: null,
+        suppressed_by,
+        reasons: ["read, and settled in the inbox past the dwell", `suppressed by guard: ${suppressed_by}`],
+      };
+    }
+    return {
+      action: "archive",
+      source: "sweep_settled",
+      policy_id: null,
+      suppressed_by: null,
+      reasons: ["read, and settled in the inbox past the dwell", "no guard, thread state, policy or derived rule claims this message"],
+    };
+  }
+
   if (derived !== null) {
     const derived_action_class: ActionClass | null = derived.action === "needs_action" ? null : derived.action;
     const suppressed_by = derived_action_class === null ? null : isBlocked(verdicts, derived_action_class, false);
