@@ -14,10 +14,34 @@ import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import { and, asc, eq, gt, isNull, lte, notExists, sql } from "drizzle-orm";
 
-// run_id is an input rather than always minted here because a sweep across several mailboxes is ONE
-// shadow run: getShadowReport and getShadowSummary both scope to a single latest run id, so four
-// mailboxes minting four ids leaves the report describing whichever mailbox finished last.
-export type RunShadowPassInput = { mailbox_id: string; batch_size: number; run_id: string | null };
+// What a pass reports about one message, before anything is journaled. Deliberately narrower than the row
+// the pass actually holds: a verification script needs to explain a decision to a human, not to re-derive
+// it, and widening this into "the whole row" would make every future column a public surface.
+export type DecisionObservation = {
+  message_id: string;
+  subject: string | null;
+  from_address: string | null;
+  internal_date: Date;
+  replied_in_thread: boolean;
+  decision: Decision;
+};
+
+export type RunShadowPassInput = {
+  mailbox_id: string;
+  batch_size: number;
+  // An input rather than always minted here because a sweep across several mailboxes is ONE shadow run:
+  // getShadowReport and getShadowSummary both scope to a single latest run id, so four mailboxes minting
+  // four ids leaves the report describing whichever mailbox finished last.
+  run_id: string | null;
+  // Decide and report, write nothing. The spec's acceptance test for every phase here has been a full
+  // pass over real data measuring what it WOULD have done, and a sweep that had to journal thousands of
+  // shadow rows into production before the operator could see a single number is not that test — it is
+  // the mutation the test exists to gate.
+  dry_run?: boolean;
+  // Called once per decided message, before journaling. Lets a script measure a pass without the pass
+  // learning how to report.
+  onDecision?: (observation: DecisionObservation) => void;
+};
 
 export type RunShadowPassResult = { examined: number; journaled: number; by_decision: Record<string, number> };
 
@@ -368,16 +392,30 @@ async function runPass(
     const rows: ShadowActionRow[] = [];
     for (const row of batch) {
       examined += 1;
-      const decision = decide(
-        buildDecisionInput(row, { policy_index, thread_facts, now, settled_sweep_candidate: input.settled_sweep !== null }),
-      );
+      const decision_input = buildDecisionInput(row, {
+        policy_index,
+        thread_facts,
+        now,
+        settled_sweep_candidate: input.settled_sweep !== null,
+      });
+      const decision = decide(decision_input);
       by_decision[decision.action] = (by_decision[decision.action] ?? 0) + 1;
+      input.onDecision?.({
+        message_id: row.id,
+        subject: row.subject,
+        from_address: row.from_address,
+        internal_date: row.internal_date,
+        replied_in_thread: decision_input.replied_in_thread,
+        decision,
+      });
       const mapping = filingMappingFor(policy_index, decision, row.from_address ?? "", row.from_domain ?? "");
       rows.push(buildShadowActionRow({ message_id: row.id, mailbox_id: input.mailbox_id, decision, mapping, run_id, now }));
     }
 
-    await writeShadowBatch(rows);
-    journaled += rows.length;
+    if (input.dry_run !== true) {
+      await writeShadowBatch(rows);
+      journaled += rows.length;
+    }
 
     after_id = batch[batch.length - 1]?.id ?? after_id;
     if (batch.length < input.batch_size) {
@@ -418,10 +456,12 @@ export async function runNewMailShadowPass(input: RunShadowPassInput): Promise<R
 // state and policy still wins (1.8). Journaled at `shadow` like every other new rule; nothing here moves
 // mail until the operator promotes it.
 export async function runSettledSweepPass(input: RunShadowPassInput & { dwell_days: number; now: Date }): Promise<RunShadowPassResult> {
+  // Spread, never a hand-listed field set. The first version of this named its five fields explicitly and
+  // silently dropped dry_run and onDecision — so the verification pass that exists to write NOTHING would
+  // have journaled a shadow row for every settled message in production, which is the exact mutation it
+  // is supposed to gate. Anything added to RunShadowPassInput must reach runPass by default.
   return runPass({
-    mailbox_id: input.mailbox_id,
-    batch_size: input.batch_size,
-    run_id: input.run_id,
+    ...input,
     unclassified_only: false,
     settled_sweep: { dwell_days: input.dwell_days, now: input.now },
   });
