@@ -1,0 +1,26 @@
+# Wakapi — self-hosted, WakaTime-compatible time tracking. Deployed as a Coolify "Docker Compose"
+# resource from this file; every ${VAR} below is set in Coolify, never in the repo. See README.md.
+services:
+  wakapi:
+    # Pinned, never :latest — 2.17.6 fixed a critical authentication bypass (shared cache-key
+    # namespace). Bump deliberately, after reading the release notes.
+    image: ghcr.io/muety/wakapi:2.17.6
+    restart: unless-stopped
+    # expose, not ports: Coolify's proxy terminates TLS for wakapi.flext.dev and forwards to 3000
+    # on the internal network. A published host port would serve plain HTTP off the box directly.
+    expose:
+      - "3000"
+    environment:
+      WAKAPI_DB_TYPE: mysql
+      WAKAPI_DB_HOST: ${WAKAPI_DB_HOST}
+      WAKAPI_DB_PORT: "3306"
+      WAKAPI_DB_NAME: ${WAKAPI_DB_NAME}
+      WAKAPI_DB_USER: ${WAKAPI_DB_USER}
+      WAKAPI_DB_PASSWORD: ${WAKAPI_DB_PASSWORD}
+      WAKAPI_PASSWORD_SALT: ${WAKAPI_PASSWORD_SALT}
+      WAKAPI_PUBLIC_URL: ${WAKAPI_PUBLIC_URL}
+      # true for the single boot that creates the one account, then false forever.
+      WAKAPI_ALLOW_SIGNUP: ${WAKAPI_ALLOW_SIGNUP:-false}
+      # Wakapi defaults this to true; behind HTTPS it must be false or session cookies leak over http.
+      WAKAPI_INSECURE_COOKIES: "false"
+      WAKAPI_DISABLE_FRONTPAGE: "true"
