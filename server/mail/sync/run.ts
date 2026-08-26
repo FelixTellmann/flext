@@ -168,6 +168,7 @@ async function runSettledSweepForMailbox(input: {
       batch_size: SHADOW_BATCH_SIZE,
       run_id: input.run_id,
       dwell_days: input.mailbox_row.dwell_settled_days,
+      replied_dwell_days: input.mailbox_row.dwell_replied_days,
       now: new Date(),
     });
     if (sweep.examined === 0) {

@@ -849,3 +849,37 @@ describe("the settled sweep, at step 6.5", () => {
     expect(decision.source).toBe("sweep_settled");
   });
 });
+
+// 1.10's floor, measured on 2026-08-26. decide() sees only the boolean; the age comparison that produces
+// it lives in shadow/run.ts's buildDecisionInput, because which dwell applies depends on a per-thread fact
+// no column holds. These cases pin the rung's behaviour on either side of that boolean.
+describe("the exemption's age floor", () => {
+  const settled: DecisionInput = { ...base_input, settled_sweep_candidate: true };
+
+  test("a replied-to thread that HAS cleared its longer dwell is swept", () => {
+    const decision = decide({
+      ...settled,
+      replied_in_thread: true,
+      signals: { ...base_signals, sender_known: true, age_days: 874 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_settled");
+  });
+
+  test("a replied-to thread still inside its dwell is never a candidate, so nothing fires", () => {
+    // The 8-day VitaminShoppe case. buildDecisionInput leaves settled_sweep_candidate false, so the rung
+    // is not reached at all and the message falls through to whatever the ladder would otherwise say.
+    const decision = decide({
+      ...base_input,
+      settled_sweep_candidate: false,
+      replied_in_thread: true,
+      signals: { ...base_signals, sender_known: true, age_days: 8 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+});

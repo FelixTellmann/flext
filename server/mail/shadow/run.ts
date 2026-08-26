@@ -124,7 +124,14 @@ async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_f
 // takes mail no Action row has ever named, this one takes mail that was classified, left alone, and has
 // since sat read in the inbox past the dwell. The two are complementary by design and must not be merged
 // — one is "decide about new mail", the other is "reconsider old mail because time passed".
-export type SettledSweepScope = { dwell_days: number; flavor: MailboxFlavor; now: Date };
+export type SettledSweepScope = {
+  dwell_days: number;
+  // 1.10's floor. A thread the operator replied in needs longer silence than ordinary settled mail before
+  // the exemption may act on it — see Mailbox.dwellRepliedDays for the evidence that set the default.
+  replied_dwell_days: number;
+  flavor: MailboxFlavor;
+  now: Date;
+};
 
 type MessageBatchQueryInput = {
   mailbox_id: string;
@@ -151,8 +158,13 @@ export function messageBatchQuery(input: MessageBatchQueryInput) {
   }
 
   if (input.settled_sweep !== null) {
-    const { dwell_days, flavor, now } = input.settled_sweep;
-    const cutoff = new Date(now.getTime() - dwell_days * 86_400_000);
+    const { dwell_days, replied_dwell_days, flavor, now } = input.settled_sweep;
+    // The SHORTER of the two, deliberately. Which dwell applies depends on replied_in_thread, which is a
+    // per-thread fact loadThreadFacts computes in JavaScript and no column holds — so SQL cannot make that
+    // distinction. It casts the coarse net at the lower bound and buildDecisionInput applies the real
+    // threshold per message. Using the longer one here would silently hide every ordinary settled message
+    // between the two values.
+    const cutoff = new Date(now.getTime() - Math.min(dwell_days, replied_dwell_days) * 86_400_000);
 
     conditions.push(eq(message.is_seen, true));
     conditions.push(lte(message.internal_date, cutoff));
@@ -223,7 +235,12 @@ function selectPolicies(policy_index: PolicyIndex, from_address: string, from_do
 
 function buildDecisionInput(
   row: ShadowMessageRow,
-  params: { policy_index: PolicyIndex; thread_facts: Map<string, ThreadFacts>; now: Date; settled_sweep_candidate: boolean },
+  params: {
+    policy_index: PolicyIndex;
+    thread_facts: Map<string, ThreadFacts>;
+    now: Date;
+    settled_sweep: Omit<SettledSweepScope, "flavor"> | null;
+  },
 ): DecisionInput {
   const from_address = row.from_address ?? "";
   const from_domain = row.from_domain ?? "";
@@ -263,9 +280,11 @@ function buildDecisionInput(
     last_in_thread_is_mine: thread_facts.last_in_thread_is_mine,
     sender_suppressed: params.policy_index.suppressed.has(from_address.toLowerCase()),
     policies: selectPolicies(params.policy_index, from_address, from_domain),
-    // True only on the sweep pass. Every row that pass fetches already cleared the candidate test in SQL
-    // — in the inbox, seen, older than the dwell — so the flag is a property of the pass, not of the row.
-    settled_sweep_candidate: params.settled_sweep_candidate,
+    // The SQL above cast a coarse net at the shorter dwell; the real threshold is applied here, because
+    // which one applies depends on replied_in_thread and only this layer knows it.
+    settled_sweep_candidate:
+      params.settled_sweep !== null &&
+      signals.age_days >= (thread_facts.replied_in_thread ? params.settled_sweep.replied_dwell_days : params.settled_sweep.dwell_days),
   };
 }
 
@@ -392,12 +411,7 @@ async function runPass(
     const rows: ShadowActionRow[] = [];
     for (const row of batch) {
       examined += 1;
-      const decision_input = buildDecisionInput(row, {
-        policy_index,
-        thread_facts,
-        now,
-        settled_sweep_candidate: input.settled_sweep !== null,
-      });
+      const decision_input = buildDecisionInput(row, { policy_index, thread_facts, now, settled_sweep: input.settled_sweep });
       const decision = decide(decision_input);
       by_decision[decision.action] = (by_decision[decision.action] ?? 0) + 1;
       input.onDecision?.({
@@ -469,7 +483,9 @@ export async function runNewMailShadowPass(input: RunShadowPassInput): Promise<R
 // everything else — the sweep does not bypass decide(), it is step 6.5 inside it, so every guard, thread
 // state and policy still wins (1.8). Journaled at `shadow` like every other new rule; nothing here moves
 // mail until the operator promotes it.
-export async function runSettledSweepPass(input: RunShadowPassInput & { dwell_days: number; now: Date }): Promise<RunShadowPassResult> {
+export async function runSettledSweepPass(
+  input: RunShadowPassInput & { dwell_days: number; replied_dwell_days: number; now: Date },
+): Promise<RunShadowPassResult> {
   // Spread, never a hand-listed field set. The first version of this named its five fields explicitly and
   // silently dropped dry_run and onDecision — so the verification pass that exists to write NOTHING would
   // have journaled a shadow row for every settled message in production, which is the exact mutation it
@@ -477,6 +493,6 @@ export async function runSettledSweepPass(input: RunShadowPassInput & { dwell_da
   return runPass({
     ...input,
     unclassified_only: false,
-    settled_sweep: { dwell_days: input.dwell_days, now: input.now },
+    settled_sweep: { dwell_days: input.dwell_days, replied_dwell_days: input.replied_dwell_days, now: input.now },
   });
 }

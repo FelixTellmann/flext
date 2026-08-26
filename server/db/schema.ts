@@ -118,6 +118,12 @@ export const mailbox = mysqlTable(
     // Inbox-dwell 1.9: how long a READ message may sit in the inbox before the settled sweep archives it.
     // Per mailbox rather than global so one can be tuned or effectively disabled without a deploy.
     dwell_settled_days: int("dwellSettledDays").default(7).notNull(),
+    // The same dwell for a thread the operator REPLIED IN, which needs longer. Measured on 2026-08-26:
+    // of 66 archives the 1.10 exemption made reachable, every one past ~40 days read as finished (a
+    // 874-day trial thread, 265-day partnership, 211-day support tickets) while the two youngest did not
+    // — an 8-day live client thread whose subject said "continuation of last week's". Age is what
+    // separates finished from merely quiet, so the exemption gets a floor rather than being reversed.
+    dwell_replied_days: int("dwellRepliedDays").default(30).notNull(),
     // 1.11: SenderPolicy.suspendedAt's sibling. A sweep action carries no senderPolicyId, so rescue
     // detection has nothing to suspend and would discard every rescue against the newest, least-proven
     // rule in the system for want of an id to blame. Suspension is per mailbox because the sweep is.

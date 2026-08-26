@@ -255,7 +255,7 @@ set for the purge sweep: *"a separate scheduled sweep, never inline with classif
 
 | Sweep | Candidates | Destination | Also |
 |---|---|---|---|
-| **Settled** | in inbox · `is_seen` · `age_days ≥ 7` | `archive` | — |
+| **Settled** | in inbox · `is_seen` · `age_days ≥ 7`, or `≥ 30` where the operator replied in the thread (§1.10) | `archive` | — |
 | **Declined** | in inbox · not `is_seen` · exposures ≥ 3 | the sender's policy action if one exists, else `archive` | sets `\Seen` |
 | **Declined (Needs Action)** | as above, but exposures ≥ 6 | `Followup/` | sets `\Seen` |
 
@@ -290,6 +290,21 @@ muted.
 The exemption is narrow and explicit: **Settled only.** Never Declined, never a policy, never a
 destructive kind. Declined mail is unread by definition so the guard is unreachable there anyway; stating
 it keeps the rule true if the definition ever loosens.
+
+**Amended 2026-08-26, from evidence: the exemption gets an age floor.** A dry run over three live
+mailboxes (3,529 settled candidates) found 66 archives reachable only through this exemption. Every one
+past roughly 40 days read as finished — an 874-day trial thread, a 265-day partnership, 211-day support
+tickets. The two youngest did not: an **8-day** live client thread whose subject read *"continuation of
+last week's"*, and a 34-day one. Age, not the guard, is what separates finished from merely quiet.
+
+So a thread the operator replied in needs its own, longer dwell — `mailbox.dwell_replied_days`, default
+**30** — while ordinary settled mail keeps the 7-day one. This protects the two live threads and still
+sweeps roughly 60 of the 66.
+
+Which dwell applies depends on `replied_in_thread`, a per-thread fact computed in JavaScript that no
+column holds, so **SQL cannot make the distinction.** The candidate query casts its net at the *shorter*
+of the two and `buildDecisionInput` applies the real threshold per message. Cutting at the longer value in
+SQL would silently hide every ordinary settled message between 7 and 30 days, which is most of them.
 
 ### 1.11 A sweep suspends the sweep, because it has no policy to blame
 
@@ -349,8 +364,9 @@ Index on `started_at` — §1.2's count is a range scan on exactly that column a
 batch.
 
 **`mailbox`** gains `dwell_suspended_at`, `dwell_suspension_reason` (§1.11), and the thresholds
-`dwell_decline_count` (default 3), `dwell_needs_action_decline_count` (default 6) and
-`dwell_settled_days` (default 7), so a mailbox can be tuned or disabled without a deploy.
+`dwell_decline_count` (default 3), `dwell_needs_action_decline_count` (default 6),
+`dwell_settled_days` (default 7) and `dwell_replied_days` (default 30, §1.10), so a mailbox can be tuned
+or disabled without a deploy.
 
 **`DECISION_SOURCES`** gains `sweep_settled` and `sweep_declined`. They are what makes a sweep action
 distinguishable in the Journal, and what §1.11's rescue handler keys on.
@@ -423,6 +439,15 @@ measuring what each sweep *would* have done, before either is permitted to mutat
   falsifiable.
 - **Destination for Declined mail with no sender policy** is `archive`. Revisit with numbers if the
   shadow run shows a large unclassified residue.
+- **Reference mail belongs in a `file` policy, not in the sweep's path.** The 2026-08-26 dry run surfaced
+  senders whose mail is a finished conversation *and* material the operator wants to browse later —
+  apartment move-in details, booking confirmations. Archive is the wrong destination for those, and no
+  dwell setting fixes it: they want a `file` policy with a `topic`, which `logicalPathFor` turns into a
+  folder without inventing a client. A policy then wins at §5.2 step 3/4 and the sweep never sees them.
+  Worth a pass over the Sender Policy surface before Settled is promoted.
+- **679 read messages resolved to `needs_action`** in that same run and will never be swept, because a
+  derived rule that names an action wins at step 6. Correct, and worth stating: Branch A alone does not
+  empty the inbox.
 
 ## References
 

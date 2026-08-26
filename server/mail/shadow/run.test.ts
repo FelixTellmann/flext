@@ -146,9 +146,29 @@ describe("the settled sweep's message batch", () => {
       after_id: null,
       batch_size: 500,
       unclassified_only: false,
-      settled_sweep: { dwell_days: 7, flavor, now: sweep_now },
+      settled_sweep: { dwell_days: 7, replied_dwell_days: 30, flavor, now: sweep_now },
     }).toSQL().sql;
   }
+
+  test("casts the coarse net at the SHORTER dwell, so ordinary settled mail is not hidden", () => {
+    // Which dwell applies depends on replied_in_thread, which loadThreadFacts computes in JavaScript and
+    // no column holds — so SQL cannot make the distinction and buildDecisionInput applies the real
+    // threshold per message. Cutting at the longer value here would silently drop every ordinary settled
+    // message between 7 and 30 days, which is most of them.
+    const sql = messageBatchQuery({
+      mailbox_id: "mailbox-1",
+      after_id: null,
+      batch_size: 500,
+      unclassified_only: false,
+      settled_sweep: { dwell_days: 7, replied_dwell_days: 30, flavor: "generic", now: sweep_now },
+    }).toSQL();
+
+    // Drizzle serialises a datetime bind to "YYYY-MM-DD HH:MM:SS.mmm", so the cutoff is asserted as the
+    // date it should be rather than reconstructed from a Date instance that never reaches the wire.
+    // sweep_now is 2026-08-25, so 7 days back is 2026-08-18 and 30 days back would be 2026-07-26.
+    expect(sql.params).toContainEqual(expect.stringContaining("2026-08-18"));
+    expect(sql.params).not.toContainEqual(expect.stringContaining("2026-07-26"));
+  });
 
   test("takes only mail that is read, in the inbox, and past the dwell", () => {
     const sql = sweepSql("generic");
