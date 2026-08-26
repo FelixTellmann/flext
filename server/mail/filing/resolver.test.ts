@@ -46,6 +46,7 @@ function createFakeProvider(input: { folders: FolderInfo[]; events: string[] }):
     listUids: () => unsupported("listUids"),
     moveMessages: () => unsupported("moveMessages"),
     setLabels: () => unsupported("setLabels"),
+    setFlags: () => unsupported("setFlags"),
     disconnect: () => unsupported("disconnect"),
   };
 }

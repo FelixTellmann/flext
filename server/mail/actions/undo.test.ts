@@ -10,6 +10,8 @@ import type {
   CopyUidResult,
   FetchedMessage,
   FlagChangeResult,
+  FlagWrite,
+  FlagWriteResult,
   FolderInfo,
   FolderStatus,
   LabelChange,
@@ -46,10 +48,11 @@ type FakeFolder = {
 type FakeMailbox = {
   folders: FakeFolder[];
   labels: Map<string, string[] | null>;
+  flags: Map<string, string[]>;
   next_uid: number;
 };
 
-type ProviderFailure = "move" | "set_labels";
+type ProviderFailure = "move" | "set_labels" | "set_flags";
 
 // Mutable so a test can clear the failure and re-run the same undo against the same mailbox, which is the
 // only way to prove a retry actually reaches the row and resumes.
@@ -74,7 +77,7 @@ function genericMailbox(input: { folder: string; uid: number; labels?: string[] 
     throw new Error(`the fixture has no folder ${input.folder}`);
   }
   home.messages.set(input.uid, MESSAGE_ID);
-  return { folders, labels: new Map([[MESSAGE_ID, input.labels ?? null]]), next_uid: 6000 };
+  return { folders, labels: new Map([[MESSAGE_ID, input.labels ?? null]]), flags: new Map(), next_uid: 6000 };
 }
 
 // `extra_folders` are Gmail's labels as IMAP LISTs them, which is how a filing destination already exists
@@ -92,7 +95,7 @@ function gmailMailbox(input: { folder: string; uid: number; labels: string[]; ex
     throw new Error(`the fixture has no folder ${input.folder}`);
   }
   home.messages.set(input.uid, MESSAGE_ID);
-  return { folders, labels: new Map([[MESSAGE_ID, [...input.labels]]]), next_uid: 7000 };
+  return { folders, labels: new Map([[MESSAGE_ID, [...input.labels]]]), flags: new Map(), next_uid: 7000 };
 }
 
 function locate(mailbox: FakeMailbox, message_id: string): { folder: string; uid: number } | null {
@@ -171,6 +174,26 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
         pairs.push({ source_uid: uid, destination_uid });
       }
       return { target_folder, destination_uid_validity: target.uid_validity, pairs, unconfirmed_uids };
+    },
+
+    setFlags: async (path: string, uids: number[], change: FlagWrite): Promise<FlagWriteResult> => {
+      events.push(`set_flags ${path} ${uids.join(",")} +[${change.add_flags.join(",")}] -[${change.remove_flags.join(",")}]`);
+      if (options.fail === "set_flags") {
+        throw new Error("STORE FLAGS was rejected");
+      }
+      const folder = requireFolder(path);
+      const written: number[] = [];
+      for (const uid of uids) {
+        const held = folder.messages.get(uid);
+        if (held === undefined) {
+          continue;
+        }
+        const current = mailbox.flags.get(held) ?? [];
+        const remaining = current.filter((flag) => !change.remove_flags.includes(flag));
+        mailbox.flags.set(held, [...new Set([...remaining, ...change.add_flags])].sort());
+        written.push(uid);
+      }
+      return { folder: path, uids: written, added_flags: change.add_flags, removed_flags: change.remove_flags };
     },
 
     setLabels: async (path: string, uids: number[], change: LabelChange): Promise<LabelResult> => {

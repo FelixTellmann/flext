@@ -13,6 +13,8 @@ import type {
   CopyUidResult,
   FetchedMessage,
   FlagChangeResult,
+  FlagWrite,
+  FlagWriteResult,
   FolderInfo,
   FolderStatus,
   LabelChange,
@@ -47,13 +49,16 @@ test("a pass that rescues nothing leaves no note", async () => {
   expect(note).toBeNull();
 });
 
-// Records every call, and the three mutating ones separately: moveMessages, setLabels and createFolder are
-// the entire mutating surface of MailboxProvider (server/mail/providers/types.ts), so a provider whose
-// three mutation logs are empty is a mailbox that was not touched. Nothing here reaches a real server.
+// Records every call, and the four mutating ones separately: moveMessages, setLabels, setFlags and
+// createFolder are the entire mutating surface of MailboxProvider (server/mail/providers/types.ts), so a
+// provider whose four mutation logs are empty is a mailbox that was not touched. Keeping this list in step
+// with that one is load-bearing rather than tidy — an unrecorded mutating member would let a test assert
+// "nothing was touched" while the sync had in fact written flags. Nothing here reaches a real server.
 type RecordingProvider = MailboxProvider & {
   calls: string[];
   moves: string[];
   label_writes: string[];
+  flag_writes: string[];
   created_folders: string[];
 };
 
@@ -63,12 +68,14 @@ function createRecordingProvider(uids: number[] = []): RecordingProvider {
   const calls: string[] = [];
   const moves: string[] = [];
   const label_writes: string[] = [];
+  const flag_writes: string[] = [];
   const created_folders: string[] = [];
 
   return {
     calls,
     moves,
     label_writes,
+    flag_writes,
     created_folders,
     capabilities: { condstore: true, qresync: true, uidplus: true, move: true, gmail: false },
     listFolders: async (): Promise<FolderInfo[]> => {
@@ -120,6 +127,12 @@ function createRecordingProvider(uids: number[] = []): RecordingProvider {
         unconfirmed_uids: [],
       };
     },
+    setFlags: async (folder: string, uids: number[], change: FlagWrite): Promise<FlagWriteResult> => {
+      calls.push(`setFlags ${folder}`);
+      flag_writes.push(`${folder} ${uids.join(",")} +${change.add_flags.join(",")} -${change.remove_flags.join(",")}`);
+      return { folder, uids, added_flags: change.add_flags, removed_flags: change.remove_flags };
+    },
+
     setLabels: async (folder: string, uids: number[], change: LabelChange): Promise<LabelResult> => {
       calls.push(`setLabels ${folder}`);
       label_writes.push(`${folder} ${uids.join(",")} +${change.add_labels.join(",")} -${change.remove_labels.join(",")}`);

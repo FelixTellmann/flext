@@ -182,6 +182,7 @@ export type ExecuteActionsResult = {
 
 type ExecutionGroup = {
   folder: string;
+  pre_mutations: MailboxMutation[];
   mutation: MailboxMutation;
   rows: PendingActionRow[];
 };
@@ -200,14 +201,26 @@ function toRecordedError(error: unknown): string {
   return classifyMailboxError(error).message;
 }
 
-// §7.3's grouping key. Rows sharing a folder and a target become one command over a UID set, so archiving
-// 400 newsletters is one UID MOVE rather than 400 round trips. Label writes join the key on their exact
-// add/remove sets, because two different label edits cannot ride one STORE.
-function groupKeyFor(folder: string, mutation: MailboxMutation): string {
+// One mutation's contribution to the grouping key. Label and flag writes join on their exact add/remove
+// sets, because two different edits cannot ride one STORE.
+function describeMutation(mutation: MailboxMutation): string {
   if (mutation.verb === "move") {
-    return ["move", folder, mutation.target_folder].join(" | ");
+    return ["move", mutation.target_folder].join(" ");
   }
-  return ["set_labels", folder, [...mutation.add_labels].sort().join(","), [...mutation.remove_labels].sort().join(",")].join(" | ");
+  if (mutation.verb === "set_flags") {
+    return ["set_flags", [...mutation.add_flags].sort().join(","), [...mutation.remove_flags].sort().join(",")].join(" ");
+  }
+  return ["set_labels", [...mutation.add_labels].sort().join(","), [...mutation.remove_labels].sort().join(",")].join(" ");
+}
+
+// §7.3's grouping key. Rows sharing a folder and a target become one command over a UID set, so archiving
+// 400 newsletters is one UID MOVE rather than 400 round trips.
+//
+// The prefix is part of the key, not an afterthought: two rows with the same folder and the same primary
+// mutation but different pre-mutations need different STORE commands, and batching them together would
+// issue one row's flag write against the other's UIDs.
+function groupKeyFor(folder: string, pre_mutations: MailboxMutation[], mutation: MailboxMutation): string {
+  return [folder, ...pre_mutations.map(describeMutation), describeMutation(mutation)].join(" | ");
 }
 
 // Every wanted path either resolved or had its rows queued, and pass two skips the queued ones — so a
@@ -250,6 +263,11 @@ async function performMutation(
       confirmed.set(pair.source_uid, { uid: pair.destination_uid, uid_validity: result.destination_uid_validity });
     }
     return { confirmed };
+  }
+
+  if (mutation.verb === "set_flags") {
+    const result = await provider.setFlags(folder, uids, { add_flags: mutation.add_flags, remove_flags: mutation.remove_flags });
+    return { confirmed: new Map(result.uids.map((uid) => [uid, { uid, uid_validity: null }])) };
   }
 
   const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
@@ -323,6 +341,13 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
   const uids = live_rows.map((row) => row.uid);
   let outcome: MutationOutcome;
   try {
+    // The prefix goes first and against the same (folder, uids) — see PlannedAction.pre_mutations for why
+    // that is only sound while nothing in it relocates a message. Its outcome is discarded on purpose: an
+    // address-preserving write confirms the UIDs it was already given, and the addresses that matter come
+    // from the primary mutation below. A throw here fails the group exactly as a primary failure does.
+    for (const pre_mutation of group.pre_mutations) {
+      await performMutation(provider, group.folder, uids, pre_mutation);
+    }
     outcome = await performMutation(provider, group.folder, uids, group.mutation);
   } catch (error) {
     // Every row keeps its pre-state and becomes failed rather than applied. Nothing re-runs a failed row —
@@ -490,10 +515,10 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
       continue;
     }
 
-    const key = groupKeyFor(row.folder, plan.mutation);
+    const key = groupKeyFor(row.folder, plan.pre_mutations, plan.mutation);
     const group = groups.get(key);
     if (group === undefined) {
-      groups.set(key, { folder: row.folder, mutation: plan.mutation, rows: [row] });
+      groups.set(key, { folder: row.folder, pre_mutations: plan.pre_mutations, mutation: plan.mutation, rows: [row] });
       continue;
     }
     group.rows.push(row);

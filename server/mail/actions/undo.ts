@@ -152,7 +152,14 @@ function requirePlan(
 // stopped half way rewrites to_state_json to where it actually got to, so a retry finds itself at some
 // i > 0 rather than at a dead address.
 function replayStates(plan: PlannedAction, from_state: MailboxState, inverse: MailboxMutation[]): MailboxState[] {
-  const states: MailboxState[] = [applyToState(plan.mutation, from_state)];
+  // Seeded with the state the executor's WHOLE forward sequence produced, prefix included. Seeding from
+  // plan.mutation alone would start the chain at a state the executor never left the message in, and the
+  // sequence-validity check below would then compare every inverse against fiction.
+  let executed_state = from_state;
+  for (const step of [...plan.pre_mutations, plan.mutation]) {
+    executed_state = applyToState(step, executed_state);
+  }
+  const states: MailboxState[] = [executed_state];
   for (const mutation of inverse) {
     states.push(applyToState(mutation, states[states.length - 1]));
   }
@@ -197,6 +204,21 @@ async function issueMutation(input: {
   mutation: MailboxMutation;
 }): Promise<MutationOutcome> {
   const { provider, address, mutation } = input;
+
+  if (mutation.verb === "set_flags") {
+    const flag_result = await provider.setFlags(address.folder, [address.uid], {
+      add_flags: mutation.add_flags,
+      remove_flags: mutation.remove_flags,
+    });
+    if (!flag_result.uids.includes(address.uid)) {
+      return {
+        outcome: "failed",
+        error: `the server confirmed no flag write for UID ${address.uid} in ${address.folder}, so the recorded flags were not restored.`,
+      };
+    }
+    // A flag write leaves the message exactly where it was, so the address is unchanged.
+    return { outcome: "issued", address };
+  }
 
   if (mutation.verb === "move") {
     if (mutation.source_folder !== address.folder) {

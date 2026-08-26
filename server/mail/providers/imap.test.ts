@@ -451,12 +451,76 @@ describe("locking", () => {
   });
 });
 
+describe("setFlags", () => {
+  test("issues UID STORE +FLAGS then -FLAGS, and never a bare STORE FLAGS", async () => {
+    const { provider, commands } = createFake();
+
+    await provider.setFlags("INBOX", [11, 12], { add_flags: ["\\Seen"], remove_flags: ["\\Flagged"] });
+
+    const stores = commands.filter((command) => command.includes("STORE"));
+    expect(stores).toEqual(["UID STORE 11,12 +FLAGS (\\Seen)", "UID STORE 11,12 -FLAGS (\\Flagged)"]);
+
+    // A bare STORE FLAGS clears every flag it is not given, which would silently drop \Flagged — the
+    // operator's hold signal and an absolute guard in classify/guards.ts. imapflow spells that
+    // messageFlagsSet; nothing in setFlags may reach it, and this assertion is what keeps that true.
+    expect(stores.some((command) => /STORE \S+ FLAGS \(/.test(command))).toBe(false);
+  });
+
+  test("additions go first, so a failure between the two STOREs adds a flag rather than losing one", async () => {
+    const { provider, commands } = createFake();
+
+    await provider.setFlags("INBOX", [11], { add_flags: ["\\Seen"], remove_flags: ["\\Draft"] });
+
+    const stores = commands.filter((command) => command.includes("STORE"));
+    expect(stores[0]).toContain("+FLAGS");
+    expect(stores[1]).toContain("-FLAGS");
+  });
+
+  test("issues only the half it was given", async () => {
+    const { provider, commands } = createFake();
+
+    await provider.setFlags("INBOX", [11], { add_flags: ["\\Seen"], remove_flags: [] });
+
+    expect(commands.filter((command) => command.includes("STORE"))).toEqual(["UID STORE 11 +FLAGS (\\Seen)"]);
+  });
+
+  test("refuses a change that would add nothing and remove nothing", async () => {
+    const { provider, commands } = createFake();
+
+    await expect(provider.setFlags("INBOX", [11], { add_flags: [], remove_flags: [] })).rejects.toThrow(
+      /nothing to add and nothing to remove/,
+    );
+    expect(commands.filter((command) => command.includes("STORE"))).toEqual([]);
+  });
+
+  test("takes a write lock, unlike the read-only paths", async () => {
+    const { provider, locks } = createFake();
+
+    await provider.setFlags("INBOX", [11], { add_flags: ["\\Seen"], remove_flags: [] });
+
+    expect(locks.some((lock) => lock.folder === "INBOX" && lock.read_only === false)).toBe(true);
+  });
+
+  test("is not Gmail-only — every IMAP server has flags", async () => {
+    const { provider } = createFake({ gmail: false });
+
+    await expect(provider.setFlags("INBOX", [11], { add_flags: ["\\Seen"], remove_flags: [] })).resolves.toEqual({
+      folder: "INBOX",
+      uids: [11],
+      added_flags: ["\\Seen"],
+      removed_flags: [],
+    });
+  });
+});
+
 // The interface enumerates what can happen to a mailbox, so an unreachable member is a lie about the
 // blast radius rather than dead weight: `copyMessages` and `expungeUids` sat here through Phase 4 with no
 // caller, and a public expunge was the only way this contract could delete mail. Adding either back needs
 // a caller and this list edited on purpose. `createFolder` joined in Phase 5 (§6) as the narrowest
 // possible addition: it creates, and it cannot delete, rename, unsubscribe or move anything.
-test("the provider exposes exactly three mutating methods, and none deletes", () => {
+// `setFlags` joined for inbox-dwell 1.6, and is narrow in a different direction: it moves nothing and
+// creates nothing, it only writes flags on messages that are already where they are.
+test("the provider exposes exactly four mutating methods, and none deletes", () => {
   const { provider } = createFake();
 
   const members = Object.keys(provider).sort();
@@ -471,6 +535,7 @@ test("the provider exposes exactly three mutating methods, and none deletes", ()
     "listUids",
     "moveMessages",
     "openFolder",
+    "setFlags",
     "setLabels",
   ]);
   expect(members.some((member) => member.toLowerCase().includes("purge"))).toBe(false);

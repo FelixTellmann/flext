@@ -199,6 +199,7 @@ describe("archive means one thing per flavor", () => {
   test("generic archive moves to the folder the caller resolved, not to a name this module invented", () => {
     expect(planFor("archive", "generic", contextFor("generic", generic_states[0]))).toEqual({
       outcome: "planned",
+      pre_mutations: [],
       kind: "archive",
       flavor: "generic",
       mutation: { verb: "move", source_folder: "INBOX", target_folder: GENERIC_ARCHIVE },
@@ -232,6 +233,7 @@ describe("file means one thing per flavor", () => {
   test("generic file moves from the source folder to the destination the caller resolved", () => {
     expect(planFor("file", "generic", contextFor("generic", generic_states[0]))).toEqual({
       outcome: "planned",
+      pre_mutations: [],
       kind: "file",
       flavor: "generic",
       mutation: { verb: "move", source_folder: "INBOX", target_folder: GENERIC_FILE },
@@ -430,4 +432,100 @@ describe("quarantine", () => {
       ).toThrow(/quarantine destination/);
     });
   }
+});
+
+describe("set_flags", () => {
+  const SEEN = "\\Seen";
+  const FLAGGED = "\\Flagged";
+
+  test("adds and removes against the state's own flag set, canonically ordered", () => {
+    const before = state("INBOX", [FLAGGED], null);
+    const after = applyToState({ verb: "set_flags", add_flags: [SEEN], remove_flags: [] }, before);
+
+    expect(after.flags).toEqual([FLAGGED, SEEN]);
+    // Address-preserving by construction: nothing about where the message lives may change.
+    expect(after.folder).toBe("INBOX");
+    expect(after.labels).toBeNull();
+  });
+
+  test("removing a flag the message does not carry is a no-op rather than an error", () => {
+    const before = state("INBOX", [SEEN], null);
+    const after = applyToState({ verb: "set_flags", add_flags: [], remove_flags: [FLAGGED] }, before);
+
+    expect(after.flags).toEqual([SEEN]);
+  });
+
+  test("the inverse of marking an ALREADY-read message read is empty, never 'mark it unread'", () => {
+    // The case that matters most for inbox-dwell 1.7: quarantine adds \Seen to every message it moves,
+    // including ones the operator had already read. Inverting the instruction rather than the observed
+    // change would mark his read mail unread on undo — a visible, wrong mutation on real mail.
+    const from_state = state("INBOX", [SEEN], null);
+    const plan: PlannedAction = {
+      outcome: "planned",
+      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN], remove_flags: [] }],
+      kind: "quarantine",
+      flavor: "generic",
+      mutation: { verb: "move", source_folder: "INBOX", target_folder: "INBOX.Quarantine" },
+    };
+
+    expect(inverseOf(plan, from_state)).toEqual([{ verb: "move", source_folder: "INBOX.Quarantine", target_folder: "INBOX" }]);
+  });
+
+  test("a prefixed plan round-trips folder AND flags together", () => {
+    const from_state = state("INBOX", [FLAGGED], null);
+    const plan: PlannedAction = {
+      outcome: "planned",
+      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN], remove_flags: [] }],
+      kind: "quarantine",
+      flavor: "generic",
+      mutation: { verb: "move", source_folder: "INBOX", target_folder: "INBOX.Quarantine" },
+    };
+
+    const executed = [...plan.pre_mutations, plan.mutation].reduce(
+      (current_state, mutation) => applyToState(mutation, current_state),
+      from_state,
+    );
+    expect(executed).toEqual(state("INBOX.Quarantine", [FLAGGED, SEEN], null));
+
+    expect(undo(plan, from_state, executed)).toEqual(from_state);
+  });
+
+  test("the primary mutation's inverse comes first, so the flag restore addresses the restored message", () => {
+    const from_state = state("INBOX", [], null);
+    const plan: PlannedAction = {
+      outcome: "planned",
+      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN], remove_flags: [] }],
+      kind: "quarantine",
+      flavor: "generic",
+      mutation: { verb: "move", source_folder: "INBOX", target_folder: "INBOX.Quarantine" },
+    };
+
+    expect(inverseOf(plan, from_state)).toEqual([
+      { verb: "move", source_folder: "INBOX.Quarantine", target_folder: "INBOX" },
+      { verb: "set_flags", add_flags: [], remove_flags: [SEEN] },
+    ]);
+  });
+
+  test("a move in the prefix is refused — it would invalidate the UIDs addressing the primary mutation", () => {
+    const from_state = state("INBOX", [], null);
+    const plan: PlannedAction = {
+      outcome: "planned",
+      pre_mutations: [{ verb: "move", source_folder: "INBOX", target_folder: "Elsewhere" }],
+      kind: "archive",
+      flavor: "generic",
+      mutation: { verb: "move", source_folder: "INBOX", target_folder: "Archive" },
+    };
+
+    expect(() => inverseOf(plan, from_state)).toThrow(/a move appeared in PlannedAction.pre_mutations/);
+  });
+
+  test("every plan planFor builds today carries an empty prefix", () => {
+    for (const flavor of ["gmail", "generic"] as const) {
+      for (const from_state of statesFor(flavor)) {
+        for (const kind of ["archive", "auto_trash", "file"] as const) {
+          expect(plannedFor(kind, flavor, from_state).pre_mutations).toEqual([]);
+        }
+      }
+    }
+  });
 });

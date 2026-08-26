@@ -8,6 +8,8 @@ import type {
   FetchedMessage,
   FlagChange,
   FlagChangeResult,
+  FlagWrite,
+  FlagWriteResult,
   FolderInfo,
   FolderStatus,
   LabelChange,
@@ -182,7 +184,8 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
   }
 
   // The one write lock in `server/mail`. Every read path keeps `{ readOnly: true }`; this helper is
-  // reached only from `moveMessages` and `setLabels`, the interface's two mutating members.
+  // reached only from `moveMessages`, `setLabels` and `setFlags`, the interface's three message-mutating
+  // members. `createFolder` addresses no messages and takes no lock at all.
   async function withWriteLock<T>(folder: string, run: () => Promise<T>): Promise<T> {
     const lock = await client.getMailboxLock(folder, { readOnly: false });
     try {
@@ -366,6 +369,36 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
           requireApplied(applied, `STORE -X-GM-LABELS (${remove_labels.join(" ")})`, folder);
         }
         return { folder, uids, added_labels: add_labels, removed_labels: remove_labels };
+      });
+    },
+
+    setFlags: async (folder: string, uids: number[], change: FlagWrite): Promise<FlagWriteResult> => {
+      requireUidSet(uids, "setFlags");
+
+      const { add_flags, remove_flags } = change;
+      if (add_flags.length === 0 && remove_flags.length === 0) {
+        throw new Error(
+          "setFlags was given nothing to add and nothing to remove; an action that changes no flag must be dropped by the caller, not issued as an empty STORE.",
+        );
+      }
+
+      return withWriteLock(folder, async () => {
+        // messageFlagsAdd / messageFlagsRemove issue STORE +FLAGS and -FLAGS. messageFlagsSet, which
+        // issues a bare STORE FLAGS, must never be reached from here: a bare set clears every flag it is
+        // not given, and that includes \Flagged — the operator's hold signal and an absolute guard in
+        // classify/guards.ts. Losing it would silently unprotect exactly the mail he protected by hand.
+        //
+        // Additions first, matching setLabels above and for the same reason: a failure between the two
+        // STOREs then leaves the message carrying a flag it should not, never having lost one.
+        if (add_flags.length > 0) {
+          const applied = await client.messageFlagsAdd(uids, add_flags, { uid: true });
+          requireApplied(applied, `STORE +FLAGS (${add_flags.join(" ")})`, folder);
+        }
+        if (remove_flags.length > 0) {
+          const applied = await client.messageFlagsRemove(uids, remove_flags, { uid: true });
+          requireApplied(applied, `STORE -FLAGS (${remove_flags.join(" ")})`, folder);
+        }
+        return { folder, uids, added_flags: add_flags, removed_flags: remove_flags };
       });
     },
 

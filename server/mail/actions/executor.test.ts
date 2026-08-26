@@ -10,6 +10,8 @@ import type {
   CopyUidResult,
   FetchedMessage,
   FlagChangeResult,
+  FlagWrite,
+  FlagWriteResult,
   FolderInfo,
   FolderStatus,
   LabelChange,
@@ -27,7 +29,7 @@ const GMAIL_TRASH_FOLDER = "[Gmail]/Trash";
 
 type FakeMessage = { uid: number; flags: string[]; labels: string[] | null };
 
-type ProviderFailure = "open" | "fetch" | "move" | "set_labels";
+type ProviderFailure = "open" | "fetch" | "move" | "set_labels" | "set_flags";
 
 type FakeProviderOptions = {
   events: string[];
@@ -115,6 +117,14 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
         pairs: moved.map((uid, index) => ({ source_uid: uid, destination_uid: 9000 + index })),
         unconfirmed_uids: uids.filter((uid) => unconfirmed.includes(uid)),
       };
+    },
+
+    setFlags: async (folder: string, uids: number[], change: FlagWrite): Promise<FlagWriteResult> => {
+      events.push(`set_flags ${folder} ${uids.join(",")} +[${change.add_flags.join(",")}] -[${change.remove_flags.join(",")}]`);
+      if (options.fail === "set_flags") {
+        throw new Error("STORE FLAGS was rejected");
+      }
+      return { folder, uids, added_flags: change.add_flags, removed_flags: change.remove_flags };
     },
 
     setLabels: async (folder: string, uids: number[], change: LabelChange): Promise<LabelResult> => {

@@ -47,11 +47,16 @@ export const FILE_KIND = "file" as const satisfies ExecutableActionKind;
 // would journal as if a mutation had been considered.
 export const NON_ACTION_KINDS = ["keep_inbox", "needs_action"] as const satisfies readonly PlanRequestKind[];
 
-// The two verbs map one-to-one onto the mutating provider methods (moveMessages, setLabels), so the plan
-// names the command the executor will issue rather than an abstraction over it.
+// The three verbs map one-to-one onto the mutating provider methods (moveMessages, setLabels, setFlags),
+// so the plan names the command the executor will issue rather than an abstraction over it.
 export type MailboxMutation =
   | { verb: "move"; source_folder: string; target_folder: string }
-  | { verb: "set_labels"; add_labels: string[]; remove_labels: string[] };
+  | { verb: "set_labels"; add_labels: string[]; remove_labels: string[] }
+  | { verb: "set_flags"; add_flags: string[]; remove_flags: string[] };
+
+// The wire form of the IMAP seen flag. Written "\\Seen" in source, `\Seen` on the wire, matching the
+// GMAIL_INBOX_LABEL convention above.
+export const SEEN_FLAG = "\\Seen";
 
 // The state an inverse has to restore. UID is deliberately not part of it: a move invalidates the source
 // UID and the destination UID is knowable only from COPYUID, so an undo cannot restore a UID and must not
@@ -82,6 +87,13 @@ export type PlannedAction = {
   outcome: "planned";
   kind: ExecutableActionKind;
   flavor: MailboxFlavor;
+  // Issued before `mutation`, against the SAME folder and UID set. Every entry must therefore be
+  // address-preserving: a move here would invalidate the very UIDs that address the mutation following
+  // it, and the executor batches both into one command pair over one UID list. That invariant is why
+  // inbox-dwell §1.6 puts the \Seen write before the move rather than after — both then address the
+  // source folder and no mid-batch re-addressing is needed, which undo can afford (one message at a
+  // time) and the executor cannot (400 UIDs and one COPYUID response).
+  pre_mutations: MailboxMutation[];
   mutation: MailboxMutation;
 };
 
@@ -114,6 +126,15 @@ function normalizeLabels(labels: string[]): string[] {
   return [...new Set(labels)].sort();
 }
 
+// The same canonical form for flags, and for the same reason — but with no requireFlags counterpart,
+// because MailboxState.flags is string[] and never null. That asymmetry with labels is real rather than
+// an oversight: every IMAP server has flags, only a label store has labels, so a null check here could
+// never fire and would only suggest a state this type cannot hold. state.ts already sorts and
+// de-duplicates on capture; this keeps the projected state spelled the same way the captured one is.
+function normalizeFlags(flags: string[]): string[] {
+  return [...new Set(flags)].sort();
+}
+
 // Every kind this accepts is either planned or refused by a throw. There is no third outcome: Phase 4's
 // deferred plan carried FILE_DEFERRED_REASON, and Phase 5 made filing real, which removed the last thing
 // that could build one. Filing is now held back by §6's gate in the executor, on data about the message,
@@ -140,6 +161,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "file" && flavor === "gmail") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: {
@@ -153,6 +175,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "file") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: {
@@ -169,6 +192,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "quarantine" && flavor === "gmail") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: {
@@ -182,6 +206,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "quarantine") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: {
@@ -198,6 +223,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "archive" && flavor === "gmail") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: { verb: "set_labels", add_labels: [], remove_labels: [GMAIL_INBOX_LABEL] },
@@ -207,6 +233,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "archive") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: {
@@ -222,6 +249,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "auto_trash") {
     return {
       outcome: "planned",
+      pre_mutations: [],
       kind,
       flavor,
       mutation: {
@@ -247,8 +275,36 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
 // which folder to move back to (§7.2) and which labels the message actually carried. A mutation that would
 // change nothing is left out rather than issued as an empty command.
 export function inverseOf(plan: PlannedAction, from_state: MailboxState): MailboxMutation[] {
-  const { mutation } = plan;
+  // Only the PREFIX is folded, and the primary mutation is deliberately never handed to applyToState here.
+  // applyToState refuses a move whose source_folder disagrees with the state it is applied to, but
+  // inverseOf's whole contract is that from_state — what the executor actually captured — outranks what
+  // the plan assumed. A message filed into "INBOX/Clients" and later archived is restored to
+  // "INBOX/Clients", not to the "INBOX" the plan named, and folding the move would reject that case
+  // instead of serving it.
+  //
+  // Folding the prefix is safe precisely because pre-mutations may not relocate anything, which is
+  // asserted rather than assumed just below — so every state in this chain carries from_state's folder.
+  const states: MailboxState[] = [from_state];
+  for (const step of plan.pre_mutations) {
+    if (step.verb === "move") {
+      throw new Error(
+        "a move appeared in PlannedAction.pre_mutations. The prefix is issued against the same folder and UID set as the primary mutation, so a relocation there would invalidate the UIDs addressing the mutation that follows it.",
+      );
+    }
+    states.push(applyToState(step, states[states.length - 1]));
+  }
 
+  // Reverse order: the last mutation applied is the first one undone. The primary's inverse therefore
+  // comes first and restores the address, so a prefix inverse that follows it addresses the message where
+  // undo has just put it — which is what undo's issueMutation returns a fresh address for.
+  const inverse: MailboxMutation[] = [...inverseOfMutation(plan.mutation, states[states.length - 1])];
+  for (let index = plan.pre_mutations.length - 1; index >= 0; index -= 1) {
+    inverse.push(...inverseOfMutation(plan.pre_mutations[index], states[index]));
+  }
+  return inverse;
+}
+
+function inverseOfMutation(mutation: MailboxMutation, from_state: MailboxState): MailboxMutation[] {
   // Symmetric to requireTargetFolder: planFor refuses to move a message to a folder the caller could not
   // name, so undo must refuse to move it back to one either. A blank folder here would issue a move to ""
   // — a mutation this module would have rejected in the forward direction.
@@ -269,6 +325,22 @@ export function inverseOf(plan: PlannedAction, from_state: MailboxState): Mailbo
     // is empty because the move back out of Trash already discards whatever the server attached on the way
     // in — naming a token this module never wrote would be asserting a server fact it cannot verify.
     return [move_back, { verb: "set_labels", add_labels: [...from_state.labels], remove_labels: [] }];
+  }
+
+  if (mutation.verb === "set_flags") {
+    // Same shape as the label branch below: put back what the mutation removed and we actually had, and
+    // remove what it added and we did not. The second filter is what makes marking an already-seen
+    // message read a no-op to undo rather than an instruction to mark it unread — which would be a
+    // visible, wrong mutation on a message the operator had genuinely read.
+    const restore_flags = {
+      verb: "set_flags" as const,
+      add_flags: mutation.remove_flags.filter((flag) => from_state.flags.includes(flag)),
+      remove_flags: mutation.add_flags.filter((flag) => !from_state.flags.includes(flag)),
+    };
+    if (restore_flags.add_flags.length === 0 && restore_flags.remove_flags.length === 0) {
+      return [];
+    }
+    return [restore_flags];
   }
 
   const original_labels = requireLabels(from_state);
@@ -302,6 +374,11 @@ export function applyToState(mutation: MailboxMutation, state: MailboxState): Ma
     // leave a Gmail message with no user labels.
     const labels: string[] | null = state.labels === null ? null : [];
     return { ...state, folder: mutation.target_folder, labels };
+  }
+
+  if (mutation.verb === "set_flags") {
+    const remaining = state.flags.filter((flag) => !mutation.remove_flags.includes(flag));
+    return { ...state, flags: normalizeFlags([...remaining, ...mutation.add_flags]) };
   }
 
   const current_labels = requireLabels(state);

@@ -50,6 +50,7 @@ function createStubProvider(input: { messages?: StubMessage[]; folders?: FolderI
     listUids: async () => unsupported("listUids"),
     moveMessages: async () => unsupported("moveMessages"),
     setLabels: async () => unsupported("setLabels"),
+    setFlags: async () => unsupported("setFlags"),
     createFolder: async () => unsupported("createFolder"),
     disconnect: async () => undefined,
   };
