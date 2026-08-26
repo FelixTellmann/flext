@@ -408,6 +408,20 @@ async function runPass(
         replied_in_thread: decision_input.replied_in_thread,
         decision,
       });
+      // The sweep journals ONLY what it authored. Every other source — a policy, a derived rule, the
+      // fallback — already produced a row when this message was first classified, and the sweep reaching
+      // the same conclusion is not new information. Writing it anyway would put a second proposal on the
+      // Shadow screen for every settled message: measured against real mail on 2026-08-26, 1,561 of 3,529
+      // candidates, including 483 `file` rows on listify that were already sitting there waiting to be
+      // reviewed. A sweep that re-proposes the classify pass's conclusions buries the evidence under
+      // exactly the rows the operator is trying to read.
+      //
+      // by_decision above still counts them, because what the candidates resolve to is the useful report
+      // even when only a subset is worth journaling.
+      if (input.settled_sweep !== null && decision.source !== SWEEP_SETTLED_SOURCE) {
+        continue;
+      }
+
       const mapping = filingMappingFor(policy_index, decision, row.from_address ?? "", row.from_domain ?? "");
       rows.push(buildShadowActionRow({ message_id: row.id, mailbox_id: input.mailbox_id, decision, mapping, run_id, now }));
     }
