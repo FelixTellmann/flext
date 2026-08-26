@@ -348,9 +348,9 @@
 <div class="wrap">
 
   <header class="masthead">
-    <p class="eyebrow"><span>flext / email suite</span><span>review draft</span><span>25 Aug 2026</span></p>
+    <p class="eyebrow"><span>flext / email suite</span><span>review draft</span><span>26 Aug 2026</span></p>
     <h1>What actually runs on your mail, and what a dwell clock would change</h1>
-    <p class="standfirst">Six phases shipped. Every decision the system makes today is a <strong>pure function of message headers and the sender graph</strong> — no model, no read-state, no clock beyond message age. This is the whole machine, drawn, plus an honest read on the dwell-and-read-state proposal.</p>
+    <p class="standfirst">Six phases shipped, and then <strong>nobody switched any of it on.</strong> All 113 rules are still only watching. This is the machine as built, drawn — and the four things a day of measuring against real mail turned up, including a diagnosis that turned out to be wrong.</p>
   </header>
 
   <nav class="toc" aria-label="Sections">
@@ -362,15 +362,16 @@
       <li><a class="navlink" href="#ai">05 · Where the AI is</a></li>
       <li><a class="navlink" href="#gaps">06 · What's missing</a></li>
       <li><a class="navlink" href="#proposal">07 · The dwell proposal</a></li>
+      <li><a class="navlink" href="#found">08 · What measuring changed</a></li>
     </ol>
   </nav>
 
   <dl class="strip">
-    <div><dt>Pipeline stages</dt><dd>5<span>per mailbox, per incremental sync</span></dd></div>
-    <div><dt>Executable actions</dt><dd>4<span>archive · file · quarantine · auto_trash</span></dd></div>
-    <div class="neg"><dt>Model calls in the path</dt><dd>0<span>Phase 7 (MCP) never shipped</span></dd></div>
-    <div class="neg"><dt>Rules keyed on read-state</dt><dd>0<span><code>is_seen</code> feeds display counts only</span></dd></div>
-    <div class="pos"><dt>Ways to freeze a message</dt><dd>3<span>flag · never-touch · under 24h old</span></dd></div>
+    <div class="neg"><dt>Rules ever switched on</dt><dd>0<span>all 113 still only watching</span></dd></div>
+    <div class="neg"><dt>Mailboxes offline</dt><dd>1<span>certificate rotated, silently, for 2 days</span></dd></div>
+    <div class="neg"><dt>Dead suggestions</dt><dd>29,375<span>can never be acted on</span></dd></div>
+    <div class="pos"><dt>The dwell sweep's real yield</dt><dd>118<span>not the 1,968 first reported</span></dd></div>
+    <div><dt>Model calls in the path</dt><dd>0<span>Phase 7 never shipped</span></dd></div>
   </dl>
 
   <!-- ═══════════════ 01 ═══════════════ -->
@@ -970,11 +971,39 @@
     </div>
   </section>
 
+  <section id="found">
+    <div class="sec-head"><span class="sec-num">08</span><h2>What a day of measuring changed</h2></div>
+
+    <div class="col">
+      <p>Everything above describes the machine as designed. Running it against real mail on 26 August changed four things, and the first is the one that matters.</p>
+    </div>
+
+    <ol class="gap-list">
+      <li><span class="g-num">01</span><span class="d"><b>The diagnosis in §06 was wrong.</b> This page said the inbox stays full because no rule names most of it. Measured: of 3,529 settled candidates, <strong>2,405 already have a sender policy</strong> and 907 have a derived rule. They sit in the inbox because <strong>not one policy has ever been promoted</strong> — every one of the 113 is still at <code>shadow</code>. The lever was built in Phase 6 and never pulled.</span></li>
+      <li><span class="g-num">02</span><span class="d"><b>A mailbox had been offline for two days and nothing said so.</b> <code>felix@tellmann.co.za</code> failed an SPKI check when its host rotated a Let's Encrypt certificate — a routine 90-day renewal, correctly refused. It holds <strong>8,864 of the 8,961 executable decisions</strong> in the estate. The re-pin control updated the key and left the mailbox disabled, and <code>/api/mail-sync</code> answered 200 regardless. Both fixed; the pin will break again around 22 November, because xneelo issues a fresh key each renewal against §1.2's assumption that an SPKI survives ACME.</span></li>
+      <li><span class="g-num">03</span><span class="d"><b>Two-thirds of the suggestion backlog can never execute.</b> 29,375 rows carry <code>mailboxId = NULL</code>, all written on one day, all still <code>shadow</code>, and <code>loadPendingActions</code> filters <code>WHERE mailboxId = ?</code>. Every one covers a message a newer row already covers — 14,689 of 14,689 — so deleting them loses nothing and halves the table.</span></li>
+      <li><span class="g-num">04</span><span class="d"><b>The largest unsorted block is meeting invitations.</b> ~263 of them from colleagues, and no policy can name them: resolution is by sender, and those senders send real mail too. Now detected by MIME structure rather than subject text, which is neither translated nor written by the sender.</span></li>
+    </ol>
+
+    <div class="col">
+      <div class="note warn">
+        <span class="label">Two bugs the measurement caught in its own instruments</span>
+        <p>The first report said the sweep would archive <strong>1,968</strong>. It mixed the sweep's own decisions with ones the classify pass had already made — the real figure is <strong>118</strong>. The sweep was also about to journal a duplicate row for all 1,561 messages another rule had already claimed.</p>
+        <p>And twice, a correlated subquery reported a backlog of <strong>zero for every policy</strong>. Drizzle interpolates a column reference without a table name, so a bare <code>id</code> inside the subquery bound to <code>Action</code>'s own id column: the correlation silently became <code>a.senderPolicyId = a.id</code>, false for every row. Both call sites now qualify it, with a comment saying why.</p>
+      </div>
+
+      <div class="note">
+        <span class="label">Archive is not the only destination</span>
+        <p>Reviewing what the sweep would touch surfaced a distinction the design had collapsed: a conversation can be <em>finished</em> and still be <em>material you need again</em>. Tenancy terms, a Wohnungsgeberbestätigung, rent receipts. Archive is the "I won't need this again" pile; those want a <code>file</code> policy with a topic, which wins at step 3/4 so the sweep never sees them. Same shape for client work — vitaminshoppe.com writes from ten people, all DKIM-aligned, and had no rule at all.</p>
+      </div>
+    </div>
+  </section>
+
   <footer>
     <span>flext · email suite</span>
     <span>Phases 0–6 shipped · 7 &amp; 8 unbuilt</span>
-    <span>Drawn from server/mail at cadb9e1</span>
-    <span>Review draft, 25 Aug 2026</span>
+    <span>Drawn from server/mail, updated at 49b5295</span>
+    <span>Updated 26 Aug 2026</span>
   </footer>
 
 </div>
