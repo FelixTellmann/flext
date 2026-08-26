@@ -1,8 +1,10 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message, senderPolicy } from "@server/db/schema";
 import { APPLIED_STATUS } from "@server/mail/actions/executor";
+import { SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import { isSentByMeSql, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type {
+  DwellSuspensionEntry,
   LiveMessageFacts,
   PolicySuspensionEntry,
   RescueCandidateRow,
@@ -15,7 +17,7 @@ import type { MessageAddress } from "@server/mail/rescue/locate";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
 import type { SQL } from "drizzle-orm";
-import { and, asc, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the rescue port, kept out of detect.ts so a test importing
 // the pass cannot reach a real connection: every DATABASE_URL variant points at the same production
@@ -118,6 +120,7 @@ async function loadRescueCandidates(input: {
       message_id: action.message_id,
       sender_policy_id: action.sender_policy_id,
       kind: action.kind,
+      source: action.source,
       to_state_json: action.to_state_json,
       from_state_json: action.from_state_json,
       applied_at: action.applied_at,
@@ -274,6 +277,44 @@ async function suspendPolicy(entry: PolicySuspensionEntry): Promise<boolean> {
   return header.affectedRows > 0;
 }
 
+// 1.11. Counts STAMPED rescues rather than re-deriving them, so the window is a fact the journal already
+// holds and the count agrees with what the operator sees on the Journal surface. Scoped to the mailbox,
+// because a sweep is suspended per mailbox and evidence from one must never suspend another.
+async function countRecentSweepRescues(input: { mailbox_id: string; since: Date }): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(action)
+    .where(
+      and(
+        eq(action.mailbox_id, input.mailbox_id),
+        eq(action.source, SWEEP_SETTLED_SOURCE),
+        isNotNull(action.rescued_at),
+        gte(action.rescued_at, input.since),
+      ),
+    );
+
+  return Number(row?.total ?? 0);
+}
+
+// Guarded `WHERE dwellSuspendedAt IS NULL`, exactly as suspendPolicy is: a mailbox the operator
+// deliberately un-suspended must not be re-suspended off the same aged evidence on the next pass, and the
+// guard lives in SQL so the caller cannot infer the outcome without this boolean.
+async function suspendMailboxDwell(entry: DwellSuspensionEntry): Promise<boolean> {
+  const [header] = await db
+    .update(mailbox)
+    .set({ dwell_suspended_at: entry.suspended_at, dwell_suspension_reason: entry.reason, updatedAt: new Date() })
+    .where(and(eq(mailbox.id, entry.mailbox_id), isNull(mailbox.dwell_suspended_at)));
+
+  return header.affectedRows > 0;
+}
+
 export function createDatabaseRescuePort(): RescuePort {
-  return { loadRescueCandidates, loadLiveMessages: createLiveMessageLoader(new Map()), markRescued, suspendPolicy };
+  return {
+    loadRescueCandidates,
+    loadLiveMessages: createLiveMessageLoader(new Map()),
+    markRescued,
+    suspendPolicy,
+    countRecentSweepRescues,
+    suspendMailboxDwell,
+  };
 }

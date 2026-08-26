@@ -106,7 +106,13 @@ describe("writeShadowBatch's ON DUPLICATE KEY UPDATE clause", () => {
 // behavioural test here would read live data.
 describe("the scheduled classification's message batch", () => {
   test("skips messages that already have an Action row", () => {
-    const sql = messageBatchQuery({ mailbox_id: "mailbox-1", after_id: null, batch_size: 500, unclassified_only: true }).toSQL().sql;
+    const sql = messageBatchQuery({
+      mailbox_id: "mailbox-1",
+      after_id: null,
+      batch_size: 500,
+      unclassified_only: true,
+      settled_sweep: null,
+    }).toSQL().sql;
 
     expect(sql).toContain("not exists");
     expect(sql).toContain("`Action`");
@@ -116,9 +122,74 @@ describe("the scheduled classification's message batch", () => {
   });
 
   test("the operator's full sweep still classifies every live message", () => {
-    const sql = messageBatchQuery({ mailbox_id: "mailbox-1", after_id: null, batch_size: 500, unclassified_only: false }).toSQL().sql;
+    const sql = messageBatchQuery({
+      mailbox_id: "mailbox-1",
+      after_id: null,
+      batch_size: 500,
+      unclassified_only: false,
+      settled_sweep: null,
+    }).toSQL().sql;
 
     expect(sql).not.toContain("not exists");
     expect(sql).not.toContain("`Action`");
+  });
+});
+
+// Inbox-dwell 1.9. Inspected, never executed, for the same reason as the two above: every DATABASE_URL
+// points at the same production MySQL.
+describe("the settled sweep's message batch", () => {
+  const sweep_now = new Date("2026-08-25T12:00:00.000Z");
+
+  function sweepSql(flavor: "gmail" | "generic"): string {
+    return messageBatchQuery({
+      mailbox_id: "mailbox-1",
+      after_id: null,
+      batch_size: 500,
+      unclassified_only: false,
+      settled_sweep: { dwell_days: 7, flavor, now: sweep_now },
+    }).toSQL().sql;
+  }
+
+  test("takes only mail that is read, in the inbox, and past the dwell", () => {
+    const sql = sweepSql("generic");
+
+    expect(sql).toContain("`Message`.`isSeen` = ?");
+    expect(sql).toContain("`Message`.`internalDate` <= ?");
+    expect(sql).toContain("`Message`.`folder` = ?");
+  });
+
+  test("on Gmail, inbox membership is a label on All Mail, not a folder", () => {
+    const sql = sweepSql("gmail");
+
+    expect(sql).toContain("JSON_CONTAINS");
+    // The loose LIKE '%Inbox%' this replaced also matches a user label called "Inbox archive", which is
+    // harmless in a count and not harmless in a sweep that moves mail.
+    expect(sql).not.toContain("like");
+  });
+
+  test("decides each message once — a second sweep must not re-propose the same archive", () => {
+    const sql = sweepSql("generic");
+
+    expect(sql).toContain("not exists");
+    expect(sql).toContain("`Action`.`source` = ?");
+  });
+
+  test("the scoping is the inverse of the scheduled pass, never both at once", () => {
+    // unclassified_only takes mail no Action row has ever named; the sweep takes mail that WAS classified
+    // and has since settled. A query carrying both predicates would return the empty set forever.
+    // The sweep correlates on source, so it excludes only messages IT has already decided; it must not
+    // carry the scheduled pass's bare messageId correlation, which would exclude every classified message
+    // and leave the sweep with nothing to look at.
+    const sweep = sweepSql("generic");
+    expect(sweep).toContain("`Action`.`source` = ?");
+
+    const scheduled = messageBatchQuery({
+      mailbox_id: "mailbox-1",
+      after_id: null,
+      batch_size: 500,
+      unclassified_only: true,
+      settled_sweep: null,
+    }).toSQL().sql;
+    expect(scheduled).not.toContain("`Message`.`isSeen`");
   });
 });

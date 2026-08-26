@@ -14,7 +14,7 @@ import type { RescuePort } from "@server/mail/rescue/detect";
 import { detectRescues } from "@server/mail/rescue/detect";
 import { createDatabaseRescuePort } from "@server/mail/rescue/journal";
 import type { RunShadowPassInput, RunShadowPassResult } from "@server/mail/shadow/run";
-import { runNewMailShadowPass } from "@server/mail/shadow/run";
+import { runNewMailShadowPass, runSettledSweepPass } from "@server/mail/shadow/run";
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
@@ -147,6 +147,39 @@ export async function promoteAutoActions(input: AutoPromotionInput): Promise<str
 // Failures on either half become a note on the run summary, never a thrown error: fetching mail is the
 // sync's job, and a classifier or an executor that breaks must not cost the operator their mail. Same
 // reasoning and the same `${kind}: ${message}` shape as runRescuePassForMailbox above.
+// Inbox-dwell 1.9's stage 6. Journaled at `shadow` only — this stage decides, it never promotes and never
+// executes, so nothing it produces can move mail until the operator promotes it from /admin/shadow.
+//
+// A suspended mailbox is skipped entirely rather than run and discarded: 1.11 suspends the sweep because
+// acting on this mailbox already went wrong, and continuing to write proposals into the journal after that
+// buries the evidence under exactly the rows the operator is trying to look at.
+async function runSettledSweepForMailbox(input: {
+  mailbox_row: MailboxRow;
+  run_id: string;
+  sweepPass: typeof runSettledSweepPass;
+}): Promise<string | null> {
+  if (input.mailbox_row.dwell_suspended_at !== null) {
+    return `settled sweep: skipped, suspended (${input.mailbox_row.dwell_suspension_reason ?? "no reason recorded"})`;
+  }
+
+  try {
+    const sweep = await input.sweepPass({
+      mailbox_id: input.mailbox_row.id,
+      batch_size: SHADOW_BATCH_SIZE,
+      run_id: input.run_id,
+      dwell_days: input.mailbox_row.dwell_settled_days,
+      now: new Date(),
+    });
+    if (sweep.examined === 0) {
+      return null;
+    }
+    return `settled sweep: examined ${sweep.examined}, journaled ${sweep.journaled}`;
+  } catch (error) {
+    const failure = classifyMailboxError(error);
+    return `settled sweep failed: ${failure.kind}: ${failure.message}`;
+  }
+}
+
 export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExecuteInput): Promise<string | null> {
   const notes: string[] = [];
 
@@ -272,6 +305,18 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
       shadowPass: runNewMailShadowPass,
       promoteAutoActions,
       executePendingActions: executeActions,
+    }),
+  );
+
+  // Stage 6, last and deliberately after classify-and-execute: the sweep decides on stored rows, and this
+  // run's new messages, flag transitions and executed actions are all already written by the time it
+  // reads. Its scoping is the inverse of the classify pass's (shadow/run.ts's SettledSweepScope), so the
+  // two cannot fight over the same rows.
+  notes.push(
+    await runSettledSweepForMailbox({
+      mailbox_row: input.mailbox_row,
+      run_id: SCHEDULED_RUN_ID,
+      sweepPass: runSettledSweepPass,
     }),
   );
 

@@ -32,6 +32,8 @@ function okPort(): RescuePort {
     loadLiveMessages: async () => new Map(),
     markRescued: async () => {},
     suspendPolicy: async () => false,
+    countRecentSweepRescues: async () => 0,
+    suspendMailboxDwell: async () => false,
   };
 }
 

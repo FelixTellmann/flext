@@ -1,3 +1,4 @@
+import { SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import type { MessageAddress } from "@server/mail/rescue/locate";
 import { messageAddressForAction } from "@server/mail/rescue/locate";
 import type { RescueSignal } from "@server/mail/rescue/signals";
@@ -13,6 +14,9 @@ export type RescueCandidateRow = {
   // still be stamped. It simply has nothing left to suspend.
   sender_policy_id: string | null;
   kind: string;
+  // Decision.source. What tells a policy-driven action apart from a sweep-driven one, which is the whole
+  // basis of 1.11: a sweep row has no senderPolicyId and so has nothing for this detector to suspend.
+  source: string;
   to_state_json: string | null;
   // The message's state at the instant the rule moved it. Read for its flags only: an `opened` rescue
   // requires \Seen to have been ABSENT here, because a message the operator had already read cannot be
@@ -39,6 +43,14 @@ export function messageAddressKey(address: MessageAddress): string {
 
 export type RescueStampEntry = { action_id: string; rescued_at: Date };
 export type PolicySuspensionEntry = { sender_policy_id: string; suspended_at: Date; reason: string };
+
+export type DwellSuspensionEntry = { mailbox_id: string; suspended_at: Date; reason: string };
+
+// Inbox-dwell 1.11. A rescue against a SWEEP means something weaker than a rescue against a policy —
+// opening week-old archived mail is ordinary behaviour, not necessarily a mistake — so one is journaled
+// and surfaced rather than acted on. Three inside a rolling window is a pattern.
+export const SWEEP_RESCUE_SUSPENSION_THRESHOLD = 3;
+export const SWEEP_RESCUE_WINDOW_DAYS = 30;
 
 // The database sits behind a port so the pass can be exercised over a fake, exactly as ActionJournal does
 // for the executor: every DATABASE_URL variant points at the same production MySQL, so a test that
@@ -80,6 +92,14 @@ export type RescuePort = {
   // void return would make `suspended` in the result a count of ATTEMPTS, reporting suspensions the
   // database correctly refused to make.
   suspendPolicy: (entry: PolicySuspensionEntry) => Promise<boolean>;
+  // 1.11's two. A sweep action carries no senderPolicyId, so without these the detector would discard
+  // every rescue against it for want of an id to blame — leaving the newest and least-proven rule in the
+  // system as the only one with no safety net.
+  countRecentSweepRescues: (input: { mailbox_id: string; since: Date }) => Promise<number>;
+  // Guarded `WHERE dwellSuspendedAt IS NULL`, exactly as suspendPolicy is, and returns whether it
+  // actually suspended anything — so a mailbox the operator deliberately un-suspended is not re-suspended
+  // on the next pass off the same aged evidence, and the result counts suspensions rather than attempts.
+  suspendMailboxDwell: (entry: DwellSuspensionEntry) => Promise<boolean>;
 };
 
 export type DetectRescuesResult = {
@@ -91,6 +111,8 @@ export type DetectRescuesResult = {
   // Candidates whose address resolved to no live row. Counted rather than swallowed: a run where this
   // climbs means addresses are going stale, which is the failure Task 1 exists to prevent.
   unresolved: number;
+  // 1.11: whether THIS pass suspended the mailbox's sweeps. False when they were already suspended.
+  dwell_suspended: boolean;
 };
 
 const NO_SUBJECT = "(no subject)";
@@ -173,11 +195,37 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
   // Spans the WHOLE pass, not one chunk: a policy suspended by chunk 1 must not be attempted again — and
   // miscounted as a fresh suspension — when chunk 3 carries another rescue against the same policy.
   const suspended_in_this_run = new Set<string>();
+  // 1.11. Counted across the whole pass, then resolved once at the end rather than per rescue: the
+  // threshold is about a PATTERN over a window, so asking after every single stamp would both cost a query
+  // per rescue and read a count that does not yet include the stamps this pass is about to write.
+  let sweep_rescues_this_run = 0;
+
+  async function finish(): Promise<DetectRescuesResult> {
+    if (sweep_rescues_this_run === 0) {
+      return { examined, rescued, suspended, unresolved, dwell_suspended: false };
+    }
+
+    const since = new Date(Date.now() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
+    const recent = await input.port.countRecentSweepRescues({ mailbox_id: input.mailbox_id, since });
+    if (recent < SWEEP_RESCUE_SUSPENSION_THRESHOLD) {
+      return { examined, rescued, suspended, unresolved, dwell_suspended: false };
+    }
+
+    const dwell_suspended = await input.port.suspendMailboxDwell({
+      mailbox_id: input.mailbox_id,
+      suspended_at: new Date(),
+      reason:
+        `${recent} messages the settled sweep archived were opened or replied to within the last ` +
+        `${SWEEP_RESCUE_WINDOW_DAYS} days. The sweep is suspended on this mailbox until you clear it; ` +
+        "every action it took is in the journal and can be undone.",
+    });
+    return { examined, rescued, suspended, unresolved, dwell_suspended };
+  }
 
   for (let iteration = 0; iteration < MAX_CHUNK_ITERATIONS; iteration += 1) {
     const candidates = await input.port.loadRescueCandidates({ mailbox_id: input.mailbox_id, batch_size: input.batch_size, after: cursor });
     if (candidates.length === 0) {
-      return { examined, rescued, suspended, unresolved };
+      return finish();
     }
 
     // Where each message lives NOW, which on generic IMAP is a different row from the one the action
@@ -214,6 +262,12 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
       stamps.push({ action_id: candidate.action_id, rescued_at: new Date() });
 
       if (candidate.sender_policy_id === null) {
+        // 1.11: a sweep row has no policy to blame, and discarding its rescues is how the newest rule in
+        // the system would end up the only one running unattended with no safety net. Counted here and
+        // resolved once in finish(); everything else with no policy id genuinely has nothing to do.
+        if (candidate.source === SWEEP_SETTLED_SOURCE) {
+          sweep_rescues_this_run += 1;
+        }
         continue;
       }
       if (suspended_in_this_run.has(candidate.sender_policy_id)) {
@@ -248,7 +302,7 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
 
     const last = candidates[candidates.length - 1];
     if (last === undefined || candidates.length < input.batch_size) {
-      return { examined, rescued, suspended, unresolved };
+      return finish();
     }
     cursor = { applied_at: last.applied_at, action_id: last.action_id };
   }

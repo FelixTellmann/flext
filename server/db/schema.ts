@@ -115,6 +115,14 @@ export const mailbox = mysqlTable(
     canonical_folder: varchar("canonicalFolder", { length: 191 }),
     sent_folders: text("sentFolders"),
     trash_retention_days: int("trashRetentionDays"),
+    // Inbox-dwell 1.9: how long a READ message may sit in the inbox before the settled sweep archives it.
+    // Per mailbox rather than global so one can be tuned or effectively disabled without a deploy.
+    dwell_settled_days: int("dwellSettledDays").default(7).notNull(),
+    // 1.11: SenderPolicy.suspendedAt's sibling. A sweep action carries no senderPolicyId, so rescue
+    // detection has nothing to suspend and would discard every rescue against the newest, least-proven
+    // rule in the system for want of an id to blame. Suspension is per mailbox because the sweep is.
+    dwell_suspended_at: datetime("dwellSuspendedAt", { fsp: 3 }),
+    dwell_suspension_reason: text("dwellSuspensionReason"),
     enabled: boolean("enabled").default(true).notNull(),
     backfilled_at: datetime("backfilledAt", { fsp: 3 }),
     last_error: text("lastError"),

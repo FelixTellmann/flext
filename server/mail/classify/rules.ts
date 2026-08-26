@@ -56,6 +56,11 @@ export const DECISION_SOURCES = [
 
 export type DecisionSource = (typeof DECISION_SOURCES)[number];
 
+// The one spelling of the settled sweep's source. The sweep's candidate query filters on it to stay
+// idempotent per message, and 1.11's rescue handler keys on it to know a rescue has no policy to blame —
+// a literal in either place is the two-spellings-of-one-semantic shape this module exists to prevent.
+export const SWEEP_SETTLED_SOURCE = "sweep_settled" as const satisfies DecisionSource;
+
 // `Action.source` is a varchar with no database enum behind it, so a row written by an older build or by
 // hand can hold a value decide() never emits. Null says exactly that — "not one of ours" — rather than an
 // assertion that hands a caller a union member the string was never checked against.

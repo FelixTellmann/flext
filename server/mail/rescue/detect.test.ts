@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { serializeActionState } from "@server/mail/actions/state";
 import type {
+  DwellSuspensionEntry,
   LiveMessageFacts,
   PolicySuspensionEntry,
   RescueCandidateRow,
@@ -46,6 +47,7 @@ function candidate(input: {
   message_id?: string;
   sender_policy_id?: string | null;
   kind?: string;
+  source?: string;
   to_state_json?: string | null;
   from_state_json?: string | null;
   applied_at?: Date;
@@ -55,6 +57,7 @@ function candidate(input: {
     message_id: input.message_id === undefined ? `message-${input.action_id}` : input.message_id,
     sender_policy_id: input.sender_policy_id === undefined ? "policy-1" : input.sender_policy_id,
     kind: input.kind === undefined ? "archive" : input.kind,
+    source: input.source === undefined ? "address_policy" : input.source,
     to_state_json: input.to_state_json === undefined ? null : input.to_state_json,
     // Unseen at apply time by default: the precondition an `opened` rescue requires, and what every
     // pre-existing case in this file is implicitly about.
@@ -80,6 +83,7 @@ type FakePort = RescuePort & {
   // How many times the batch loader was called. The point of the set-based port is that this stays at one
   // however many candidates a pass judges.
   batchCount: () => number;
+  dwell_suspensions: DwellSuspensionEntry[];
 };
 
 // The fake holds the two properties the drizzle implementation holds in SQL, because a fake that did not
@@ -90,16 +94,21 @@ function createFakePort(input: {
   rows: RescueCandidateRow[];
   live: Record<string, LiveMessageFacts>;
   policies?: Record<string, PolicyState>;
+  // What the journal already holds for 1.11's rolling window, EXCLUDING whatever this pass stamps. The
+  // real port counts stamped rows, so a test that wants the threshold reached seeds the earlier ones here.
+  recent_sweep_rescues?: number;
 }): FakePort {
   const stamps = new Map<string, Date>();
   const lookups: MessageAddress[] = [];
   let batches = 0;
   const policies = new Map<string, PolicyState>(Object.entries(input.policies === undefined ? {} : input.policies));
+  const dwell_suspensions: DwellSuspensionEntry[] = [];
 
   return {
     lookups,
     stamps,
     policies,
+    dwell_suspensions,
     batchCount: (): number => batches,
     loadRescueCandidates: async (query: { mailbox_id: string; batch_size: number }): Promise<RescueCandidateRow[]> => {
       return input.rows.filter((row) => !stamps.has(row.action_id)).slice(0, query.batch_size);
@@ -130,6 +139,11 @@ function createFakePort(input: {
         return false;
       }
       policies.set(entry.sender_policy_id, { suspended_at: entry.suspended_at, suspension_reason: entry.reason });
+      return true;
+    },
+    countRecentSweepRescues: async (): Promise<number> => input.recent_sweep_rescues ?? 0,
+    suspendMailboxDwell: async (entry: DwellSuspensionEntry): Promise<boolean> => {
+      dwell_suspensions.push(entry);
       return true;
     },
   };
@@ -176,6 +190,8 @@ function createPaginatedFakePort(rows: RescueCandidateRow[]): RescuePort & { cal
       }
     },
     suspendPolicy: async (): Promise<boolean> => true,
+    countRecentSweepRescues: async (): Promise<number> => 0,
+    suspendMailboxDwell: async (): Promise<boolean> => false,
   };
 }
 
@@ -192,6 +208,8 @@ function createStuckFakePort(chunk_size: number): RescuePort {
     loadLiveMessages: async (): Promise<Map<string, LiveMessageFacts>> => new Map(),
     markRescued: async (): Promise<void> => {},
     suspendPolicy: async (): Promise<boolean> => false,
+    countRecentSweepRescues: async (): Promise<number> => 0,
+    suspendMailboxDwell: async (): Promise<boolean> => false,
   };
 }
 
@@ -204,7 +222,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 1, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 1, unresolved: 0, dwell_suspended: false });
     expect(port.stamps.has("action-1")).toBe(true);
     expect(port.policies.get("policy-1")?.suspension_reason).toBe(
       'rescued: you opened "xneelo Tax Invoice I260024265760" on 2026-08-21 07:30 UTC after this rule archived it on 2026-08-20 09:00 UTC. The rule is suspended until you clear it; the action is in the journal and can be undone.',
@@ -231,7 +249,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0, dwell_suspended: false });
     expect(port.stamps.size).toBe(0);
     expect(port.policies.size).toBe(0);
   });
@@ -254,7 +272,7 @@ describe("detectRescues", () => {
 
     expect(port.lookups).toEqual([{ by: "address", folder: "Archive", uid: 517, uid_validity: UID_VALIDITY }]);
     expect(port.lookups).not.toContainEqual({ by: "row", message_id: "dead-row" });
-    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 1, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 1, unresolved: 0, dwell_suspended: false });
     expect(port.policies.get("policy-1")?.suspension_reason).toContain("xneelo Tax Invoice I260024265760");
   });
 
@@ -269,8 +287,8 @@ describe("detectRescues", () => {
     const reason_after_first = port.policies.get("policy-1")?.suspension_reason;
     const second = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(first).toEqual({ examined: 1, rescued: 1, suspended: 1, unresolved: 0 });
-    expect(second).toEqual({ examined: 0, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(first).toEqual({ examined: 1, rescued: 1, suspended: 1, unresolved: 0, dwell_suspended: false });
+    expect(second).toEqual({ examined: 0, rescued: 0, suspended: 0, unresolved: 0, dwell_suspended: false });
     expect(port.stamps.get("action-4")).toBe(stamped_at);
     expect(port.policies.get("policy-1")?.suspension_reason).toBe(reason_after_first);
   });
@@ -292,7 +310,7 @@ describe("detectRescues", () => {
     expect(port.stamps.has("action-5")).toBe(true);
     // A real rescue, so it is stamped — but NOT a new suspension. The count reports what the guard did,
     // not what the pass attempted.
-    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 0, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 0, unresolved: 0, dwell_suspended: false });
   });
 
   test("an action with no sender policy is stamped, suspends nothing, and does not throw", async () => {
@@ -303,7 +321,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 0, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 1, suspended: 0, unresolved: 0, dwell_suspended: false });
     expect(port.stamps.has("action-6")).toBe(true);
     expect(port.policies.size).toBe(0);
   });
@@ -313,7 +331,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 1 });
+    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 1, dwell_suspended: false });
     expect(port.stamps.size).toBe(0);
   });
 
@@ -331,7 +349,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 2, rescued: 2, suspended: 1, unresolved: 0 });
+    expect(result).toEqual({ examined: 2, rescued: 2, suspended: 1, unresolved: 0, dwell_suspended: false });
     expect(port.policies.get("policy-1")?.suspension_reason).toContain('"first"');
   });
 
@@ -342,12 +360,14 @@ describe("detectRescues", () => {
   // other mailbox reach, tsc fails on the missing key and this test names the four operations the pass is
   // allowed to perform. The earlier version of this test ran a recorder that was never passed anywhere
   // and asserted it stayed empty, which could not fail and hid the real invariant.
-  test("the port exposes exactly four database operations and no way to reach a mailbox", async () => {
+  test("the port exposes exactly six database operations and no way to reach a mailbox", async () => {
     const PORT_OPERATIONS: Record<keyof RescuePort, true> = {
       loadRescueCandidates: true,
       loadLiveMessages: true,
       markRescued: true,
       suspendPolicy: true,
+      countRecentSweepRescues: true,
+      suspendMailboxDwell: true,
     };
 
     const port = createFakePort({
@@ -356,7 +376,14 @@ describe("detectRescues", () => {
     });
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(Object.keys(PORT_OPERATIONS).sort()).toEqual(["loadLiveMessages", "loadRescueCandidates", "markRescued", "suspendPolicy"]);
+    expect(Object.keys(PORT_OPERATIONS).sort()).toEqual([
+      "countRecentSweepRescues",
+      "loadLiveMessages",
+      "loadRescueCandidates",
+      "markRescued",
+      "suspendMailboxDwell",
+      "suspendPolicy",
+    ]);
     expect(result.rescued).toBe(1);
   });
 
@@ -376,7 +403,7 @@ describe("detectRescues", () => {
 
     expect(port.batchCount()).toBe(1);
     expect(port.lookups).toHaveLength(3);
-    expect(result).toEqual({ examined: 3, rescued: 2, suspended: 1, unresolved: 0 });
+    expect(result).toEqual({ examined: 3, rescued: 2, suspended: 1, unresolved: 0, dwell_suspended: false });
   });
 
   test("an empty candidate set touches the port once and asks for no messages at all", async () => {
@@ -385,7 +412,7 @@ describe("detectRescues", () => {
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
     expect(port.batchCount()).toBe(0);
-    expect(result).toEqual({ examined: 0, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(result).toEqual({ examined: 0, rescued: 0, suspended: 0, unresolved: 0, dwell_suspended: false });
   });
 
   test("an empty mailbox id and a non-positive batch size are refused", async () => {
@@ -411,7 +438,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 2 });
 
-    expect(result).toEqual({ examined: 5, rescued: 5, suspended: 5, unresolved: 0 });
+    expect(result).toEqual({ examined: 5, rescued: 5, suspended: 5, unresolved: 0, dwell_suspended: false });
   });
 
   // Same scenario, checked from the other side: not just that every row eventually gets examined, but that
@@ -456,7 +483,7 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0, dwell_suspended: false });
     expect(port.stamps.size).toBe(0);
     expect(port.policies.size).toBe(0);
   });
@@ -471,7 +498,81 @@ describe("detectRescues", () => {
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
 
-    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0 });
+    expect(result).toEqual({ examined: 1, rescued: 0, suspended: 0, unresolved: 0, dwell_suspended: false });
     expect(port.stamps.size).toBe(0);
+  });
+});
+
+// Inbox-dwell 1.11. A sweep action carries no senderPolicyId, so before this the detector hit
+// `sender_policy_id === null` and dropped the rescue on the floor — leaving the newest and least-proven
+// rule in the system as the only one running unattended with no safety net.
+describe("rescues against the settled sweep (1.11)", () => {
+  function sweepRow(action_id: string): RescueCandidateRow {
+    return candidate({ action_id, sender_policy_id: null, source: "sweep_settled" });
+  }
+
+  test("one rescue is stamped and surfaced, but does NOT suspend the sweep", async () => {
+    // Opening week-old archived mail is ordinary behaviour, not necessarily a mistake. Suspending on the
+    // first event would make the sweep unusable for exactly the mail it is best at.
+    const port = createFakePort({
+      rows: [sweepRow("action-s1")],
+      live: { [rowKey("message-action-s1")]: facts({ opened_at: OPENED_AFTER }) },
+      recent_sweep_rescues: 1,
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.rescued).toBe(1);
+    expect(result.dwell_suspended).toBe(false);
+    expect(port.dwell_suspensions).toEqual([]);
+    // Still stamped: the evidence has to accumulate somewhere for the threshold to ever be reached.
+    expect(port.stamps.has("action-s1")).toBe(true);
+  });
+
+  test("three inside the window is a pattern, and suspends the mailbox's sweeps", async () => {
+    const port = createFakePort({
+      rows: [sweepRow("action-s2")],
+      live: { [rowKey("message-action-s2")]: facts({ opened_at: OPENED_AFTER }) },
+      recent_sweep_rescues: 3,
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.dwell_suspended).toBe(true);
+    expect(port.dwell_suspensions).toHaveLength(1);
+    expect(port.dwell_suspensions[0]?.mailbox_id).toBe(MAILBOX_ID);
+    // The operator reads this sentence to decide whether the rule was wrong, so it has to say what
+    // happened and that nothing is lost.
+    expect(port.dwell_suspensions[0]?.reason).toContain("settled sweep");
+    expect(port.dwell_suspensions[0]?.reason).toContain("can be undone");
+  });
+
+  test("a rescue against a POLICY never touches the mailbox's dwell suspension", async () => {
+    const port = createFakePort({
+      rows: [candidate({ action_id: "action-p1" })],
+      live: { [rowKey("message-action-p1")]: facts({ opened_at: OPENED_AFTER }) },
+      recent_sweep_rescues: 99,
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    // The policy is suspended, the sweep is untouched, and the window is never even consulted — a pass
+    // with no sweep rescues must not spend a query asking about them.
+    expect(result.suspended).toBe(1);
+    expect(result.dwell_suspended).toBe(false);
+    expect(port.dwell_suspensions).toEqual([]);
+  });
+
+  test("an action with no policy and no sweep source is still simply skipped", async () => {
+    const port = createFakePort({
+      rows: [candidate({ action_id: "action-n1", sender_policy_id: null, source: "derived" })],
+      live: { [rowKey("message-action-n1")]: facts({ opened_at: OPENED_AFTER }) },
+      recent_sweep_rescues: 99,
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.rescued).toBe(1);
+    expect(result.dwell_suspended).toBe(false);
   });
 });

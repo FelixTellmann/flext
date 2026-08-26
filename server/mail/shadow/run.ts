@@ -3,16 +3,16 @@ import { action, mailbox, message, sender, threadState } from "@server/db/schema
 import { FILE_KIND } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
-import { decide } from "@server/mail/classify/rules";
+import { decide, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { PolicyFilingMapping } from "@server/mail/filing/paths";
 import { logicalPathFor } from "@server/mail/filing/paths";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex } from "@server/mail/query/policies";
-import { isSentByMeSql, resolveThreadState, threadGroupKeySql } from "@server/mail/query/signal-sql";
+import { isInInboxSql, isSentByMeSql, resolveThreadState, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
-import { and, asc, eq, gt, isNull, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNull, lte, notExists, sql } from "drizzle-orm";
 
 // run_id is an input rather than always minted here because a sweep across several mailboxes is ONE
 // shadow run: getShadowReport and getShadowSummary both scope to a single latest run id, so four
@@ -96,7 +96,19 @@ async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_f
   return facts;
 }
 
-type MessageBatchQueryInput = { mailbox_id: string; after_id: string | null; batch_size: number; unclassified_only: boolean };
+// Inbox-dwell 1.9's candidate set, and its scoping is the exact INVERSE of unclassified_only: that one
+// takes mail no Action row has ever named, this one takes mail that was classified, left alone, and has
+// since sat read in the inbox past the dwell. The two are complementary by design and must not be merged
+// — one is "decide about new mail", the other is "reconsider old mail because time passed".
+export type SettledSweepScope = { dwell_days: number; flavor: MailboxFlavor; now: Date };
+
+type MessageBatchQueryInput = {
+  mailbox_id: string;
+  after_id: string | null;
+  batch_size: number;
+  unclassified_only: boolean;
+  settled_sweep: SettledSweepScope | null;
+};
 
 // Exported unexecuted so server/mail/shadow/run.test.ts can assert the scheduled path's NOT EXISTS is
 // actually emitted without opening a connection: every DATABASE_URL points at the same production MySQL,
@@ -112,6 +124,26 @@ export function messageBatchQuery(input: MessageBatchQueryInput) {
     // because Action_messageId_kind_runId_key leads on messageId. The keyset cursor above still drives the
     // walk, so writing this batch's rows cannot make the next batch skip or repeat anything.
     conditions.push(notExists(db.select({ classified: sql`1` }).from(action).where(eq(action.message_id, message.id))));
+  }
+
+  if (input.settled_sweep !== null) {
+    const { dwell_days, flavor, now } = input.settled_sweep;
+    const cutoff = new Date(now.getTime() - dwell_days * 86_400_000);
+
+    conditions.push(eq(message.is_seen, true));
+    conditions.push(lte(message.internal_date, cutoff));
+    conditions.push(isInInboxSql(flavor));
+    // Decided once per message, never re-decided. Without this the constant SCHEDULED_RUN_ID would make
+    // the second sweep collide with the first on Action_messageId_kind_runId_key, and a sweep that keeps
+    // re-proposing the same archive every fifteen minutes is noise the operator would learn to ignore.
+    conditions.push(
+      notExists(
+        db
+          .select({ swept: sql`1` })
+          .from(action)
+          .where(and(eq(action.message_id, message.id), eq(action.source, SWEEP_SETTLED_SOURCE))),
+      ),
+    );
   }
 
   return db
@@ -167,7 +199,7 @@ function selectPolicies(policy_index: PolicyIndex, from_address: string, from_do
 
 function buildDecisionInput(
   row: ShadowMessageRow,
-  params: { policy_index: PolicyIndex; thread_facts: Map<string, ThreadFacts>; now: Date },
+  params: { policy_index: PolicyIndex; thread_facts: Map<string, ThreadFacts>; now: Date; settled_sweep_candidate: boolean },
 ): DecisionInput {
   const from_address = row.from_address ?? "";
   const from_domain = row.from_domain ?? "";
@@ -207,9 +239,9 @@ function buildDecisionInput(
     last_in_thread_is_mine: thread_facts.last_in_thread_is_mine,
     sender_suppressed: params.policy_index.suppressed.has(from_address.toLowerCase()),
     policies: selectPolicies(params.policy_index, from_address, from_domain),
-    // Never the sweep. This pass classifies mail it has never seen before, where nothing has had time
-    // to settle; the sweep stage builds its own input and sets this itself.
-    settled_sweep_candidate: false,
+    // True only on the sweep pass. Every row that pass fetches already cleared the candidate test in SQL
+    // — in the inbox, seen, older than the dwell — so the flag is a property of the pass, not of the row.
+    settled_sweep_candidate: params.settled_sweep_candidate,
   };
 }
 
@@ -296,7 +328,9 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
     });
 }
 
-async function runPass(input: RunShadowPassInput & { unclassified_only: boolean }): Promise<RunShadowPassResult> {
+async function runPass(
+  input: RunShadowPassInput & { unclassified_only: boolean; settled_sweep: Omit<SettledSweepScope, "flavor"> | null },
+): Promise<RunShadowPassResult> {
   const run_id = input.run_id ?? crypto.randomUUID();
   const now = new Date();
 
@@ -325,6 +359,7 @@ async function runPass(input: RunShadowPassInput & { unclassified_only: boolean 
       after_id,
       batch_size: input.batch_size,
       unclassified_only: input.unclassified_only,
+      settled_sweep: input.settled_sweep === null ? null : { ...input.settled_sweep, flavor },
     });
     if (batch.length === 0) {
       break;
@@ -333,7 +368,9 @@ async function runPass(input: RunShadowPassInput & { unclassified_only: boolean 
     const rows: ShadowActionRow[] = [];
     for (const row of batch) {
       examined += 1;
-      const decision = decide(buildDecisionInput(row, { policy_index, thread_facts, now }));
+      const decision = decide(
+        buildDecisionInput(row, { policy_index, thread_facts, now, settled_sweep_candidate: input.settled_sweep !== null }),
+      );
       by_decision[decision.action] = (by_decision[decision.action] ?? 0) + 1;
       const mapping = filingMappingFor(policy_index, decision, row.from_address ?? "", row.from_domain ?? "");
       rows.push(buildShadowActionRow({ message_id: row.id, mailbox_id: input.mailbox_id, decision, mapping, run_id, now }));
@@ -355,7 +392,7 @@ async function runPass(input: RunShadowPassInput & { unclassified_only: boolean 
 // policy edit calls for, and it stays something a human asks for from /admin/shadow, because it is also
 // the expensive one — one Action row per message per run id.
 export async function runShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
-  return runPass({ ...input, unclassified_only: false });
+  return runPass({ ...input, unclassified_only: false, settled_sweep: null });
 }
 
 // The scheduled sync's pass: only messages that have never been classified. New mail is the only input a
@@ -368,5 +405,24 @@ export async function runShadowPass(input: RunShadowPassInput): Promise<RunShado
 // messages because a rule changed is exactly what the shadow-and-review cycle exists to prevent. The
 // operator re-sweeps from /admin/shadow when they mean to.
 export async function runNewMailShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
-  return runPass({ ...input, unclassified_only: true });
+  return runPass({ ...input, unclassified_only: true, settled_sweep: null });
+}
+
+// Inbox-dwell 1.9's settled sweep. Runs as its own stage after classify-and-execute, never inside it: the
+// scheduled classify pass is scoped to mail that has never been classified, and dwell is by definition a
+// decision that CHANGES as time passes, so the two need opposite scoping and merging them would destroy
+// the classify pass's cost profile.
+//
+// Read mail that has sat in the inbox past the mailbox's dwell, re-decided through the same ladder as
+// everything else — the sweep does not bypass decide(), it is step 6.5 inside it, so every guard, thread
+// state and policy still wins (1.8). Journaled at `shadow` like every other new rule; nothing here moves
+// mail until the operator promotes it.
+export async function runSettledSweepPass(input: RunShadowPassInput & { dwell_days: number; now: Date }): Promise<RunShadowPassResult> {
+  return runPass({
+    mailbox_id: input.mailbox_id,
+    batch_size: input.batch_size,
+    run_id: input.run_id,
+    unclassified_only: false,
+    settled_sweep: { dwell_days: input.dwell_days, now: input.now },
+  });
 }
