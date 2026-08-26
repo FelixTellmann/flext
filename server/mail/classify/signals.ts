@@ -9,6 +9,7 @@ export type SignalInput = {
   to_me: boolean;
   cc_me: boolean;
   dkim_aligned: boolean | null;
+  is_calendar: boolean | null;
   internal_date: Date;
   sender_message_count: number;
   my_reply_count: number;
@@ -28,6 +29,10 @@ export type MessageSignals = {
   // contact.
   is_first_contact: boolean;
   dkim_aligned: boolean | null;
+  // Tri-state, carried through rather than collapsed. Null means the MIME structure was never observed,
+  // which is not the same as "not a calendar message" — and the difference matters because the derived
+  // rule that reads it archives mail. Same shape and same reasoning as dkim_aligned above.
+  is_calendar: boolean | null;
   volume_bucket: VolumeBucket;
   age_days: number;
 };
@@ -90,6 +95,7 @@ export function deriveSignals(input: SignalInput): MessageSignals {
     // make first contact unreachable and the whole rule dead code.
     is_first_contact: input.sender_message_count <= 1 && input.my_reply_count === 0,
     dkim_aligned: input.dkim_aligned,
+    is_calendar: input.is_calendar,
     volume_bucket: volumeBucket(input.sender_message_count),
     age_days: Math.max(0, Math.floor(elapsed_ms / 86_400_000)),
   };

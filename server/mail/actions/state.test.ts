@@ -20,6 +20,7 @@ function fetchedMessage(entry: StubMessage): FetchedMessage {
     labels: entry.labels === null ? null : [...entry.labels],
     envelope: { subject: null, message_id: null, in_reply_to: null, date: null, from: [], to: [], cc: [] },
     headers: {},
+    structure: null,
   };
 }
 

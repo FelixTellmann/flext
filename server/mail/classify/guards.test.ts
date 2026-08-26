@@ -12,6 +12,7 @@ const base_signals: MessageSignals = {
   sender_known: false,
   is_first_contact: false,
   dkim_aligned: true,
+  is_calendar: null,
   volume_bucket: "low",
   age_days: 5,
 };
@@ -58,6 +59,7 @@ describe("too_recent", () => {
       to_me: true,
       cc_me: false,
       dkim_aligned: true,
+      is_calendar: null,
       internal_date: new Date("2026-08-18T00:00:01Z"),
       sender_message_count: 1,
       my_reply_count: 0,
@@ -77,6 +79,7 @@ describe("too_recent", () => {
       to_me: true,
       cc_me: false,
       dkim_aligned: true,
+      is_calendar: null,
       internal_date: new Date("2026-08-18T00:00:00Z"),
       sender_message_count: 1,
       my_reply_count: 0,

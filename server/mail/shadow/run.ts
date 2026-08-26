@@ -58,6 +58,7 @@ type ShadowMessageRow = {
   to_me: boolean;
   cc_me: boolean;
   dkim_aligned: boolean | null;
+  is_calendar: boolean | null;
   internal_date: Date;
   list_id: string | null;
   list_unsubscribe: string | null;
@@ -194,6 +195,7 @@ export function messageBatchQuery(input: MessageBatchQueryInput) {
       to_me: message.to_me,
       cc_me: message.cc_me,
       dkim_aligned: message.dkim_aligned,
+      is_calendar: message.is_calendar,
       internal_date: message.internal_date,
       list_id: message.list_id,
       list_unsubscribe: message.list_unsubscribe,
@@ -254,6 +256,7 @@ function buildDecisionInput(
     to_me: row.to_me,
     cc_me: row.cc_me,
     dkim_aligned: row.dkim_aligned,
+    is_calendar: row.is_calendar,
     internal_date: row.internal_date,
     sender_message_count: Number(row.sender_message_count ?? 0),
     my_reply_count: Number(row.my_reply_count ?? 0),

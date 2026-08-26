@@ -186,6 +186,10 @@ export const message = mysqlTable(
     internal_date: datetime("internalDate", { fsp: 3 }).notNull(),
     size: int("size"),
     has_attachment: boolean("hasAttachment").default(false).notNull(),
+    // Tri-state for the same reason dkimAligned is: null means the MIME structure was never observed —
+    // the row predates this column, or the server returned none — and must never be read as "definitely
+    // not calendar mail". ~50,000 rows are in exactly that position until a reclassify pass runs.
+    is_calendar: boolean("isCalendar"),
     list_id: varchar("listId", { length: 320 }),
     list_unsubscribe: text("listUnsubscribe"),
     precedence: varchar("precedence", { length: 191 }),

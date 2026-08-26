@@ -1,3 +1,4 @@
+import type { MessagePart } from "@server/mail/providers/structure";
 export type MailboxCapabilities = {
   condstore: boolean;
   qresync: boolean;
@@ -50,6 +51,9 @@ export type FetchedMessage = {
   labels: string[] | null;
   envelope: FetchedEnvelope;
   headers: HeaderMap;
+  // BODYSTRUCTURE, normalized. Null when the server returned none — which stays a real answer rather than
+  // an error, because this is a capability the sync degrades around rather than depends on.
+  structure: MessagePart | null;
 };
 
 export type MessageIdentity = {

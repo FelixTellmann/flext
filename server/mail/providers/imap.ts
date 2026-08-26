@@ -1,6 +1,7 @@
 import type { ConnectionOptions } from "node:tls";
 import type { MailboxConnection } from "@server/mail/mailbox";
 import { HEADER_FIELDS, parseHeaderBlock } from "@server/mail/providers/headers";
+import type { MessagePart } from "@server/mail/providers/structure";
 import { buildTlsOptions } from "@server/mail/providers/tls";
 import type {
   CopyUidResult,
@@ -21,7 +22,14 @@ import type {
   UidPair,
 } from "@server/mail/providers/types";
 import type { MailboxFlavor } from "@server/mail/types";
-import type { CopyResponseObject, ExpungeEvent, FetchMessageObject, FetchQueryObject, MessageAddressObject } from "imapflow";
+import type {
+  CopyResponseObject,
+  ExpungeEvent,
+  FetchMessageObject,
+  FetchQueryObject,
+  MessageAddressObject,
+  MessageStructureObject,
+} from "imapflow";
 import { ImapFlow } from "imapflow";
 
 function readCapabilities(client: ImapFlow): MailboxCapabilities {
@@ -38,6 +46,25 @@ function toAddresses(entries: MessageAddressObject[] | undefined): MessageAddres
   return (entries ?? [])
     .filter((entry): entry is MessageAddressObject & { address: string } => typeof entry.address === "string")
     .map((entry) => ({ name: entry.name ?? null, address: entry.address.toLowerCase() }));
+}
+
+// imapflow's MessageStructureObject narrowed to the four fields server/mail/providers/structure.ts asks
+// about. Everything dropped — part numbers, encodings, sizes, embedded envelopes — is either
+// content-adjacent or of no use to "what kind of message is this", and carrying it would invite a caller
+// to reach for it later.
+//
+// A filename can arrive on either Content-Disposition or the legacy Content-Type `name` parameter, and
+// senders that omit the disposition entirely tend to be the ones using `name`.
+function toMessagePart(node: MessageStructureObject | undefined): MessagePart | null {
+  if (node === undefined) {
+    return null;
+  }
+  return {
+    type: node.type ?? "",
+    disposition: node.disposition ?? null,
+    filename: node.dispositionParameters?.filename ?? node.parameters?.name ?? null,
+    child_parts: (node.childNodes ?? []).map((child) => toMessagePart(child)).filter((child): child is MessagePart => child !== null),
+  };
 }
 
 function toEnvelope(raw: FetchMessageObject): FetchedEnvelope {
@@ -149,6 +176,9 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
     uid: true,
     flags: true,
     envelope: true,
+    // §1.1 of the calendar-detection spec: the server DESCRIBES the MIME tree and sends none of it, on
+    // this same round trip. No body is transferred and none is stored.
+    bodyStructure: true,
     internalDate: true,
     size: true,
     threadId: gmail,
@@ -171,6 +201,7 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
       labels: raw.labels ? [...raw.labels] : null,
       envelope: toEnvelope(raw),
       headers: parseHeaderBlock(raw.headers),
+      structure: toMessagePart(raw.bodyStructure),
     };
   }
 

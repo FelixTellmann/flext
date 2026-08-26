@@ -45,6 +45,7 @@ type NeedsActionQueryRow = {
   is_seen: boolean;
   cc_me: boolean;
   dkim_aligned: boolean | null;
+  is_calendar: boolean | null;
   message_count: number;
   sender_message_count: number | null;
   my_reply_count: number | null;
@@ -138,6 +139,7 @@ function toNeedsActionRow(row: NeedsActionQueryRow, now: Date): NeedsActionRow {
     to_me: true,
     cc_me: row.cc_me,
     dkim_aligned: row.dkim_aligned,
+    is_calendar: row.is_calendar,
     internal_date: row.internal_date,
     sender_message_count,
     my_reply_count: Number(row.my_reply_count ?? 0),
@@ -220,6 +222,7 @@ export async function listNeedsAction(input: {
         is_seen: message.is_seen,
         cc_me: message.cc_me,
         dkim_aligned: message.dkim_aligned,
+      is_calendar: message.is_calendar,
         gm_thrid: message.gm_thrid,
         folder: message.folder,
         message_id: message.message_id,
@@ -264,6 +267,7 @@ export async function listNeedsAction(input: {
       is_seen: ranked.is_seen,
       cc_me: ranked.cc_me,
       dkim_aligned: ranked.dkim_aligned,
+      is_calendar: ranked.is_calendar,
       message_count: ranked.message_count,
       sender_message_count: sender.message_count,
       my_reply_count: sender.my_reply_count,

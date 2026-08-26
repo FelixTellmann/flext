@@ -12,6 +12,7 @@ const base_signals: MessageSignals = {
   sender_known: false,
   is_first_contact: false,
   dkim_aligned: true,
+  is_calendar: null,
   volume_bucket: "low",
   age_days: 5,
 };
@@ -881,5 +882,76 @@ describe("the exemption's age floor", () => {
 
     expect(decision.action).toBe("keep_inbox");
     expect(decision.source).toBe("fallback");
+  });
+});
+
+// The calendar-detection spec's 1.6. ~263 meeting invitations from colleagues were the largest block of
+// unsorted mail in the estate, and no policy could name them: resolution is by sender, and those senders
+// send real mail too.
+describe("calendar messages, in the derived rung", () => {
+  const colleague = { ...base_signals, sender_known: true, is_calendar: true, age_days: 30 };
+
+  test("meeting churn from someone you write to is archived", () => {
+    const decision = decide({ ...base_input, signals: colleague, last_in_thread_is_mine: true });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("derived");
+    expect(decision.reasons.join(" ")).toContain("MIME structure rather than its subject line");
+  });
+
+  test("the same colleague's ORDINARY email is untouched — the point of the whole exercise", () => {
+    // A sender policy could not express this. One on jess@platter.com would archive her calendar churn
+    // and her actual correspondence with equal enthusiasm.
+    const decision = decide({
+      ...base_input,
+      signals: { ...colleague, is_calendar: false },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).not.toBe("archive");
+  });
+
+  test("null is not false: a message whose structure was never observed is left alone", () => {
+    // ~50,000 rows carry null until a reclassify pass runs. Archiving on "not definitely false" would
+    // sweep every one of them.
+    const decision = decide({
+      ...base_input,
+      signals: { ...colleague, is_calendar: null },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).not.toBe("archive");
+  });
+
+  test("an invitation from a stranger is not archived — it is a first contact", () => {
+    const decision = decide({ ...base_input, signals: { ...colleague, sender_known: false, is_first_contact: true } });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
+  });
+
+  test("a recent invitation is left alone until the dwell passes", () => {
+    const decision = decide({ ...base_input, signals: { ...colleague, age_days: 3 }, last_in_thread_is_mine: true });
+
+    expect(decision.action).not.toBe("archive");
+  });
+
+  test("a flagged invitation is still untouchable", () => {
+    const decision = decide({ ...base_input, signals: colleague, is_flagged: true, last_in_thread_is_mine: true });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("flagged");
+  });
+
+  test("an explicit policy on the sender still wins", () => {
+    const decision = decide({
+      ...base_input,
+      signals: colleague,
+      last_in_thread_is_mine: true,
+      policies: [{ id: "policy-1", scope: "address", value: "person@example.com", action: "keep_inbox", suspended_at: null }],
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("address_policy");
   });
 });

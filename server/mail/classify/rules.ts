@@ -85,6 +85,11 @@ export type DerivedAction = (typeof DERIVED_ACTIONS)[number];
 
 export const DERIVED_ARCHIVE_AGE_DAYS = 30;
 
+// Shorter than the bulk-mail window above, deliberately. A meeting that finished a week ago has no
+// further claim on the inbox, and unlike an unrecognised newsletter there is no evidence still accruing
+// about whether the sender matters — the operator has already replied to them.
+export const CALENDAR_ARCHIVE_AGE_DAYS = 7;
+
 type DerivedOutcome = { action: DerivedAction; reasons: string[] };
 
 type PolicyMatch = { policy: SenderPolicyInput; scope: PolicyScope };
@@ -220,6 +225,28 @@ function derivedOutcome(input: DecisionInput): DerivedOutcome | null {
       reasons: [
         ...describeUnsolicitedSender(input),
         `${signals.age_days} days old, within the ${DERIVED_ARCHIVE_AGE_DAYS}-day window where evidence is still accruing`,
+      ],
+    };
+  }
+
+  // Meeting churn from someone the operator actually works with. The largest single block of unsorted
+  // mail in the estate as of 2026-08-26 — ~263 messages of "Updated invitation" and "Canceled event" from
+  // colleagues — and no policy could name it: resolution is by sender, and those senders also send real
+  // mail, so a rule on them would archive both.
+  //
+  // `sender_known` is load-bearing, not decoration. It limits this to people the operator has written
+  // back to, which is what separates a colleague's meeting series from an invitation sent by a stranger —
+  // the second is a first contact and belongs to the quarantine rung above, not here.
+  //
+  // `=== true` rather than truthiness: is_calendar is a tri-state and null means the structure was never
+  // observed. Archiving on "not definitely false" would sweep every message that predates the column.
+  if (signals.is_calendar === true && signals.sender_known && signals.age_days > CALENDAR_ARCHIVE_AGE_DAYS) {
+    return {
+      action: "archive",
+      reasons: [
+        "a calendar message, by its MIME structure rather than its subject line",
+        "from a sender this mailbox has replied to",
+        `${signals.age_days} days old, past the ${CALENDAR_ARCHIVE_AGE_DAYS}-day calendar-archive age`,
       ],
     };
   }
