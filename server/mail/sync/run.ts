@@ -4,7 +4,8 @@ import { createDatabaseAutonomyPort, promoteAutoPolicies } from "@server/mail/ac
 import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
-import { classifyMailboxError } from "@server/mail/errors";
+import type { MailboxFailureKind } from "@server/mail/errors";
+import { classifyMailboxError, formatMailboxFailure, readMailboxFailureKind } from "@server/mail/errors";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { createImapProvider } from "@server/mail/providers/imap";
@@ -397,13 +398,13 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
 
     await db
       .update(syncRun)
-      .set({ status: "failed", finished_at, error_message: `${failure.kind}: ${failure.message}`, updatedAt: finished_at })
+      .set({ status: "failed", finished_at, error_message: formatMailboxFailure(failure), updatedAt: finished_at })
       .where(eq(syncRun.id, run_id));
 
     await db
       .update(mailbox)
       .set({
-        last_error: `${failure.kind}: ${failure.message}`,
+        last_error: formatMailboxFailure(failure),
         last_error_at: finished_at,
         ...(failure.disable_mailbox ? { enabled: false } : {}),
         updatedAt: finished_at,
@@ -507,4 +508,23 @@ export async function runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id
     summaries.push(await runMailboxSync({ mailbox_row: row, mode: input.mode }));
   }
   return summaries;
+}
+
+export type MailboxNeedingOperator = { label: string; host: string; reason: MailboxFailureKind | null; error: string | null };
+
+// Mailboxes the sync can no longer reach and will not recover on its own. Both kinds that disable a
+// mailbox land here — a rotated certificate needs the operator to look at it and re-pin, a revoked app
+// password needs a new credential — and neither resolves by waiting.
+export async function listMailboxesNeedingOperator(): Promise<MailboxNeedingOperator[]> {
+  const rows = await db
+    .select({ label: mailbox.label, host: mailbox.host, last_error: mailbox.last_error })
+    .from(mailbox)
+    .where(eq(mailbox.enabled, false));
+
+  return rows.map((row) => ({
+    label: row.label,
+    host: row.host,
+    reason: readMailboxFailureKind(row.last_error),
+    error: row.last_error,
+  }));
 }

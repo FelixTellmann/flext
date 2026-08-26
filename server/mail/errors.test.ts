@@ -1,5 +1,5 @@
-import { expect, test } from "bun:test";
-import { classifyMailboxError } from "./errors";
+import { describe, expect, test } from "bun:test";
+import { classifyMailboxError, formatMailboxFailure, MAILBOX_FAILURE_KINDS, readMailboxFailureKind } from "./errors";
 
 test("an SPKI mismatch is a hard stop that disables the mailbox", () => {
   const failure = classifyMailboxError(new Error("pinned SPKI mismatch for mail.example.com: server presented abc="));
@@ -47,4 +47,28 @@ test("classification still sees a network code through the wrapper", () => {
   const driver = Object.assign(new Error("connect ETIMEDOUT"), { code: "ETIMEDOUT" });
 
   expect(classifyMailboxError(new Error("Failed query: ...", { cause: driver })).kind).toBe("network");
+});
+
+describe("the lastError prefix round-trips", () => {
+  test("every failure kind survives being written to a text column and read back", () => {
+    // Mailbox.lastError and SyncRun.errorMessage are plain text, so the kind lives as a prefix or is
+    // lost — and losing it matters: a rotated certificate and a revoked app password both disable a
+    // mailbox and need completely different responses.
+    for (const kind of MAILBOX_FAILURE_KINDS) {
+      const written = formatMailboxFailure({ kind, message: "something went wrong: with a colon in it" });
+      expect(readMailboxFailureKind(written)).toBe(kind);
+    }
+  });
+
+  test("the real recorded failure that disabled felix@tellmann.co.za reads as a pin problem", () => {
+    const recorded = "tls_pin: pinned SPKI mismatch for mail.tellmann.co.za: server presented 8j0wCQLWS0MygJth8ZIqH6LAZlwhCRaIw46hpmJlgpg=";
+
+    expect(readMailboxFailureKind(recorded)).toBe("tls_pin");
+  });
+
+  test("text this module did not write reads as unknown provenance, never as a guessed kind", () => {
+    expect(readMailboxFailureKind(null)).toBeNull();
+    expect(readMailboxFailureKind("something with no prefix at all")).toBeNull();
+    expect(readMailboxFailureKind("nonsense: a plausible-looking prefix")).toBeNull();
+  });
 });

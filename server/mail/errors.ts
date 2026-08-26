@@ -1,4 +1,6 @@
-export type MailboxFailureKind = "auth" | "tls_pin" | "network" | "unknown";
+export const MAILBOX_FAILURE_KINDS = ["auth", "tls_pin", "network", "unknown"] as const;
+
+export type MailboxFailureKind = (typeof MAILBOX_FAILURE_KINDS)[number];
 
 export type MailboxFailure = {
   kind: MailboxFailureKind;
@@ -66,4 +68,27 @@ export function classifyMailboxError(error: unknown): MailboxFailure {
     return { kind: "network", message, disable_mailbox: false };
   }
   return { kind: "unknown", message, disable_mailbox: false };
+}
+
+// The one spelling of what Mailbox.lastError and SyncRun.errorMessage hold. Both are plain text columns,
+// so the kind has to survive as a prefix or be lost — and it must not be lost: "the certificate rotated
+// again" and "the app password was revoked" both disable a mailbox and need completely different
+// responses from the operator.
+export function formatMailboxFailure(failure: Pick<MailboxFailure, "kind" | "message">): string {
+  return `${failure.kind}: ${failure.message}`;
+}
+
+// The inverse, kept beside the writer so the two cannot drift. Null means the text was written by
+// something other than formatMailboxFailure — an older build, or a hand-edited row — which is a real
+// answer rather than a guess at which kind it might have been.
+export function readMailboxFailureKind(last_error: string | null): MailboxFailureKind | null {
+  if (last_error === null) {
+    return null;
+  }
+  const separator = last_error.indexOf(":");
+  if (separator === -1) {
+    return null;
+  }
+  const prefix = last_error.slice(0, separator);
+  return MAILBOX_FAILURE_KINDS.find((kind) => kind === prefix) ?? null;
 }

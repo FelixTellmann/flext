@@ -9,7 +9,7 @@ import type { UndoResult } from "@server/mail/actions/undo";
 import { undoAction, undoPolicyActions } from "@server/mail/actions/undo";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import { encryptCredential } from "@server/mail/crypto/credentials";
-import { classifyMailboxError } from "@server/mail/errors";
+import { classifyMailboxError, readMailboxFailureKind } from "@server/mail/errors";
 import { CLIENT_SEGMENT_RULE, logicalPathFor } from "@server/mail/filing/paths";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
@@ -240,11 +240,29 @@ export const mailProcedures = {
       // The set is additive by default so a planned key rotation can be staged; replacing is the explicit
       // operator choice after comparing the old and new certificate side by side (§1.2).
       const next = input.replace ? [input.spki_sha256] : [...new Set([...current, input.spki_sha256])];
+
+      // Re-pinning IS the operator saying "I looked at this certificate and I accept it", so the mailbox
+      // comes back in the same action. Without this the re-pin succeeded and the mailbox stayed disabled
+      // with a stale error next to a pin that now matches — which is what kept felix@tellmann.co.za, and
+      // the 8,864 decisions waiting on it, offline after the 2026-08-24 rotation.
+      //
+      // ONLY when the recorded failure was a pin mismatch. A mailbox disabled because its app password
+      // was revoked must not be re-enabled by someone accepting a certificate: the sync would reconnect,
+      // fail authentication, and disable it again, having taught the operator that the button lies.
+      const failure_kind = readMailboxFailureKind(row.last_error);
+      const clears_the_failure = failure_kind === "tls_pin";
+
       await db
         .update(mailbox)
-        .set({ tls_policy: "pinned", pinned_spki: serializeStringList(next), updatedAt: new Date() })
+        .set({
+          tls_policy: "pinned",
+          pinned_spki: serializeStringList(next),
+          ...(clears_the_failure ? { enabled: true, last_error: null, last_error_at: null } : {}),
+          updatedAt: new Date(),
+        })
         .where(eq(mailbox.id, row.id));
-      return { pinned_spki: next };
+
+      return { pinned_spki: next, reenabled: clears_the_failure, previous_failure: failure_kind };
     }),
 
   listObservedAddresses: authed.input(mailbox_id_schema).handler(async ({ input }) => {
