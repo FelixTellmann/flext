@@ -1,5 +1,5 @@
 import type { ExecutableActionKind, MailboxMutation, MailboxState, PlannedAction } from "@server/mail/actions/kinds";
-import { applyToState, FILE_KIND, planFor, QUARANTINE_KIND, QUARANTINE_LOGICAL_PATH } from "@server/mail/actions/kinds";
+import { applyToState, FILE_KIND, planFor, QUARANTINE_KIND, QUARANTINE_LOGICAL_PATH, SEEN_FLAG } from "@server/mail/actions/kinds";
 import type { ActionStateSnapshot } from "@server/mail/actions/state";
 import { captureFolderStates, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
 import type { PolicyScope } from "@server/mail/classify/rules";
@@ -118,6 +118,18 @@ export type ActionJournal = {
   // correct pre-state, and the next run re-captures a post-mutation one; the first capture is the truth,
   // and journal.ts enforces that in the UPDATE's WHERE clause rather than trusting a caller to check.
   recordFromState: (entries: FromStateEntry[]) => Promise<void>;
+  // Inbox-dwell 1.5. Writes Message.isSeen = true for messages this run is about to mark \Seen itself,
+  // BEFORE the STORE is issued. sync/incremental.ts stamps openedAt on any observed unseen->seen
+  // transition, and rescue detection reads openedAt > appliedAt as "the operator rescued this" and
+  // suspends the responsible policy. Without this write the next sync witnesses our OWN flag write,
+  // stamps openedAt, and the action suspends the policy that produced it — which is 565fb58 in a new
+  // disguise, this time generated deliberately on every quarantine.
+  //
+  // Before rather than after, deliberately: if the process dies between the STORE and this write, a
+  // stored isSeen of 0 means the next sync stamps openedAt and the false rescue lands. Writing first
+  // inverts the failure — the mutation fails, the row says seen, and the next flag fetch corrects it
+  // with no openedAt written. One direction self-heals; the other suspends policies.
+  recordSelfMarkedRead: (message_ids: string[]) => Promise<void>;
   // Behind the port for the same reason every other read is: a test that reached a real implementation
   // would open a connection to the production database.
   loadFilingBindings: (input: { mailbox_id: string }) => Promise<FilingBindingRow[]>;
@@ -336,6 +348,12 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
       from_state_json: serializeActionState(requireState(from_states, row.action_id)),
     })),
   );
+
+  // Still step 2, and still before anything is mutated — see ActionJournal.recordSelfMarkedRead for why
+  // the order is load-bearing rather than incidental.
+  if (group.pre_mutations.some((mutation) => mutation.verb === "set_flags" && mutation.add_flags.includes(SEEN_FLAG))) {
+    await journal.recordSelfMarkedRead(live_rows.map((row) => row.message_id));
+  }
 
   // Step 3: one command over the whole UID set.
   const uids = live_rows.map((row) => row.uid);

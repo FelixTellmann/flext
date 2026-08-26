@@ -65,6 +65,7 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
 
     loadPendingActions: async () => unsupported("loadPendingActions"),
     recordFromState: async () => unsupported("recordFromState"),
+    recordSelfMarkedRead: async () => unsupported("recordSelfMarkedRead"),
     loadFilingBindings: async () => unsupported("loadFilingBindings"),
     markApplied: async () => unsupported("markApplied"),
     markFailed: async () => unsupported("markFailed"),

@@ -194,6 +194,9 @@ function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: str
     recordFromState: async () => {
       writes.push("recordFromState");
     },
+    recordSelfMarkedRead: async (message_ids) => {
+      writes.push(`recordSelfMarkedRead ${message_ids.join(",")}`);
+    },
     loadFilingBindings: async (): Promise<FilingBindingRow[]> => [],
     markApplied: async (entries) => {
       writes.push("markApplied");

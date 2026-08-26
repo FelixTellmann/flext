@@ -132,6 +132,20 @@ async function recordFromState(entries: FromStateEntry[]): Promise<void> {
   }
 }
 
+// Inbox-dwell 1.5: the executor's own \Seen writes must be indistinguishable from nothing, not from the
+// operator reading his mail. Recording the transition here means sync/incremental.ts sees a stored isSeen
+// of 1 when it is re-told about the flag, takes the branch that leaves openedAt alone, and stamps nothing.
+//
+// openedAt is deliberately NOT written. There is no evidence of when the message was opened, because it
+// was not — inventing a timestamp is exactly what 565fb58 did to 1,562 messages.
+async function recordSelfMarkedRead(message_ids: string[]): Promise<void> {
+  if (message_ids.length === 0) {
+    return;
+  }
+  const now = new Date();
+  await db.update(message).set({ is_seen: true, updatedAt: now }).where(inArray(message.id, message_ids));
+}
+
 async function markApplied(entries: AppliedEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
@@ -405,6 +419,7 @@ export function createDatabaseJournal(): ActionJournal {
   return {
     loadPendingActions,
     recordFromState,
+    recordSelfMarkedRead,
     loadFilingBindings,
     markApplied,
     markFailed,

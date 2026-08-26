@@ -338,6 +338,7 @@ function createFakeJournal(input: { events: string[]; seed: SeedRow[]; bindings?
 
     loadPendingActions: async () => unsupported("loadPendingActions"),
     recordFromState: async () => unsupported("recordFromState"),
+    recordSelfMarkedRead: async () => unsupported("recordSelfMarkedRead"),
     markApplied: async () => unsupported("markApplied"),
     markFailed: async () => unsupported("markFailed"),
     markDeferred: async () => unsupported("markDeferred"),

@@ -72,6 +72,13 @@ async function applyFlagChanges(input: {
     // later than its own appliedAt, and the rescue detector read the lot as "the operator rescued this"
     // and suspended 34 policies.
     //
+    // Since inbox-dwell 1.5 this guard carries a SECOND load, and the newer one is generated on purpose
+    // rather than stumbled into. The executor can now mark messages \Seen itself (quarantine does, on
+    // every first contact it moves), and that write comes back through this exact path looking like a
+    // human opening the message. actions/journal.ts's recordSelfMarkedRead writes Message.isSeen = 1
+    // BEFORE the STORE goes out, so by the time the flag is reported here the stored value is already 1
+    // and nothing is stamped. Anything that weakens this guard re-arms the sweeps to suspend themselves.
+    //
     // The consequence is deliberate: mail that was already read when it was backfilled never receives an
     // openedAt, because there is no evidence of when it was opened and inventing one is what broke this.
     // felix@tellmann.co.za shows the end state — 4 of 4,719 applied messages carry one — so `opened`

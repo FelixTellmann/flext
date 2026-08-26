@@ -196,6 +196,10 @@ function createFakeJournal(input: {
       return input.bindings ?? [];
     },
 
+    recordSelfMarkedRead: async (message_ids) => {
+      input.events.push(`record_self_marked_read ${message_ids.join(",")}`);
+    },
+
     recordFromState: async (entries) => {
       input.events.push(`record_from_state ${entries.map((entry) => entry.action_id).join(",")}`);
       if (input.crash_at === "record_from_state") {
@@ -1041,5 +1045,84 @@ describe("executeActions filing (§6)", () => {
       `move INBOX 114 -> ${CLIENT_FOLDER}`,
       `move INBOX 115 -> ${TRASH_FOLDER}`,
     ]);
+  });
+});
+
+describe("quarantine marks read (inbox-dwell 1.6/1.7)", () => {
+  test("the \\Seen write is journalled AND issued before the move, and the move is last", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 11, kind: "quarantine" })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 11, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: ".",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+
+    const journalled_at = indexOfEvent(events, "record_from_state");
+    const recorded_seen_at = indexOfEvent(events, "record_self_marked_read");
+    const stored_at = indexOfEvent(events, "set_flags");
+    const moved_at = indexOfEvent(events, "move INBOX");
+
+    // The whole of inbox-dwell 1.5 in four numbers. isSeen reaches the database BEFORE the STORE goes
+    // out, so a crash between them leaves a row claiming seen that the next flag fetch corrects — rather
+    // than a stored 0 that makes sync/incremental.ts stamp openedAt and rescue detection read our own
+    // write as the operator rescuing the message.
+    expect(journalled_at).toBeGreaterThanOrEqual(0);
+    expect(journalled_at).toBeLessThan(recorded_seen_at);
+    expect(recorded_seen_at).toBeLessThan(stored_at);
+
+    // And the flag write precedes the move, because a MOVE invalidates the source UID that addresses it.
+    expect(stored_at).toBeLessThan(moved_at);
+
+    expect(events[stored_at]).toBe("set_flags INBOX 11 +[\\Seen] -[]");
+  });
+
+  test("a message already carrying \\Seen is still marked, so the stored row and the server agree", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 12, kind: "quarantine" })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 12, flags: ["\\Seen"], labels: null }] });
+
+    await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: ".",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    // planFor does not inspect message state, so the prefix is unconditional. That is the cheap and
+    // correct choice: STORE +FLAGS is idempotent, and skipping it per message would mean reading state
+    // into a pure planner to save one no-op command.
+    expect(events).toContain("record_self_marked_read message-12");
+    expect(indexOfEvent(events, "set_flags")).toBeGreaterThanOrEqual(0);
+  });
+
+  test("an archive carries no prefix, so nothing is marked read that was not asked for", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 13, kind: "archive" })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 13, flags: [], labels: null }] });
+
+    await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: ".",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(indexOfEvent(events, "record_self_marked_read")).toBe(-1);
+    expect(indexOfEvent(events, "set_flags")).toBe(-1);
   });
 });

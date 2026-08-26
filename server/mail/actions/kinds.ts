@@ -192,7 +192,14 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "quarantine" && flavor === "gmail") {
     return {
       outcome: "planned",
-      pre_mutations: [],
+      // Inbox-dwell 1.7: quarantine marks read on the way out. A first contact moved to Quarantine/ and left
+      // unread carries its badge into a folder the operator never opens, and "unread" is a claim about the
+      // INBOX that stops being true the moment the message leaves it. Both flavors, so the rule does not
+      // depend on whether quarantine happens to be a move or a label swap.
+      //
+      // Before the move, never after: on a generic server the MOVE invalidates the source UID, and the
+      // executor issues the whole prefix against the same (folder, uids) as the primary mutation.
+      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }],
       kind,
       flavor,
       mutation: {
@@ -206,7 +213,14 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "quarantine") {
     return {
       outcome: "planned",
-      pre_mutations: [],
+      // Inbox-dwell 1.7: quarantine marks read on the way out. A first contact moved to Quarantine/ and left
+      // unread carries its badge into a folder the operator never opens, and "unread" is a claim about the
+      // INBOX that stops being true the moment the message leaves it. Both flavors, so the rule does not
+      // depend on whether quarantine happens to be a move or a label swap.
+      //
+      // Before the move, never after: on a generic server the MOVE invalidates the source UID, and the
+      // executor issues the whole prefix against the same (folder, uids) as the primary mutation.
+      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }],
       kind,
       flavor,
       mutation: {
