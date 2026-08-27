@@ -10,6 +10,11 @@ const admin_links = [
     label: "Turn rules on",
     description: "Rules that have been watching and never allowed to act. Review the big ones and switch them on together.",
   },
+  {
+    to: "/admin/unsubscribe",
+    label: "Stop mail arriving",
+    description: "Senders who offer a way off their list. Every rule elsewhere only hides mail; this stops it being sent.",
+  },
   { to: "/admin/shadow", label: "Shadow Report", description: "What each policy would have done — review before promoting it to auto." },
   {
     to: "/admin/journal",

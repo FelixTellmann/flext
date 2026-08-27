@@ -38,6 +38,7 @@ import { listPromotionCandidates } from "@server/mail/query/promotion";
 import { getDashboardSummary, getSenderProfile, listSenders } from "@server/mail/query/senders";
 import { getShadowReport, getShadowSummary } from "@server/mail/query/shadow";
 import { dismissThread, markThreadDone, snoozeThread } from "@server/mail/query/threads";
+import { listUnsubscribeCandidates } from "@server/mail/query/unsubscribe";
 import { runShadowPass } from "@server/mail/shadow/run";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { runSyncForAllMailboxes } from "@server/mail/sync/run";
@@ -443,6 +444,13 @@ export const mailProcedures = {
         port: createDatabasePromotionPort(),
       }),
     ),
+
+  // Read-only, deliberately. Every rule in this system HIDES mail; unsubscribing is the only thing that
+  // stops it arriving, and it is the one action here the system does not take on the operator's behalf —
+  // a mailto: route would mean SENDING mail, which nothing under server/mail has ever done.
+  listUnsubscribeCandidates: authed
+    .input(z.object({ limit: z.number().int().positive().max(200).default(60) }))
+    .handler(async ({ input }) => listUnsubscribeCandidates({ limit: input.limit })),
 
   demotePolicyAutonomy: authed
     .input(z.object({ sender_policy_id: z.string().min(1) }))
