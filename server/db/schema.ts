@@ -115,6 +115,12 @@ export const mailbox = mysqlTable(
     canonical_folder: varchar("canonicalFolder", { length: 191 }),
     sent_folders: text("sentFolders"),
     trash_retention_days: int("trashRetentionDays"),
+    // When the operator actually checked what this server does with Trash. §1.7 allows two answers: a
+    // retention value, OR an explicitly accepted null meaning Trash simply accumulates — which is itself
+    // safe, just untidy. The column alone cannot tell those apart from "nobody has looked yet", and the
+    // auto_trash gate reads a bare null as UNKNOWN, so without this the honest answer "xneelo never
+    // purges" is unrecordable and the gate stays shut on a question that has been answered.
+    trash_retention_confirmed_at: datetime("trashRetentionConfirmedAt", { fsp: 3 }),
     // Inbox-dwell 1.9: how long a READ message may sit in the inbox before the settled sweep archives it.
     // Per mailbox rather than global so one can be tuned or effectively disabled without a deploy.
     dwell_settled_days: int("dwellSettledDays").default(7).notNull(),

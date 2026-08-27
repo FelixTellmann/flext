@@ -554,3 +554,47 @@ describe("promotePolicyAutonomyBatch", () => {
     expect(result.results[0]?.outcome === "refused" && result.results[0].gate).toBe("missing");
   });
 });
+
+// The gate's own precondition, which was unrecordable until trashRetentionConfirmedAt existed. §1.7
+// accepts a retention value OR a confirmed null; the column alone could only say "some number" or
+// "nothing", and the second was read as unknown.
+describe("the trash retention gate", () => {
+  test("refuses while any mailbox is unchecked, and names it", async () => {
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({
+      events,
+      written,
+      policy: { id: "policy-trash", action: "auto_trash", autonomy_promoted_at: null },
+      mailboxes_missing_retention: ["felix@tellmann.co.za"],
+    });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-trash", reviewed_shadow_record: true, port });
+
+    expect(result.outcome).toBe("refused");
+    expect(result.outcome === "refused" && result.gate).toBe("trash_retention");
+    // Naming the mailbox is the difference between a check the operator can clear and one they can only
+    // route around.
+    expect(result.outcome === "refused" && result.detail).toContain("felix@tellmann.co.za");
+    expect(written.size).toBe(0);
+  });
+
+  test("once every mailbox is answered, the shadow cycle becomes the remaining obstacle", async () => {
+    // Not promoted: an auto_trash policy still has to run a full cycle first. This asserts the gate moves
+    // on to that rather than passing outright, which is what proves retention was the only thing cleared.
+    const events: string[] = [];
+    const written = new Map<string, FakePromotedPolicy>();
+    const port = createFakePromotionPort({
+      events,
+      written,
+      policy: { id: "policy-trash", action: "auto_trash", autonomy_promoted_at: null },
+      mailboxes_missing_retention: [],
+    });
+
+    const result = await promotePolicyAutonomy({ sender_policy_id: "policy-trash", reviewed_shadow_record: true, port });
+
+    expect(result.outcome).toBe("refused");
+    expect(result.outcome === "refused" && result.gate).toBe("shadow_cycle");
+    expect(written.size).toBe(0);
+  });
+});

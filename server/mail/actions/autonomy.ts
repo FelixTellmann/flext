@@ -289,7 +289,14 @@ export function createDatabasePromotionPort(): PromotionPort {
       return Number(row?.count ?? 0);
     },
     mailboxesMissingTrashRetention: async () => {
-      const rows = await db.select({ label: mailbox.label }).from(mailbox).where(isNull(mailbox.trash_retention_days));
+      // Missing means NOBODY HAS LOOKED, not "no retention". §1.7 accepts two answers — a retention value,
+      // or a confirmed null meaning Trash accumulates forever — and a bare null cannot distinguish the
+      // second from the first. Reading null alone as unknown would leave the gate shut on a question the
+      // operator has already answered, which is how a safety check turns into a thing people route around.
+      const rows = await db
+        .select({ label: mailbox.label })
+        .from(mailbox)
+        .where(and(isNull(mailbox.trash_retention_days), isNull(mailbox.trash_retention_confirmed_at)));
       return rows.map((row) => row.label);
     },
     promoteToAuto: (input) => promotePolicyToAuto(input),
