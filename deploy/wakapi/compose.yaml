@@ -24,3 +24,15 @@ services:
       # Wakapi defaults this to true; behind HTTPS it must be false or session cookies leak over http.
       WAKAPI_INSECURE_COOKIES: "false"
       WAKAPI_DISABLE_FRONTPAGE: "true"
+      # Single user: a public leaderboard is pointless, and its default schedule wakes the box
+      # twice a day (06:00 and 18:00) to recalculate it.
+      WAKAPI_LEADERBOARD_ENABLED: "false"
+      # Monthly OPTIMIZE TABLE. On InnoDB this REBUILDS the heartbeats table, and mysqld is shared
+      # with the other apps on this box — so it runs at 04:00 on the 1st, not Wakapi's 08:00 default.
+      WAKAPI_OPTIMIZE_DATABASE_TIME: "0 0 4 1 * *"
+    # A ceiling, not a reservation. Wakapi idles far below this; the cap exists so a runaway import
+    # cannot starve the other containers on the box.
+    deploy:
+      resources:
+        limits:
+          memory: 512M

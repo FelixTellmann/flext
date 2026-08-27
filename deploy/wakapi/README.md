@@ -78,3 +78,35 @@ The image ships its own `HEALTHCHECK` (`/app/healthcheck`, 120 s start period); 
   paywall makes Wakapi's importer see an empty dump and report success.
 - Verify the earliest heartbeat matches the WakaTime account's real start date.
 - After ten minutes of coding, confirm the same heartbeat shows in both dashboards.
+
+## Load on a shared box
+
+This box also runs Coolify, flext.dev and its MySQL, and other apps. What Wakapi adds:
+
+**Steady state — negligible.** A single Go binary; expect it to idle in the tens of MB of RSS and
+at ~0% CPU. The write path is one small `INSERT` per heartbeat, and the WakaTime plugin sends at
+most one heartbeat per file every two minutes while you are actually typing — a few hundred rows a
+day, well under one write per minute averaged out. Reads come off pre-computed summaries, not off
+the heartbeats table.
+
+**Growth — tens of MB a year.** A heartbeat row is a couple of hundred bytes with its indexes;
+a few hundred a day is roughly 150k–200k rows a year.
+
+**Three spikes worth scheduling around:**
+
+1. **The initial WakaTime import** (Task 1.2) is the only sustained write event — years of history
+   at `import_batch_size: 50` heartbeats per transaction. Run it overnight, once.
+2. **The first daily aggregation after that import** (`02:15` by default) walks everything the
+   import just inserted. Subsequent runs only touch the previous day.
+3. **`OPTIMIZE TABLE`, monthly.** On InnoDB this rebuilds the table, and `mysqld` is shared with
+   the other apps here — so `compose.yaml` moves it to `04:00` on the 1st, off Wakapi's `08:00`
+   default.
+
+`compose.yaml` also disables the leaderboard (single user; its default schedule recalculates twice
+a day) and sets a `512M` memory ceiling — a cap, not a reservation, so a runaway import cannot
+starve the neighbours.
+
+**Not tuned, but available if the box gets tight:** `WAKAPI_DATA_RETENTION_MONTHS` (default `-1`,
+keep forever) and `WAKAPI_AGGREGATION_TIME`. Note `heartbeat_max_age` defaults to `4320h` (180
+days) — heartbeats older than that are rejected at the API, which is why the plan keeps permanent
+dual-write to WakaTime rather than relying on a later backfill.
