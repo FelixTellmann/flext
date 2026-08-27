@@ -30,9 +30,15 @@ services:
       # Monthly OPTIMIZE TABLE. On InnoDB this REBUILDS the heartbeats table, and mysqld is shared
       # with the other apps on this box — so it runs at 04:00 on the 1st, not Wakapi's 08:00 default.
       WAKAPI_OPTIMIZE_DATABASE_TIME: "0 0 4 1 * *"
-    # A ceiling, not a reservation. Wakapi idles far below this; the cap exists so a runaway import
-    # cannot starve the other containers on the box.
+      # Hours before another import is allowed. Wakapi records "success" the moment the import
+      # STARTS — before a single heartbeat lands — so a run that dies mid-flight still arms this
+      # and blocks the retry for a day. Override to 0 in Coolify to re-run, then set it back.
+      WAKAPI_IMPORT_MAX_RATE: ${WAKAPI_IMPORT_MAX_RATE:-24}
+    # A ceiling, not a reservation — Wakapi idles in the tens of MB. It is this high only because
+    # the WakaTime importer decodes the ENTIRE history dump into memory before writing any of it,
+    # so the import peak is orders of magnitude above steady state. Still a cap, so a runaway
+    # cannot take the box down with it.
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 2G

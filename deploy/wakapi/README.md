@@ -110,3 +110,35 @@ starve the neighbours.
 keep forever) and `WAKAPI_AGGREGATION_TIME`. Note `heartbeat_max_age` defaults to `4320h` (180
 days) — heartbeats older than that are rejected at the API, which is why the plan keeps permanent
 dual-write to WakaTime rather than relying on a later backfill.
+
+## If an import lands nothing
+
+Two behaviours in Wakapi 2.17.6 (`routes/settings.go`, `services/imports/wakatime_dump.go`) make a
+failed import look like a successful one:
+
+1. **"Success" is recorded before any data arrives.** The handler writes its `last_import_success`
+   key as soon as the importer hands back a channel — which happens immediately, because the dump
+   is fetched asynchronously. A run that dies later still arms the 24-hour rate limit, so the
+   obvious retry is refused with *"last import ran less than 24 hours ago"*.
+2. **A single polling error aborts the run for good.** The poll loop asks WakaTime every 10 seconds
+   whether the dump is ready; any error closes the heartbeat channel and the import ends silently
+   with zero rows. The importer's own source documents a recurring `unexpected EOF` from WakaTime
+   here (upstream issue #602). A container restart does the same thing — the poll loop is an
+   in-process goroutine, so nothing survives it.
+
+**Recovery.** Set `WAKAPI_IMPORT_MAX_RATE=0` in Coolify, redeploy, re-run the import, then put it
+back to `24`. The dump already sitting on WakaTime gets reused rather than regenerated: the
+importer treats *"Wait for your current export to expire before creating another"* as "use the
+existing one", so the retry starts at the download, not at the back of WakaTime's queue.
+
+**If the dump path keeps failing,** tick **use legacy importer** on the import form. It pages
+through WakaTime's heartbeats API day by day instead of downloading one large dump — slower, but
+it has no in-memory decode step and no single point of failure.
+
+**Confirming the outcome** — the log line that tells the truth is
+`downloaded heartbeats for user count=… importedCount=…`. Anything else is optimism. From outside:
+
+```bash
+curl -s -H "Authorization: Basic $(printf '%s' "$WAKAPI_API_KEY" | base64)" \
+  https://wakapi.flext.dev/api/compat/wakatime/v1/users/current/all_time_since_today
+```
