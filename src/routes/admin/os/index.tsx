@@ -34,6 +34,7 @@ function PersonalOsTodayPage() {
 
   const [blocked_id, setBlockedId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<PersonalTask[] | null>(null);
+  const [triaging, setTriaging] = useState(false);
 
   const complete = (id: string) =>
     run(id, "Could not complete the task", async () => {
@@ -121,38 +122,53 @@ function PersonalOsTodayPage() {
 
       {banner !== null && <Banner banner={banner} className="" />}
 
+      {/* A count by default, expanded only when triaged. §3.5: the inbox must never become the
+          working list, and a list of captured thoughts sitting open above today's commitments is
+          precisely that. Expanding is the morning recap's triage step. */}
       {inbox.length > 0 && (
-        <OsPanel title={`Inbox — ${inbox.length}`}>
-          <ul className="flex flex-col gap-2">
-            {inbox.map((task) => (
-              <li
-                className="flex items-center gap-3 rounded border border-gray-200 bg-bg p-3 dark:border-dark-border dark:bg-dark-bg"
-                key={task.id}
-              >
-                <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">{task.title}</span>
-                <button
-                  className="rounded border border-gray-300 px-2 py-1 text-gray-900 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-headings"
-                  disabled={busy_key !== null}
-                  onClick={() => pullToToday(task.id)}
-                  type="button"
+        <section className="rounded-lg border border-gray-200 bg-card p-4 dark:border-dark-border dark:bg-dark-card">
+          <button
+            aria-expanded={triaging}
+            className="flex w-full items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
+            onClick={() => setTriaging((open) => !open)}
+            type="button"
+          >
+            <span className="font-semibold text-gray-900 text-sm dark:text-dark-headings">Inbox &mdash; {inbox.length}</span>
+            <span className="flex-grow text-[13px] text-gray-500 dark:text-dark-text">
+              {triaging ? "one action each, then it is empty" : "captured, not yet triaged"}
+            </span>
+            <span className="text-gray-500 text-xs dark:text-dark-text">{triaging ? "Hide" : "Triage"}</span>
+          </button>
+
+          {triaging && (
+            <ul className="mt-3 flex flex-col gap-2">
+              {inbox.map((task) => (
+                <li
+                  className="flex flex-wrap items-center gap-2 rounded border border-gray-200 bg-bg p-3 dark:border-dark-border dark:bg-dark-bg"
+                  key={task.id}
                 >
-                  today
-                </button>
-                <button
-                  className="rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
-                  disabled={busy_key !== null}
-                  onClick={() => sendToPool(task.id)}
-                  type="button"
-                >
-                  &rarr; pool
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-gray-600 text-xs dark:text-dark-text">
-            A holding pen, not a working list. Everything here is one action from leaving it.
-          </p>
-        </OsPanel>
+                  <span className="min-w-0 flex-grow text-gray-900 text-sm dark:text-dark-headings">{task.title}</span>
+                  {[
+                    { label: "today", run: () => pullToToday(task.id) },
+                    { label: "→ pool", run: () => sendToPool(task.id) },
+                    { label: "someday", run: () => dispose(task.id, "someday") },
+                    { label: "drop", run: () => dispose(task.id, "cancelled") },
+                  ].map((exit) => (
+                    <button
+                      className="rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
+                      disabled={busy_key !== null}
+                      key={exit.label}
+                      onClick={() => exit.run()}
+                      type="button"
+                    >
+                      {exit.label}
+                    </button>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       )}
 
       <OsPanel title="Committed today">
