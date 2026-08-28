@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
 import { personalArea, personalProject, personalTask } from "@server/db/schema";
-import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
 
@@ -130,6 +130,33 @@ export const personalTaskProcedures = {
       .orderBy(asc(personalTask.when_date), asc(personalTask.createdAt));
 
     return rows.map(mapTask);
+  }),
+
+  // A captured thought matches none of the lists above on purpose: it carries no date and belongs to no
+  // week yet, which is exactly the combination each of them excludes. Without this it would be written and
+  // never seen again. The inbox is a holding pen to be emptied, never a working list — nothing in it is
+  // scheduled, and everything in it is one action away from leaving.
+  listInbox: authed.handler(async () => {
+    const rows = await db
+      .select()
+      .from(personalTask)
+      .where(and(eq(personalTask.state, "inbox"), isNull(personalTask.when_date), isNull(personalTask.plan_week)))
+      .orderBy(desc(personalTask.createdAt));
+
+    return rows.map(mapTask);
+  }),
+
+  // The other half of triage. pullToToday is a promise about today; this one only says "this week", which
+  // is why it sets plan_week and leaves when_date alone.
+  sendToPool: authed.input(id_schema).handler(async ({ input }) => {
+    const plan_week = isoWeekOf();
+
+    await db
+      .update(personalTask)
+      .set({ plan_week, when_date: null, state: "open", updatedAt: new Date() })
+      .where(eq(personalTask.id, input.id));
+
+    return { id: input.id, plan_week };
   }),
 
   capture: authed.input(capture_input_schema).handler(async ({ input }) => insertCapturedTask(input.title)),

@@ -20,12 +20,16 @@ const formatOperatorToday = (): string =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: OPERATOR_TIME_ZONE, weekday: "long" }).format(new Date());
 
 export const Route = createFileRoute("/admin/os/")({
-  loader: async () => orpc.personalTasks.listToday(),
+  loader: async () => {
+    const [today, inbox] = await Promise.all([orpc.personalTasks.listToday(), orpc.personalTasks.listInbox()]);
+
+    return { ...today, inbox };
+  },
   component: PersonalOsTodayPage,
 });
 
 function PersonalOsTodayPage() {
-  const { committed, hidden_count, overdue } = Route.useLoaderData();
+  const { committed, hidden_count, inbox, overdue } = Route.useLoaderData();
   const { plan_week } = shell_route.useLoaderData();
   const [, setCaptureOpen] = useCaptureStore();
   const { banner, busy_key, run, setBanner } = useTaskAction();
@@ -43,6 +47,16 @@ function PersonalOsTodayPage() {
     run(id, "Could not push the task out", async () => {
       const result = await orpc.personalTasks.pushOut({ id });
       setBlockedId(result.blocked ? id : null);
+    });
+
+  const pullToToday = (id: string) =>
+    run(id, "Could not pull the task into today", async () => {
+      await orpc.personalTasks.pullToToday({ id });
+    });
+
+  const sendToPool = (id: string) =>
+    run(id, "Could not send the task to the pool", async () => {
+      await orpc.personalTasks.sendToPool({ id });
     });
 
   const dispose = (id: string, state: "someday" | "cancelled") =>
@@ -108,6 +122,40 @@ function PersonalOsTodayPage() {
       </div>
 
       {banner !== null && <Banner banner={banner} className="" />}
+
+      {inbox.length > 0 && (
+        <OsPanel title={`Inbox — ${inbox.length}`}>
+          <ul className="flex flex-col gap-2">
+            {inbox.map((task) => (
+              <li
+                className="flex items-center gap-3 rounded border border-gray-200 bg-bg p-3 dark:border-dark-border dark:bg-dark-bg"
+                key={task.id}
+              >
+                <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">{task.title}</span>
+                <button
+                  className="rounded border border-gray-300 px-2 py-1 text-gray-900 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-headings"
+                  disabled={busy_key !== null}
+                  onClick={() => pullToToday(task.id)}
+                  type="button"
+                >
+                  today
+                </button>
+                <button
+                  className="rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
+                  disabled={busy_key !== null}
+                  onClick={() => sendToPool(task.id)}
+                  type="button"
+                >
+                  &rarr; pool
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-gray-600 text-xs dark:text-dark-text">
+            A holding pen, not a working list. Everything here is one action from leaving it.
+          </p>
+        </OsPanel>
+      )}
 
       <OsPanel title="Committed today">
         {committed.length === 0 && (
