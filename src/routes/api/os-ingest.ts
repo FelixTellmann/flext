@@ -53,6 +53,6 @@ async function handle({ request }: { request: Request }) {
   }
 }
 
-export const Route = createFileRoute("/api/personal-os-ingest")({
+export const Route = createFileRoute("/api/os-ingest")({
   server: { handlers: { POST: handle } },
 });

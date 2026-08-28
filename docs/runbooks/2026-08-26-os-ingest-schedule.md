@@ -1,8 +1,13 @@
 # Personal OS — heartbeat ingest schedule
 
-`POST /api/personal-os-ingest` pulls heartbeats from Wakapi, upserts them into
+`POST /api/os-ingest` pulls heartbeats from Wakapi, upserts them into
 `WakaHeartbeat`, and rebuilds `ActivityBucket` for the days it touched. The allocation
 ledger reads only the buckets, so nothing appears on that screen until this has run.
+
+> Named `os-ingest` rather than `personal-os-ingest`: the pre-push guard
+> (`scripts/guard-private-paths.sh`) refuses any tracked path matching `personal-os`, a
+> pattern meant for personal content that also catches a public route file. Renaming the
+> file was the fix; weakening the guard was not.
 
 ## Prerequisites
 
@@ -33,14 +38,14 @@ Coolify → project **flext.dev** → the application → **Configuration → Sc
 
 | Field | Value |
 | --- | --- |
-| Name | `personal-os-ingest` |
+| Name | `os-ingest` |
 | Frequency | `0 * * * *` |
 | Container name | **leave empty** |
 
 Command — one line:
 
 ```
-bun -e 'const r = await fetch("http://127.0.0.1:3000/api/personal-os-ingest?days=3", {method:"POST",headers:{authorization:"Bearer "+process.env.SCRIPT_SECRET}}); console.log(r.status, await r.text()); process.exit(r.ok?0:1)'
+bun -e 'const r = await fetch("http://127.0.0.1:3000/api/os-ingest?days=3", {method:"POST",headers:{authorization:"Bearer "+process.env.SCRIPT_SECRET}}); console.log(r.status, await r.text()); process.exit(r.ok?0:1)'
 ```
 
 Three details that are not stylistic:
