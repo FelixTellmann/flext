@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, datetime, float, index, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, datetime, decimal, float, index, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 // ─── Account ─────────────────────────────────────────────────────────────────
 // Prisma @map directives rename DB columns: e.g. refresh_token → "refreshToken" in DB
@@ -516,5 +516,60 @@ export const personalTask = mysqlTable(
   (table) => ({
     stateWhenIndex: index("PersonalTask_state_whenDate_idx").on(table.state, table.when_date),
     planWeekIndex: index("PersonalTask_planWeek_poolOrder_idx").on(table.plan_week, table.pool_order),
+  }),
+);
+
+// ─── WakaHeartbeat ───────────────────────────────────────────────────────────
+// The raw signal, stored exactly as the tracker reported it. Wakapi's own duration figures are
+// conservative by construction — heartbeatPadding = 0 in its services/duration.go credits nothing to a
+// session's final beat, which measured ~78–81% of WakaTime's hours on dense days and worse on fragmented
+// ones. Keeping the heartbeats means the ledger computes its own totals and inherits none of that.
+export const wakaHeartbeat = mysqlTable(
+  "WakaHeartbeat",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    // Wakapi's own heartbeat id. The unique index on it is what makes a re-ingest idempotent, which
+    // matters because the scheduled job deliberately overlaps its own windows.
+    source_id: varchar("sourceId", { length: 191 }).notNull(),
+    // The project name exactly as it arrived, never normalised. One project answers to several names
+    // upstream (doveras / doveras-donor-parser; listify / listify-2 / a Windows path), so normalisation
+    // belongs to bucketing where it can be corrected — rewriting it here would destroy the evidence.
+    project: varchar("project", { length: 191 }),
+    language: varchar("language", { length: 191 }),
+    entity: text("entity"),
+    is_write: boolean("isWrite").default(false).notNull(),
+    occurred_at: datetime("occurredAt", { fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    sourceUnique: uniqueIndex("WakaHeartbeat_sourceId_key").on(table.source_id),
+    occurredIndex: index("WakaHeartbeat_occurredAt_idx").on(table.occurred_at),
+  }),
+);
+
+// ─── ActivityBucket ──────────────────────────────────────────────────────────
+// Derived from the heartbeats above and safe to rebuild from them at any time.
+export const activityBucket = mysqlTable(
+  "ActivityBucket",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    // Start of a 15-minute bucket. The scheduler's grid and the ledger's grain are the same.
+    bucket_start: datetime("bucketStart", { fsp: 3 }).notNull(),
+    // The NORMALISED project name, unlike WakaHeartbeat.project above.
+    project: varchar("project", { length: 191 }).notNull(),
+    // Fraction of the bucket attributed to this project, 0–1, summing to 1 per bucket. That constraint is
+    // the reason a day's totals can never exceed wall-clock time however many editors were open.
+    //
+    // The only decimal column in this database, and mysql2 hands decimals back as STRINGS — every read of
+    // this column must go through Number() at the row-mapping boundary, the way the mail queries already
+    // treat COUNT and SUM. `seconds` beside it is an int and needs no such care.
+    share: decimal("share", { precision: 5, scale: 4 }).notNull(),
+    seconds: int("seconds").notNull(),
+  },
+  (table) => ({
+    bucketProjectUnique: uniqueIndex("ActivityBucket_bucketStart_project_key").on(table.bucket_start, table.project),
   }),
 );
