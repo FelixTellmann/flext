@@ -1,6 +1,6 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
-import { personalArea, personalProject, personalTask } from "@server/db/schema";
+import { personalArea, personalProject, personalTask, personalTaskDeferral } from "@server/db/schema";
 import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
@@ -158,10 +158,17 @@ export const personalTaskProcedures = {
     }
 
     const deferral_count = row.deferral_count + 1;
+    const now = new Date();
+
+    // Recorded with no reason on purpose: an unexplained push-out is exactly what the review later
+    // asks a task to account for. A row whose reason is set marks a debt already settled.
+    await db
+      .insert(personalTaskDeferral)
+      .values({ id: crypto.randomUUID(), task_id: row.id, from_date: row.when_date, to_date: null, reason: null });
 
     await db
       .update(personalTask)
-      .set({ deferral_count, when_date: null, plan_week: isoWeekOf(), updatedAt: new Date() })
+      .set({ deferral_count, when_date: null, plan_week: isoWeekOf(), updatedAt: now })
       .where(eq(personalTask.id, row.id));
 
     return { id: row.id, deferral_count, blocked: false };
