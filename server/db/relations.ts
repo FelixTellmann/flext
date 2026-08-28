@@ -1,5 +1,18 @@
 import { relations } from "drizzle-orm";
-import { account, mailbox, mailboxCursor, mailboxObservedAddress, message, sender, session, syncRun, user } from "./schema";
+import {
+  account,
+  mailbox,
+  mailboxCursor,
+  mailboxObservedAddress,
+  message,
+  personalArea,
+  personalProject,
+  personalTask,
+  sender,
+  session,
+  syncRun,
+  user,
+} from "./schema";
 
 // ─── User relations ──────────────────────────────────────────────────────────
 export const userRelations = relations(user, ({ many }) => ({
@@ -64,5 +77,32 @@ export const syncRunRelations = relations(syncRun, ({ one }) => ({
   mailbox: one(mailbox, {
     fields: [syncRun.mailbox_id],
     references: [mailbox.id],
+  }),
+}));
+
+// ─── PersonalArea relations ──────────────────────────────────────────────────
+export const personalAreaRelations = relations(personalArea, ({ many }) => ({
+  projects: many(personalProject),
+  tasks: many(personalTask),
+}));
+
+// ─── PersonalProject relations ───────────────────────────────────────────────
+export const personalProjectRelations = relations(personalProject, ({ one, many }) => ({
+  area: one(personalArea, {
+    fields: [personalProject.area_id],
+    references: [personalArea.id],
+  }),
+  tasks: many(personalTask),
+}));
+
+// ─── PersonalTask relations ──────────────────────────────────────────────────
+export const personalTaskRelations = relations(personalTask, ({ one }) => ({
+  area: one(personalArea, {
+    fields: [personalTask.area_id],
+    references: [personalArea.id],
+  }),
+  project: one(personalProject, {
+    fields: [personalTask.project_id],
+    references: [personalProject.id],
   }),
 }));

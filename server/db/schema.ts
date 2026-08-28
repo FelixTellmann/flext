@@ -450,3 +450,71 @@ export const filingBinding = mysqlTable(
     mailboxLogicalPathUnique: uniqueIndex("FilingBinding_mailboxId_logicalPath_key").on(table.mailbox_id, table.logical_path),
   }),
 );
+
+// ─── PersonalArea ────────────────────────────────────────────────────────────
+// The personal OS lives behind the same ADMIN_EMAIL gate as everything else under /admin.
+export const personalArea = mysqlTable("PersonalArea", {
+  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  // dormant | maintenance | sprint | always_on — validated at the zod layer, never a DB enum
+  mode: varchar("mode", { length: 191 }).default("always_on").notNull(),
+  soft_floor_hours: int("softFloorHours"),
+  sort_order: int("sortOrder").default(0).notNull(),
+  archived_at: datetime("archivedAt", { fsp: 3 }),
+});
+
+// ─── PersonalProject ─────────────────────────────────────────────────────────
+export const personalProject = mysqlTable(
+  "PersonalProject",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    // The Wakapi project name, when this project maps to tracked coding work. One project can
+    // answer to several names upstream (doveras / doveras-donor-parser), so the ledger phase
+    // normalises rather than trusting this to be one-to-one.
+    waka_project: varchar("wakaProject", { length: 191 }),
+    sort_order: int("sortOrder").default(0).notNull(),
+    archived_at: datetime("archivedAt", { fsp: 3 }),
+  },
+  (table) => ({
+    areaIndex: index("PersonalProject_areaId_idx").on(table.area_id),
+  }),
+);
+
+// ─── PersonalTask ────────────────────────────────────────────────────────────
+export const personalTask = mysqlTable(
+  "PersonalTask",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }),
+    project_id: varchar("projectId", { length: 191 }),
+    title: varchar("title", { length: 512 }).notNull(),
+    notes: text("notes"),
+    // inbox | open | someday | completed | cancelled
+    state: varchar("state", { length: 191 }).default("inbox").notNull(),
+    // Hides the task until this date. A visibility control, never a commitment.
+    when_date: datetime("whenDate", { fsp: 3 }),
+    // Externally imposed. Hides nothing and schedules nothing.
+    deadline: datetime("deadline", { fsp: 3 }),
+    // ISO week, e.g. "2026-W35". Membership of the week pool; carries no date.
+    plan_week: varchar("planWeek", { length: 16 }),
+    pool_order: int("poolOrder").default(0).notNull(),
+    // Incremented ONLY when a task committed to today is pushed out.
+    deferral_count: int("deferralCount").default(0).notNull(),
+    estimate_minutes: int("estimateMinutes"),
+    focus: boolean("focus").default(false).notNull(),
+    completed_at: datetime("completedAt", { fsp: 3 }),
+    cancelled_at: datetime("cancelledAt", { fsp: 3 }),
+  },
+  (table) => ({
+    stateWhenIndex: index("PersonalTask_state_whenDate_idx").on(table.state, table.when_date),
+    planWeekIndex: index("PersonalTask_planWeek_poolOrder_idx").on(table.plan_week, table.pool_order),
+  }),
+);

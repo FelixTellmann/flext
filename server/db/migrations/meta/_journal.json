@@ -92,6 +92,13 @@
       "when": 1787832118279,
       "tag": "0012_heavy_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1787906592536,
+      "tag": "0013_friendly_rhino",
+      "breakpoints": true
     }
   ]
 }
