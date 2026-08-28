@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { FC } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import { formatColon, formatLong, formatShort, formatWeekday } from "./-format";
 import { OsPanel } from "./-task-row";
 
 type LedgerRange = Awaited<ReturnType<typeof orpc.personalLedger.listRange>>;
@@ -45,18 +46,6 @@ export const Route = createFileRoute("/admin/os/ledger")({
   },
   component: PersonalOsLedgerPage,
 });
-
-const formatLong = (seconds: number): string =>
-  `${Math.floor(seconds / 3600)}h ${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}m`;
-
-const formatShort = (seconds: number): string =>
-  `${Math.floor(seconds / 3600)}h${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}`;
-
-const formatColon = (seconds: number): string =>
-  `${Math.floor(seconds / 3600)}:${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}`;
-
-const weekdayOf = (date: string): string =>
-  new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "short" }).format(new Date(`${date}T00:00:00.000Z`));
 
 const dayTotals = (ledger: LedgerRange): number[] =>
   ledger.dates.map((_, index) => ledger.streams.reduce((sum, stream) => sum + (stream.per_day[index] ?? 0), 0));
@@ -168,7 +157,7 @@ function PersonalOsLedgerPage() {
                   className={clsx("min-w-0 flex-1 text-center text-[13px]", (totals[index] ?? 0) === 0 ? "text-gray-400" : "text-gray-600")}
                   key={date}
                 >
-                  {weekdayOf(date)}
+                  {formatWeekday(date)}
                 </p>
               ))}
             </div>
@@ -190,7 +179,7 @@ function PersonalOsLedgerPage() {
                 <th className="py-1.5 text-left font-medium">Stream</th>
                 {ledger.dates.map((date) => (
                   <th className="py-1.5 text-right font-medium" key={date}>
-                    {weekdayOf(date)}
+                    {formatWeekday(date)}
                   </th>
                 ))}
                 <th className="py-1.5 text-right font-medium">Total</th>

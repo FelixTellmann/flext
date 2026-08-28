@@ -5,6 +5,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
 import { Banner } from "../-outcome-banner";
+import { formatDay } from "./-format";
 import { OsPanel } from "./-task-row";
 import { useTaskAction } from "./-use-task-action";
 
@@ -23,9 +24,6 @@ export const Route = createFileRoute("/admin/os/logbook")({
   },
   component: PersonalOsLogbookPage,
 });
-
-const formatDay = (iso: string): string =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" }).format(new Date(iso));
 
 function PersonalOsLogbookPage() {
   const { entries, range } = Route.useLoaderData();

@@ -1,5 +1,5 @@
-import { timingSafeEqual } from "node:crypto";
 import { serverEnv } from "@server/env";
+import { matchesScriptSecret } from "@server/script-auth";
 import { WakaConfigError } from "@server/wakatime/client";
 import { runHeartbeatIngest } from "@server/wakatime/ingest";
 import { createFileRoute } from "@tanstack/react-router";
@@ -12,17 +12,6 @@ const ingest_days_schema = z.coerce.number().int().min(1).max(14).default(3);
 // serverEnv(), never the root env.ts — that one validates ~40 variables at import time and calls
 // process.exit(1) on a miss, which from a route would read environment during the Docker build and kill
 // the container over variables this endpoint never touches.
-function matchesSecret(provided: string | null, expected_secret: string): boolean {
-  if (provided === null) {
-    return false;
-  }
-  const expected = Buffer.from(`Bearer ${expected_secret}`, "utf8");
-  const candidate = Buffer.from(provided, "utf8");
-  if (expected.length !== candidate.length) {
-    return false;
-  }
-  return timingSafeEqual(expected, candidate);
-}
 
 async function handle({ request }: { request: Request }) {
   const secret = serverEnv().SCRIPT_SECRET;
@@ -31,7 +20,7 @@ async function handle({ request }: { request: Request }) {
     return Response.json({ error: "SCRIPT_SECRET is not configured on this deployment" }, { status: 503 });
   }
 
-  if (!matchesSecret(request.headers.get("authorization"), secret)) {
+  if (!matchesScriptSecret(request.headers.get("authorization"), secret)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { type FC, type ReactNode, useState } from "react";
 import { orpc } from "~/integrations/orpc";
 import { Banner } from "../-outcome-banner";
+import { formatColon, formatDay } from "./-format";
 import { OsPanel } from "./-task-row";
 import { useTaskAction } from "./-use-task-action";
 
@@ -25,12 +26,6 @@ export const Route = createFileRoute("/admin/os/review")({
   },
   component: PersonalOsReviewPage,
 });
-
-const formatColon = (seconds: number): string =>
-  `${Math.floor(seconds / 3600)}:${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}`;
-
-const formatDay = (iso: string): string =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Johannesburg" }).format(new Date(iso));
 
 const Step: FC<{ children: ReactNode; number: number; title: string }> = ({ children, number, title }) => (
   <OsPanel title={`${number}   ${title}`}>{children}</OsPanel>

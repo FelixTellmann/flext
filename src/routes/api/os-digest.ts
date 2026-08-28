@@ -1,24 +1,13 @@
-import { timingSafeEqual } from "node:crypto";
 import { db } from "@server/db/drizzle";
 import { activityBucket, personalTask } from "@server/db/schema";
 import { serverEnv } from "@server/env";
 import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
+import { matchesScriptSecret } from "@server/script-auth";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, count, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 // serverEnv(), never the root env.ts — that one validates ~40 variables at import time and calls
 // process.exit(1) on a miss, which from a route would read environment during the Docker build.
-function matchesSecret(provided: string | null, expected_secret: string): boolean {
-  if (provided === null) {
-    return false;
-  }
-  const expected = Buffer.from(`Bearer ${expected_secret}`, "utf8");
-  const candidate = Buffer.from(provided, "utf8");
-  if (expected.length !== candidate.length) {
-    return false;
-  }
-  return timingSafeEqual(expected, candidate);
-}
 
 const hours = (seconds: number): string => `${Math.floor(seconds / 3600)}h${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}`;
 
@@ -81,7 +70,7 @@ async function handle({ request }: { request: Request }) {
     return Response.json({ error: "SCRIPT_SECRET is not configured on this deployment" }, { status: 503 });
   }
 
-  if (!matchesSecret(request.headers.get("authorization"), secret)) {
+  if (!matchesScriptSecret(request.headers.get("authorization"), secret)) {
     return new Response("Unauthorized", { status: 401 });
   }
 

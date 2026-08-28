@@ -1,21 +1,13 @@
-import { OPERATOR_TIME_ZONE } from "@server/operator-day";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 import { orpc } from "~/integrations/orpc";
 import { Banner, toFailureBanner } from "../-outcome-banner";
 import { useCaptureStore } from "./-capture";
+import { formatDay, formatToday } from "./-format";
 import { BlockedNotice, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
 import { useTaskAction } from "./-use-task-action";
 
 const shell_route = getRouteApi("/admin/os");
-
-// Formatted in the operator's zone rather than the browser's, so the server render and the hydrated one
-// agree and a date the server called today never prints as yesterday.
-const formatTaskDay = (iso: string): string =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: OPERATOR_TIME_ZONE }).format(new Date(iso));
-
-const formatOperatorToday = (): string =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: OPERATOR_TIME_ZONE, weekday: "long" }).format(new Date());
 
 export const Route = createFileRoute("/admin/os/")({
   loader: async () => {
@@ -99,7 +91,7 @@ function PersonalOsTodayPage() {
     <>
       <div className="flex items-center gap-3">
         <div className="flex-grow">
-          <p className="font-bold text-gray-900 text-xl dark:text-dark-headings">{formatOperatorToday()}</p>
+          <p className="font-bold text-gray-900 text-xl dark:text-dark-headings">{formatToday()}</p>
           <p className="mt-0.5 text-gray-500 text-sm dark:text-dark-text">
             Week {plan_week.slice(-2)} &middot; {hidden_count} {hidden_count === 1 ? "item" : "items"} hidden until later
           </p>
@@ -181,7 +173,7 @@ function PersonalOsTodayPage() {
       {overdue.length > 0 && (
         <OsPanel title="Overdue">
           <div className="flex flex-col gap-2">
-            {overdue.map((task) => renderTask(task, task.when_date === null ? null : formatTaskDay(task.when_date)))}
+            {overdue.map((task) => renderTask(task, task.when_date === null ? null : formatDay(task.when_date)))}
           </div>
         </OsPanel>
       )}
@@ -200,7 +192,7 @@ function PersonalOsTodayPage() {
               <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1 dark:border-dark-border" key={task.id}>
                 <span className="flex-grow text-gray-500 text-sm dark:text-dark-text">{task.title}</span>
                 <span className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text">
-                  {task.when_date === null ? "someday" : `when ${formatTaskDay(task.when_date)}`}
+                  {task.when_date === null ? "someday" : `when ${formatDay(task.when_date)}`}
                 </span>
               </div>
             ))}
