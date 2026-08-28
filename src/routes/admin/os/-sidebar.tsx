@@ -1,15 +1,16 @@
-import { ClockIcon, MagnifyingGlassIcon, RectangleStackIcon, Squares2X2Icon, SunIcon } from "@heroicons/react/24/outline";
+import { ChartBarIcon, ClockIcon, MagnifyingGlassIcon, RectangleStackIcon, Squares2X2Icon, SunIcon } from "@heroicons/react/24/outline";
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { FC } from "react";
 
 // The sidebar and the command palette both read this, so the two surfaces cannot disagree about which
-// screens exist. Ledger, Goals, Habits and the weekly review are drawn in the design canvas but have no
+// screens exist. Week, Goals, Habits and the weekly review are drawn in the design canvas but have no
 // route yet — they arrive with the phases that give them something to show.
 export const os_screens = [
   { Icon: SunIcon, label: "Today", to: "/admin/os" },
   { Icon: RectangleStackIcon, label: "Week pool", to: "/admin/os/pool" },
   { Icon: Squares2X2Icon, label: "Areas", to: "/admin/os/areas" },
+  { Icon: ChartBarIcon, label: "Ledger", to: "/admin/os/ledger" },
 ] as const;
 
 // A count is the reason the sidebar earns 240px over a row of tabs: it says how much is waiting without
