@@ -3,6 +3,7 @@ import { useState } from "react";
 import { orpc } from "~/integrations/orpc";
 import type { OutcomeBanner } from "../-outcome-banner";
 import { Banner, toFailureBanner } from "../-outcome-banner";
+import { useCaptureStore } from "./-capture";
 import { formatOperatorToday, formatTaskDay, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
 
 const shell_route = getRouteApi("/admin/os");
@@ -16,6 +17,7 @@ function PersonalOsTodayPage() {
   const { committed, hidden_count, overdue } = Route.useLoaderData();
   const { plan_week } = shell_route.useLoaderData();
   const router = useRouter();
+  const [, setCaptureOpen] = useCaptureStore();
 
   const [banner, setBanner] = useState<OutcomeBanner | null>(null);
   const [busy_id, setBusyId] = useState<string | null>(null);
@@ -121,6 +123,13 @@ function PersonalOsTodayPage() {
           type="button"
         >
           {hidden === null ? "Peek" : "Hide"}
+        </button>
+        <button
+          className="rounded bg-accent px-3 py-2 font-medium text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:bg-accent-dark dark:text-dark-bg"
+          onClick={() => setCaptureOpen(true)}
+          type="button"
+        >
+          Capture
         </button>
       </div>
 

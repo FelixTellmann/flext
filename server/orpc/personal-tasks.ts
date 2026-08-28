@@ -60,6 +60,19 @@ const mapTask = (row: TaskRow) => ({
 // for real — and the system refuses to let it bounce a fourth time.
 const DEFERRAL_LIMIT = 3;
 
+export const capture_input_schema = z.object({ title: z.string().min(1).max(512) });
+
+// Shared with src/routes/api/personal-capture.ts, which the iOS Shortcut posts to with a bearer token and
+// no session — it cannot reach an `authed` procedure, and capture is the one thing that must work from
+// wherever the thought turns up.
+export const insertCapturedTask = async (title: string): Promise<{ id: string }> => {
+  const id = crypto.randomUUID();
+
+  await db.insert(personalTask).values({ id, title, state: "inbox", updatedAt: new Date() });
+
+  return { id };
+};
+
 export const personalTaskProcedures = {
   listToday: authed.handler(async () => {
     const day_start = operatorDayStart();
@@ -113,14 +126,7 @@ export const personalTaskProcedures = {
     return rows.map(mapTask);
   }),
 
-  capture: authed.input(z.object({ title: z.string().min(1).max(512) })).handler(async ({ input }) => {
-    const id = crypto.randomUUID();
-    const now = new Date();
-
-    await db.insert(personalTask).values({ id, title: input.title, state: "inbox", updatedAt: now });
-
-    return { id };
-  }),
+  capture: authed.input(capture_input_schema).handler(async ({ input }) => insertCapturedTask(input.title)),
 
   pullToToday: authed.input(task_id_schema).handler(async ({ input }) => {
     const when_date = operatorDayStart();
