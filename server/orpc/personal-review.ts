@@ -244,12 +244,68 @@ export const personalReviewProcedures = {
         )
         .orderBy(desc(personalTask.updatedAt));
 
+      // The reason a task was last rescheduled is the most useful thing on a settled row: it is the
+      // only place the logbook can say why something took as long as it did.
+      const reasons = new Map<string, string>();
+
+      if (rows.length > 0) {
+        const history = await db
+          .select()
+          .from(personalTaskDeferral)
+          .where(
+            inArray(
+              personalTaskDeferral.task_id,
+              rows.map((row) => row.id),
+            ),
+          )
+          .orderBy(desc(personalTaskDeferral.createdAt));
+
+        for (const row of history) {
+          if (row.reason !== null && !reasons.has(row.task_id)) {
+            reasons.set(row.task_id, row.reason);
+          }
+        }
+      }
+
       return rows.map((row) => ({
         id: row.id,
         title: row.title,
         state: row.state,
         deferral_count: row.deferral_count,
+        reason: reasons.get(row.id) ?? null,
         settled_at: (row.completed_at ?? row.cancelled_at)?.toISOString() ?? null,
       }));
     }),
+
+  // §16 rule 8: "An explicit archive-everything action exists. Trust is restored by amnesty, not
+  // triage." A backlog that has become frightening is not fixed by working through it — it is fixed
+  // by being allowed to declare it over. Everything lands in the logbook, so nothing is destroyed
+  // and any of it can be read back.
+  //
+  // Guarded by a typed phrase rather than a confirm dialog: this should cost a deliberate sentence,
+  // never a stray click, and it is the one action in the system that touches every open task.
+  archiveEverything: authed.input(z.object({ confirm: z.literal("archive everything") })).handler(async () => {
+    const now = new Date();
+
+    const open = await db
+      .select({ id: personalTask.id })
+      .from(personalTask)
+      .where(inArray(personalTask.state, ["inbox", "open", "someday"]));
+
+    if (open.length === 0) {
+      return { archived: 0 };
+    }
+
+    await db
+      .update(personalTask)
+      .set({ state: "cancelled", cancelled_at: now, when_date: null, plan_week: null, updatedAt: now })
+      .where(
+        inArray(
+          personalTask.id,
+          open.map((row) => row.id),
+        ),
+      );
+
+    return { archived: open.length };
+  }),
 };
