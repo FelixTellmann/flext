@@ -1,5 +1,5 @@
 import { readSession } from "@server/auth/session";
-import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useLocation } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import type { FC } from "react";
 
@@ -9,6 +9,13 @@ const fetchSession = createServerFn({ method: "POST" }).handler(async () => {
 
 const AdminLayout: FC = () => {
   const { session } = Route.useRouteContext();
+  const in_personal_os = useLocation({ select: (location) => location.pathname.startsWith("/admin/os") });
+
+  // The personal OS brings its own full-bleed shell, sidebar and identity. Stacking this centred column
+  // and its "Admin" heading on top would give it two headers and pull the sidebar off the edge it needs.
+  if (in_personal_os) {
+    return <Outlet />;
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
