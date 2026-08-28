@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
 import { personalArea, personalProject, personalTask } from "@server/db/schema";
 import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
+import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
@@ -30,10 +31,6 @@ const mapTask = (row: TaskRow) => ({
   cancelled_at: row.cancelled_at?.toISOString() ?? null,
   created_at: row.createdAt.toISOString(),
 });
-
-// Three strikes and the task stops moving. It owes a disposition — drop it, shrink it, or schedule it
-// for real — and the system refuses to let it bounce a fourth time.
-const DEFERRAL_LIMIT = 3;
 
 // A steady weekly budget would fire a warning most weeks and be dismissed most weeks, because the work
 // genuinely arrives in bursts. The mode is what lets a zero-hour fortnight on a dormant area read as
