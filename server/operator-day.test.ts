@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isoWeekOf, operatorDateOf, operatorDayStart, operatorDayStartOf } from "@server/operator-day";
+import { isoWeekOf, operatorDateOf, operatorDayStart, operatorDayStartOf, operatorWeekRange } from "@server/operator-day";
 
 // Every screen, bucket and ingest window in the personal OS agrees on one definition of "today". These
 // tests exist because the failure is silent: a boundary that drifts by two hours does not throw, it just
@@ -47,5 +47,19 @@ describe("isoWeekOf pins a week to the year holding its Thursday", () => {
     const sunday = isoWeekOf(new Date("2026-08-30T10:00:00.000Z"));
 
     expect(monday).toBe(sunday);
+  });
+});
+
+describe("operatorWeekRange runs Monday to Sunday", () => {
+  test("a Friday resolves to its own Monday and Sunday", () => {
+    expect(operatorWeekRange(new Date("2026-08-28T10:00:00.000Z"))).toEqual({ from: "2026-08-24", to: "2026-08-30" });
+  });
+
+  test("a Sunday belongs to the week that is ending, not the one starting", () => {
+    expect(operatorWeekRange(new Date("2026-08-30T10:00:00.000Z"))).toEqual({ from: "2026-08-24", to: "2026-08-30" });
+  });
+
+  test("a Monday is the first day of its own week", () => {
+    expect(operatorWeekRange(new Date("2026-08-24T10:00:00.000Z"))).toEqual({ from: "2026-08-24", to: "2026-08-30" });
   });
 });

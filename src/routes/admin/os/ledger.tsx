@@ -1,4 +1,4 @@
-import { DAY_MS, OPERATOR_UTC_OFFSET_MINUTES } from "@server/operator-day";
+import { operatorWeekRange } from "@server/operator-day";
 import { createFileRoute } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { FC } from "react";
@@ -31,24 +31,13 @@ const OTHER_SERIES = { bar: "bg-gray-400", label: "Other", swatch: "bg-gray-400"
 
 const seriesOf = (project: string) => SERIES[project] ?? { ...OTHER_SERIES, label: project === "unknown" ? "Unattributed" : project };
 
-const operatorToday = (): Date => new Date(Date.now() + OPERATOR_UTC_OFFSET_MINUTES * 60_000);
-
-// Monday to Sunday of the operator's current week, computed from the fixed offset rather than the browser
-// so the server render and the hydrated one agree on which week they are showing.
-const currentWeekRange = (): { from: string; to: string } => {
-  const today = operatorToday();
-  const monday = new Date(today.getTime() - ((today.getUTCDay() + 6) % 7) * DAY_MS);
-
-  return { from: monday.toISOString().slice(0, 10), to: new Date(monday.getTime() + 6 * DAY_MS).toISOString().slice(0, 10) };
-};
-
 const ledger_search_schema = z.object({ from: z.string().optional(), to: z.string().optional() });
 
 export const Route = createFileRoute("/admin/os/ledger")({
   validateSearch: ledger_search_schema,
   loaderDeps: ({ search }) => search,
   loader: async ({ deps }) => {
-    const week = currentWeekRange();
+    const week = operatorWeekRange();
     const range = { from: deps.from ?? week.from, to: deps.to ?? week.to };
     const [ledger, overlap] = await Promise.all([orpc.personalLedger.listRange(range), orpc.personalLedger.listOverlap(range)]);
 

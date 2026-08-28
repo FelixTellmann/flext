@@ -34,3 +34,12 @@ export const isoWeekOf = (at: Date = new Date()): string => {
   const week = Math.ceil(((shifted.getTime() - first_thursday) / DAY_MS + 1) / 7);
   return `${year}-W${String(week).padStart(2, "0")}`;
 };
+
+// Monday to Sunday of the operator's week containing `at`, as YYYY-MM-DD. ISO weeks start Monday,
+// and getUTCDay() calls Sunday 0 — hence the shift, which is the bug this exists to only write once.
+export const operatorWeekRange = (at: Date = new Date()): { from: string; to: string } => {
+  const shifted = new Date(at.getTime() + OPERATOR_UTC_OFFSET_MINUTES * 60_000);
+  const monday = new Date(shifted.getTime() - ((shifted.getUTCDay() + 6) % 7) * DAY_MS);
+
+  return { from: monday.toISOString().slice(0, 10), to: new Date(monday.getTime() + 6 * DAY_MS).toISOString().slice(0, 10) };
+};
