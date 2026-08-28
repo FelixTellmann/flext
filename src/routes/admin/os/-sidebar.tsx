@@ -1,4 +1,5 @@
 import {
+  ArchiveBoxIcon,
   CalendarDaysIcon,
   ChartBarIcon,
   ClockIcon,
@@ -20,6 +21,9 @@ export const os_screens = [
   { Icon: Squares2X2Icon, label: "Areas", to: "/admin/os/areas" },
   { Icon: ChartBarIcon, label: "Ledger", to: "/admin/os/ledger" },
   { Icon: CalendarDaysIcon, label: "Weekly review", to: "/admin/os/review" },
+  // Not on the design canvas, which predates it. Added because "cancel to logbook" is only a real
+  // exit if the logbook is reachable — otherwise the fourth disposition looks like deletion.
+  { Icon: ArchiveBoxIcon, label: "Logbook", to: "/admin/os/logbook" },
 ] as const;
 
 // A count is the reason the sidebar earns 240px over a row of tabs: it says how much is waiting without
