@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
-import { personalTask } from "@server/db/schema";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { personalArea, personalProject, personalTask } from "@server/db/schema";
+import { and, asc, count, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
 
@@ -14,8 +14,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // The states a task is still live in. `someday` is live but deliberately out of sight, and it is
 // therefore excluded here and surfaced only through listHidden.
 const ACTIVE_STATES = ["inbox", "open"] as const;
-
-const task_id_schema = z.object({ id: z.string().min(1) });
 
 const operatorDayStart = (at: Date = new Date()): Date => {
   const shifted = new Date(at.getTime() + OPERATOR_UTC_OFFSET_MINUTES * 60_000);
@@ -59,6 +57,14 @@ const mapTask = (row: TaskRow) => ({
 // Three strikes and the task stops moving. It owes a disposition — drop it, shrink it, or schedule it
 // for real — and the system refuses to let it bounce a fourth time.
 const DEFERRAL_LIMIT = 3;
+
+// A steady weekly budget would fire a warning most weeks and be dismissed most weeks, because the work
+// genuinely arrives in bursts. The mode is what lets a zero-hour fortnight on a dormant area read as
+// normal rather than as a deficit. Validated here rather than as a DB enum so adding a fifth mode is a
+// code change, not a migration.
+const area_mode_schema = z.enum(["dormant", "maintenance", "sprint", "always_on"]);
+
+const id_schema = z.object({ id: z.string().min(1) });
 
 export const capture_input_schema = z.object({ title: z.string().min(1).max(512) });
 
@@ -128,7 +134,7 @@ export const personalTaskProcedures = {
 
   capture: authed.input(capture_input_schema).handler(async ({ input }) => insertCapturedTask(input.title)),
 
-  pullToToday: authed.input(task_id_schema).handler(async ({ input }) => {
+  pullToToday: authed.input(id_schema).handler(async ({ input }) => {
     const when_date = operatorDayStart();
     const now = new Date();
 
@@ -139,7 +145,7 @@ export const personalTaskProcedures = {
     return { id: input.id, when_date: when_date.toISOString() };
   }),
 
-  pushOut: authed.input(task_id_schema).handler(async ({ input }) => {
+  pushOut: authed.input(id_schema).handler(async ({ input }) => {
     const [row] = await db.select().from(personalTask).where(eq(personalTask.id, input.id)).limit(1);
 
     if (!row) {
@@ -161,7 +167,7 @@ export const personalTaskProcedures = {
   }),
 
   setState: authed
-    .input(task_id_schema.extend({ state: z.enum(["open", "someday", "completed", "cancelled"]) }))
+    .input(id_schema.extend({ state: z.enum(["open", "someday", "completed", "cancelled"]) }))
     .handler(async ({ input }) => {
       const now = new Date();
 
@@ -191,4 +197,140 @@ export const personalTaskProcedures = {
   }),
 
   currentWeek: authed.handler(async () => ({ plan_week: isoWeekOf() })),
+
+  // One query per table rather than a join, then assembled here: the tree is five areas deep at most, and
+  // a join would repeat every area row once per project only to be unpicked again on this side.
+  listAreas: authed.handler(async () => {
+    const [areas, projects, open_rows] = await Promise.all([
+      db.select().from(personalArea).where(isNull(personalArea.archived_at)).orderBy(asc(personalArea.sort_order), asc(personalArea.name)),
+      db
+        .select()
+        .from(personalProject)
+        .where(isNull(personalProject.archived_at))
+        .orderBy(asc(personalProject.sort_order), asc(personalProject.name)),
+      db
+        .select({ area_id: personalTask.area_id, project_id: personalTask.project_id, open: count() })
+        .from(personalTask)
+        .where(inArray(personalTask.state, [...ACTIVE_STATES]))
+        .groupBy(personalTask.area_id, personalTask.project_id),
+    ]);
+
+    const area_open = new Map<string, number>();
+    const project_open = new Map<string, number>();
+
+    for (const row of open_rows) {
+      if (row.area_id !== null) {
+        area_open.set(row.area_id, (area_open.get(row.area_id) ?? 0) + row.open);
+      }
+      if (row.project_id !== null) {
+        project_open.set(row.project_id, (project_open.get(row.project_id) ?? 0) + row.open);
+      }
+    }
+
+    return areas.map((area) => ({
+      id: area.id,
+      name: area.name,
+      mode: area.mode,
+      soft_floor_hours: area.soft_floor_hours,
+      sort_order: area.sort_order,
+      // Counts every open task filed to the area, including the ones sitting directly under it with no
+      // project — so an area total is never smaller than the projects listed beneath it.
+      open_count: area_open.get(area.id) ?? 0,
+      projects: projects
+        .filter((project) => project.area_id === area.id)
+        .map((project) => ({
+          id: project.id,
+          name: project.name,
+          waka_project: project.waka_project,
+          sort_order: project.sort_order,
+          open_count: project_open.get(project.id) ?? 0,
+        })),
+    }));
+  }),
+
+  createArea: authed
+    .input(
+      z.object({ name: z.string().min(1).max(191), mode: area_mode_schema.default("always_on"), sort_order: z.number().int().default(0) }),
+    )
+    .handler(async ({ input }) => {
+      const id = crypto.randomUUID();
+
+      await db.insert(personalArea).values({ id, name: input.name, mode: input.mode, sort_order: input.sort_order, updatedAt: new Date() });
+
+      return { id };
+    }),
+
+  updateArea: authed
+    .input(
+      id_schema.extend({
+        name: z.string().min(1).max(191).optional(),
+        mode: area_mode_schema.optional(),
+        soft_floor_hours: z.number().int().min(0).max(168).nullable().optional(),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const { id, ...fields } = input;
+
+      await db
+        .update(personalArea)
+        .set({ ...fields, updatedAt: new Date() })
+        .where(eq(personalArea.id, id));
+
+      return { id };
+    }),
+
+  // Archived, never deleted. An area that stops mattering still owns the history of everything filed to
+  // it, and the allocation ledger reads that history backwards.
+  archiveArea: authed.input(id_schema).handler(async ({ input }) => {
+    const now = new Date();
+
+    await db.update(personalArea).set({ archived_at: now, updatedAt: now }).where(eq(personalArea.id, input.id));
+
+    return { id: input.id };
+  }),
+
+  createProject: authed
+    .input(
+      z.object({
+        area_id: z.string().min(1),
+        name: z.string().min(1).max(191),
+        waka_project: z.string().min(1).max(191).nullable().default(null),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const id = crypto.randomUUID();
+
+      await db
+        .insert(personalProject)
+        .values({ id, area_id: input.area_id, name: input.name, waka_project: input.waka_project, updatedAt: new Date() });
+
+      return { id };
+    }),
+
+  updateProject: authed
+    .input(
+      id_schema.extend({
+        area_id: z.string().min(1).optional(),
+        name: z.string().min(1).max(191).optional(),
+        waka_project: z.string().min(1).max(191).nullable().optional(),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const { id, ...fields } = input;
+
+      await db
+        .update(personalProject)
+        .set({ ...fields, updatedAt: new Date() })
+        .where(eq(personalProject.id, id));
+
+      return { id };
+    }),
+
+  archiveProject: authed.input(id_schema).handler(async ({ input }) => {
+    const now = new Date();
+
+    await db.update(personalProject).set({ archived_at: now, updatedAt: now }).where(eq(personalProject.id, input.id));
+
+    return { id: input.id };
+  }),
 };
