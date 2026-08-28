@@ -573,3 +573,47 @@ export const activityBucket = mysqlTable(
     bucketProjectUnique: uniqueIndex("ActivityBucket_bucketStart_project_key").on(table.bucket_start, table.project),
   }),
 );
+
+// ─── PersonalReview ──────────────────────────────────────────────────────────
+// Keyed to an ISO week and to nothing else. There is deliberately no due date: §6.6 requires the
+// review to slip forward gracefully, and a date-pinned review manufactures a miss out of a Sunday
+// spent elsewhere — exactly the failure state §16 exists to avoid. A week reviewed on Tuesday is
+// not late, and a week never reviewed simply never completes.
+export const personalReview = mysqlTable(
+  "PersonalReview",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    plan_week: varchar("planWeek", { length: 16 }).notNull(),
+    opened_at: datetime("openedAt", { fsp: 3 }).notNull(),
+    // Null forever is a legitimate resting state, not a failure. Nothing reports on it.
+    completed_at: datetime("completedAt", { fsp: 3 }),
+    someday_swept_at: datetime("somedaySweptAt", { fsp: 3 }),
+    note: text("note"),
+  },
+  (table) => ({
+    weekUnique: uniqueIndex("PersonalReview_planWeek_key").on(table.plan_week),
+  }),
+);
+
+// ─── PersonalTaskDeferral ────────────────────────────────────────────────────
+// One row per push-out. PersonalTask.deferral_count stays as the cheap read the row badge uses;
+// this is what makes §3.4's discriminator computable — a task deferred to a changed date with a
+// stable estimate is scheduling, one deferred repeatedly onto consecutive days is avoidance. A
+// bare counter records how many times and never to when or why.
+export const personalTaskDeferral = mysqlTable(
+  "PersonalTaskDeferral",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    task_id: varchar("taskId", { length: 191 }).notNull(),
+    from_date: datetime("fromDate", { fsp: 3 }),
+    // Set only when the exit was "schedule with a reason"; null for every other way out.
+    to_date: datetime("toDate", { fsp: 3 }),
+    reason: varchar("reason", { length: 512 }),
+  },
+  (table) => ({
+    taskIndex: index("PersonalTaskDeferral_taskId_idx").on(table.task_id),
+  }),
+);
