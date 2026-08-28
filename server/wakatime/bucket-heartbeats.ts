@@ -7,6 +7,9 @@ export type ActivityBucketRow = { bucket_start: Date; project: string; seconds: 
 export const BUCKET_SECONDS = 900;
 const BUCKET_MS = BUCKET_SECONDS * 1000;
 
+// share is stored as decimal(5,4), so a share is a whole number of ten-thousandths.
+const SHARE_UNITS = 10_000;
+
 // The name in a heartbeat is not the name of the project. The same work arrives as `doveras` and
 // `doveras-donor-parser`, and as `listify`, `listify-2` and `C:\development\listify` — measured on the
 // 2026 data, treating them as distinct under-reported Doveras by roughly 40%. The mechanical rules below
@@ -41,19 +44,21 @@ export const normaliseProjectName = (raw: string | null): string => {
 
 const bucketStartOf = (at: Date): Date => new Date(Math.floor(at.getTime() / BUCKET_MS) * BUCKET_MS);
 
-// Whole seconds, summing to exactly BUCKET_SECONDS, apportioned by heartbeat count. Largest-remainder
-// rather than rounding each share independently: rounding leaks or loses a second or two per bucket, and
-// across a day of buckets that becomes a visible drift in the only number the ledger exists to report.
-const apportionSeconds = (counts: number[]): number[] => {
-  const total = counts.reduce((sum, count) => sum + count, 0);
+// Whole units, summing to exactly `into`, apportioned by weight. Largest-remainder rather than rounding
+// each value independently: independent rounding both leaks and loses, and it does not merely drift — six
+// equal projects each round 0.16667 up to 0.1667, and the six sum to 1.0002. A share total above one is
+// the one direction this must never fail in, because it is the claim that the bucket held more time than
+// it had. Measured on real heartbeats, five buckets in three days did exactly that.
+const apportion = (weights: number[], into: number): number[] => {
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
 
   if (total === 0) {
-    return counts.map(() => 0);
+    return weights.map(() => 0);
   }
 
-  const exact = counts.map((count) => (BUCKET_SECONDS * count) / total);
+  const exact = weights.map((weight) => (into * weight) / total);
   const floored = exact.map((value) => Math.floor(value));
-  let remainder = BUCKET_SECONDS - floored.reduce((sum, value) => sum + value, 0);
+  let remainder = into - floored.reduce((sum, value) => sum + value, 0);
 
   const by_largest_remainder = exact
     .map((value, index) => ({ fraction: value - floored[index]!, index }))
@@ -92,18 +97,20 @@ export const bucketHeartbeats = (input: { heartbeats: HeartbeatForBucketing[] })
 
   for (const [bucket_key, projects] of [...counts_by_bucket.entries()].sort(([left], [right]) => left - right)) {
     const entries = [...projects.entries()].sort(([left], [right]) => left.localeCompare(right));
-    const seconds = apportionSeconds(entries.map(([, count]) => count));
+    const seconds = apportion(
+      entries.map(([, count]) => count),
+      BUCKET_SECONDS,
+    );
+    // Apportioned from the seconds rather than divided out of them, so the two can never disagree AND the
+    // rounded shares still sum to exactly one. Dividing and rounding gives one or the other, never both.
+    const share_units = apportion(seconds, SHARE_UNITS);
 
     for (const [index, [project]] of entries.entries()) {
-      // share is derived from the apportioned seconds rather than computed alongside them, so the two can
-      // never disagree. Stored at 4dp, so three equal projects hold 0.3333 each and sum to 0.9999 — under
-      // one, never over, which is the direction the invariant has to fail in. `seconds` stays the
-      // authoritative figure and is what the ledger sums.
       rows.push({
         bucket_start: new Date(bucket_key),
         project,
         seconds: seconds[index]!,
-        share: Math.round((seconds[index]! / BUCKET_SECONDS) * 10_000) / 10_000,
+        share: share_units[index]! / SHARE_UNITS,
       });
     }
   }
