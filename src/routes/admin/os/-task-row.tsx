@@ -5,16 +5,31 @@ import { Spinner } from "../-ui";
 
 export type PersonalTask = Awaited<ReturnType<typeof orpc.personalTasks.listToday>>["committed"][number];
 
-// The server decides what "today" means at a fixed +02:00 (OPERATOR_UTC_OFFSET_MINUTES in
-// server/orpc/personal-tasks.ts). Naming the zone here rather than reading the browser's keeps the server
-// render and the hydrated one identical, and stops a date the server called today printing as yesterday.
-const OPERATOR_TIME_ZONE = "Africa/Johannesburg";
-
-export const formatTaskDay = (iso: string): string =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: OPERATOR_TIME_ZONE }).format(new Date(iso));
-
-export const formatOperatorToday = (): string =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: OPERATOR_TIME_ZONE, weekday: "long" }).format(new Date());
+// pushOut answers `blocked` rather than throwing: refusing a fourth deferral is a decision the system
+// made on purpose, not a failure. Saying nothing would make the click look broken instead of answered.
+export const BlockedNotice: FC<{ disabled: boolean; onDispose: (state: "someday" | "cancelled") => void }> = ({ disabled, onDispose }) => (
+  <div className="flex flex-wrap items-center gap-2 rounded border border-danger p-2.5 text-[13px] text-gray-600 dark:text-dark-text">
+    <span className="flex-grow">
+      Blocked at three. It stops moving and owes a disposition: do it today, put it in someday, or cancel it to the logbook.
+    </span>
+    <button
+      className="rounded border border-gray-300 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border"
+      disabled={disabled}
+      onClick={() => onDispose("someday")}
+      type="button"
+    >
+      Someday
+    </button>
+    <button
+      className="rounded border border-gray-300 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border"
+      disabled={disabled}
+      onClick={() => onDispose("cancelled")}
+      type="button"
+    >
+      Drop it
+    </button>
+  </div>
+);
 
 // A task that has bounced back has to look different from a fresh one, or the count is bookkeeping nobody
 // reads. Nothing is drawn at zero: the badge is news, not a field.

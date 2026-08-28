@@ -166,23 +166,21 @@ export const personalTaskProcedures = {
     return { id: row.id, deferral_count, blocked: false };
   }),
 
-  setState: authed
-    .input(id_schema.extend({ state: z.enum(["open", "someday", "completed", "cancelled"]) }))
-    .handler(async ({ input }) => {
-      const now = new Date();
+  setState: authed.input(id_schema.extend({ state: z.enum(["open", "someday", "completed", "cancelled"]) })).handler(async ({ input }) => {
+    const now = new Date();
 
-      await db
-        .update(personalTask)
-        .set({
-          state: input.state,
-          completed_at: input.state === "completed" ? now : null,
-          cancelled_at: input.state === "cancelled" ? now : null,
-          updatedAt: now,
-        })
-        .where(eq(personalTask.id, input.id));
+    await db
+      .update(personalTask)
+      .set({
+        state: input.state,
+        completed_at: input.state === "completed" ? now : null,
+        cancelled_at: input.state === "cancelled" ? now : null,
+        updatedAt: now,
+      })
+      .where(eq(personalTask.id, input.id));
 
-      return { id: input.id, state: input.state };
-    }),
+    return { id: input.id, state: input.state };
+  }),
 
   reorderPool: authed.input(z.object({ ids: z.array(z.string().min(1)).max(500) })).handler(async ({ input }) => {
     const now = new Date();

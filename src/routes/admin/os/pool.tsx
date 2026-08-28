@@ -1,10 +1,10 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { orpc } from "~/integrations/orpc";
-import type { OutcomeBanner } from "../-outcome-banner";
-import { Banner, toFailureBanner } from "../-outcome-banner";
-import { DeferralBadge, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
+import { Banner } from "../-outcome-banner";
+import { BlockedNotice, DeferralBadge, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
+import { useTaskAction } from "./-use-task-action";
 
 export const Route = createFileRoute("/admin/os/pool")({
   loader: async () => {
@@ -18,10 +18,8 @@ export const Route = createFileRoute("/admin/os/pool")({
 
 function PersonalOsPoolPage() {
   const { plan_week, pool, today } = Route.useLoaderData();
-  const router = useRouter();
+  const { banner, busy_key, run } = useTaskAction();
 
-  const [banner, setBanner] = useState<OutcomeBanner | null>(null);
-  const [busy_id, setBusyId] = useState<string | null>(null);
   const [blocked_id, setBlockedId] = useState<string | null>(null);
   const [dragging_id, setDraggingId] = useState<string | null>(null);
   const [order, setOrder] = useState<PersonalTask[]>(pool);
@@ -32,38 +30,25 @@ function PersonalOsPoolPage() {
     setOrder(pool);
   }, [pool]);
 
-  const runOnTask = async (id: string, prefix: string, run: () => Promise<void>) => {
-    setBusyId(id);
-    setBanner(null);
-    try {
-      await run();
-      await router.invalidate();
-    } catch (error) {
-      setBanner(toFailureBanner(prefix, error));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const pull = (id: string) =>
-    runOnTask(id, "Could not pull the task into today", async () => {
+    run(id, "Could not pull the task into today", async () => {
       await orpc.personalTasks.pullToToday({ id });
     });
 
   const complete = (id: string) =>
-    runOnTask(id, "Could not complete the task", async () => {
+    run(id, "Could not complete the task", async () => {
       setBlockedId(null);
       await orpc.personalTasks.setState({ id, state: "completed" });
     });
 
   const pushOut = (id: string) =>
-    runOnTask(id, "Could not push the task out", async () => {
+    run(id, "Could not push the task out", async () => {
       const result = await orpc.personalTasks.pushOut({ id });
       setBlockedId(result.blocked ? id : null);
     });
 
   const dispose = (id: string, state: "someday" | "cancelled") =>
-    runOnTask(id, "Could not settle the task", async () => {
+    run(id, "Could not settle the task", async () => {
       setBlockedId(null);
       await orpc.personalTasks.setState({ id, state });
     });
@@ -84,15 +69,10 @@ function PersonalOsPoolPage() {
 
   // Only pool_order moves, and nothing else does. A task can be dragged to the bottom every day of the
   // week without that counting as a deferral — the count is reserved for a same-day promise you broke.
-  const persistOrder = async (ids: string[]) => {
-    setBanner(null);
-    try {
+  const persistOrder = (ids: string[]) =>
+    run("reorder", "Could not save the new order", async () => {
       await orpc.personalTasks.reorderPool({ ids });
-    } catch (error) {
-      setBanner(toFailureBanner("Could not save the new order", error));
-    }
-    await router.invalidate();
-  };
+    });
 
   const dragOver = (target_id: string) => {
     if (dragging_id === null || dragging_id === target_id) {
@@ -147,7 +127,10 @@ function PersonalOsPoolPage() {
                 )}
                 draggable
                 key={task.id}
-                onDragEnd={() => persistOrder(order.map((item) => item.id))}
+                onDragEnd={() => {
+                  setDraggingId(null);
+                  void persistOrder(order.map((item) => item.id));
+                }}
                 onDragOver={(event) => {
                   event.preventDefault();
                   dragOver(task.id);
@@ -173,7 +156,7 @@ function PersonalOsPoolPage() {
                 <DeferralBadge count={task.deferral_count} />
                 <button
                   className="rounded border border-gray-300 px-2.5 py-1 text-gray-900 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-headings"
-                  disabled={busy_id !== null}
+                  disabled={busy_key !== null}
                   onClick={() => pull(task.id)}
                   type="button"
                 >
@@ -194,34 +177,14 @@ function PersonalOsPoolPage() {
               <div className="flex flex-col gap-2" key={task.id}>
                 <TaskRow
                   action_label="Not today"
-                  busy={busy_id === task.id}
-                  disabled={busy_id !== null}
+                  busy={busy_key === task.id}
+                  disabled={busy_key !== null}
                   onAction={() => pushOut(task.id)}
                   onComplete={() => complete(task.id)}
                   overdue_since={null}
                   task={task}
                 />
-                {blocked_id === task.id && (
-                  <div className="flex flex-wrap items-center gap-2 rounded border border-danger p-2.5 text-[13px] text-gray-600 dark:text-dark-text">
-                    <span className="flex-grow">
-                      Blocked at three. It stops moving and owes a disposition: do it today, someday, or cancel it to the logbook.
-                    </span>
-                    <button
-                      className="rounded border border-gray-300 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:border-dark-border"
-                      onClick={() => dispose(task.id, "someday")}
-                      type="button"
-                    >
-                      Someday
-                    </button>
-                    <button
-                      className="rounded border border-gray-300 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:border-dark-border"
-                      onClick={() => dispose(task.id, "cancelled")}
-                      type="button"
-                    >
-                      Drop it
-                    </button>
-                  </div>
-                )}
+                {blocked_id === task.id && <BlockedNotice disabled={busy_key !== null} onDispose={(state) => dispose(task.id, state)} />}
               </div>
             ))}
           </div>

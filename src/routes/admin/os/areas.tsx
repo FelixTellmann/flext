@@ -1,9 +1,9 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { type FC, useState } from "react";
 import { orpc } from "~/integrations/orpc";
-import type { OutcomeBanner } from "../-outcome-banner";
-import { Banner, toFailureBanner } from "../-outcome-banner";
+import { Banner } from "../-outcome-banner";
 import { OsPanel } from "./-task-row";
+import { useTaskAction } from "./-use-task-action";
 
 type Area = Awaited<ReturnType<typeof orpc.personalTasks.listAreas>>[number];
 
@@ -33,25 +33,12 @@ const OpenCount: FC<{ count: number }> = ({ count }) => {
 
 function PersonalOsAreasPage() {
   const areas = Route.useLoaderData();
-  const router = useRouter();
+  const { banner, busy_key, run } = useTaskAction();
 
-  const [banner, setBanner] = useState<OutcomeBanner | null>(null);
-  const [busy, setBusy] = useState(false);
   const [new_area_name, setNewAreaName] = useState("");
   const [new_project_name, setNewProjectName] = useState<Record<string, string>>({});
 
-  const run = async (prefix: string, work: () => Promise<void>) => {
-    setBusy(true);
-    setBanner(null);
-    try {
-      await work();
-      await router.invalidate();
-    } catch (error) {
-      setBanner(toFailureBanner(prefix, error));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const busy = busy_key !== null;
 
   const addArea = () => {
     const name = new_area_name.trim();
@@ -60,7 +47,7 @@ function PersonalOsAreasPage() {
       return;
     }
 
-    return run("Could not add the area", async () => {
+    return run("new-area", "Could not add the area", async () => {
       await orpc.personalTasks.createArea({ name, mode: "always_on", sort_order: areas.length });
       setNewAreaName("");
     });
@@ -73,7 +60,7 @@ function PersonalOsAreasPage() {
       return;
     }
 
-    return run("Could not add the project", async () => {
+    return run(area_id, "Could not add the project", async () => {
       await orpc.personalTasks.createProject({ area_id, name, waka_project: null });
       setNewProjectName((current) => ({ ...current, [area_id]: "" }));
     });
@@ -105,7 +92,7 @@ function PersonalOsAreasPage() {
                 className="rounded-sm border border-gray-300 bg-bg px-1.5 text-gray-500 text-xs dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
                 disabled={busy}
                 onChange={(event) =>
-                  run("Could not change the mode", async () => {
+                  run(area.id, "Could not change the mode", async () => {
                     await orpc.personalTasks.updateArea({ id: area.id, mode: event.target.value as (typeof AREA_MODES)[number] });
                   })
                 }
@@ -121,7 +108,9 @@ function PersonalOsAreasPage() {
               <button
                 className="text-gray-400 text-xs hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:text-dark-text"
                 disabled={busy}
-                onClick={() => run("Could not archive the area", async () => void (await orpc.personalTasks.archiveArea({ id: area.id })))}
+                onClick={() =>
+                  run(area.id, "Could not archive the area", async () => void (await orpc.personalTasks.archiveArea({ id: area.id })))
+                }
                 type="button"
               >
                 archive
@@ -144,7 +133,11 @@ function PersonalOsAreasPage() {
                   className="text-gray-400 text-xs hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:text-dark-text"
                   disabled={busy}
                   onClick={() =>
-                    run("Could not archive the project", async () => void (await orpc.personalTasks.archiveProject({ id: project.id })))
+                    run(
+                      project.id,
+                      "Could not archive the project",
+                      async () => void (await orpc.personalTasks.archiveProject({ id: project.id })),
+                    )
                   }
                   type="button"
                 >

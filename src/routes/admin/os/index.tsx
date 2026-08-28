@@ -1,12 +1,23 @@
-import { createFileRoute, getRouteApi, useRouter } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 import { orpc } from "~/integrations/orpc";
-import type { OutcomeBanner } from "../-outcome-banner";
 import { Banner, toFailureBanner } from "../-outcome-banner";
 import { useCaptureStore } from "./-capture";
-import { formatOperatorToday, formatTaskDay, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
+import { BlockedNotice, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
+import { useTaskAction } from "./-use-task-action";
 
 const shell_route = getRouteApi("/admin/os");
+
+// The server decides what "today" means at a fixed +02:00 (OPERATOR_UTC_OFFSET_MINUTES in
+// server/orpc/personal-tasks.ts). Naming the zone here rather than reading the browser's keeps the server
+// render and the hydrated one identical, and stops a date the server called today printing as yesterday.
+const OPERATOR_TIME_ZONE = "Africa/Johannesburg";
+
+const formatTaskDay = (iso: string): string =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: OPERATOR_TIME_ZONE }).format(new Date(iso));
+
+const formatOperatorToday = (): string =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: OPERATOR_TIME_ZONE, weekday: "long" }).format(new Date());
 
 export const Route = createFileRoute("/admin/os/")({
   loader: async () => orpc.personalTasks.listToday(),
@@ -16,43 +27,26 @@ export const Route = createFileRoute("/admin/os/")({
 function PersonalOsTodayPage() {
   const { committed, hidden_count, overdue } = Route.useLoaderData();
   const { plan_week } = shell_route.useLoaderData();
-  const router = useRouter();
   const [, setCaptureOpen] = useCaptureStore();
+  const { banner, busy_key, run, setBanner } = useTaskAction();
 
-  const [banner, setBanner] = useState<OutcomeBanner | null>(null);
-  const [busy_id, setBusyId] = useState<string | null>(null);
   const [blocked_id, setBlockedId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<PersonalTask[] | null>(null);
 
-  const runOnTask = async (id: string, prefix: string, run: () => Promise<void>) => {
-    setBusyId(id);
-    setBanner(null);
-    try {
-      await run();
-      await router.invalidate();
-    } catch (error) {
-      setBanner(toFailureBanner(prefix, error));
-    } finally {
-      setBusyId(null);
-    }
-  };
-
   const complete = (id: string) =>
-    runOnTask(id, "Could not complete the task", async () => {
+    run(id, "Could not complete the task", async () => {
       setBlockedId(null);
       await orpc.personalTasks.setState({ id, state: "completed" });
     });
 
-  // pushOut answers `blocked` rather than throwing, because refusing a fourth deferral is a decision the
-  // system made on purpose — not an error. The row has to say so, or the click looks broken.
   const pushOut = (id: string) =>
-    runOnTask(id, "Could not push the task out", async () => {
+    run(id, "Could not push the task out", async () => {
       const result = await orpc.personalTasks.pushOut({ id });
       setBlockedId(result.blocked ? id : null);
     });
 
   const dispose = (id: string, state: "someday" | "cancelled") =>
-    runOnTask(id, "Could not settle the task", async () => {
+    run(id, "Could not settle the task", async () => {
       setBlockedId(null);
       await orpc.personalTasks.setState({ id, state });
     });
@@ -77,34 +71,14 @@ function PersonalOsTodayPage() {
     <div className="flex flex-col gap-2" key={task.id}>
       <TaskRow
         action_label="Not today"
-        busy={busy_id === task.id}
-        disabled={busy_id !== null}
+        busy={busy_key === task.id}
+        disabled={busy_key !== null}
         onAction={() => pushOut(task.id)}
         onComplete={() => complete(task.id)}
         overdue_since={overdue_since}
         task={task}
       />
-      {blocked_id === task.id && (
-        <div className="flex flex-wrap items-center gap-2 rounded border border-warning/40 bg-warning/10 p-2 text-sm text-warning">
-          <span className="flex-grow">
-            Pushed out {task.deferral_count} times already. It stays here until you decide what it really is.
-          </span>
-          <button
-            className="rounded border border-warning/40 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
-            onClick={() => dispose(task.id, "someday")}
-            type="button"
-          >
-            Someday
-          </button>
-          <button
-            className="rounded border border-warning/40 px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info"
-            onClick={() => dispose(task.id, "cancelled")}
-            type="button"
-          >
-            Drop it
-          </button>
-        </div>
-      )}
+      {blocked_id === task.id && <BlockedNotice disabled={busy_key !== null} onDispose={(state) => dispose(task.id, state)} />}
     </div>
   );
 
