@@ -1,3 +1,4 @@
+import { OPERATOR_TIME_ZONE } from "@server/operator-day";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useState } from "react";
 import { orpc } from "~/integrations/orpc";
@@ -8,11 +9,8 @@ import { useTaskAction } from "./-use-task-action";
 
 const shell_route = getRouteApi("/admin/os");
 
-// The server decides what "today" means at a fixed +02:00 (OPERATOR_UTC_OFFSET_MINUTES in
-// server/orpc/personal-tasks.ts). Naming the zone here rather than reading the browser's keeps the server
-// render and the hydrated one identical, and stops a date the server called today printing as yesterday.
-const OPERATOR_TIME_ZONE = "Africa/Johannesburg";
-
+// Formatted in the operator's zone rather than the browser's, so the server render and the hydrated one
+// agree and a date the server called today never prints as yesterday.
 const formatTaskDay = (iso: string): string =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: OPERATOR_TIME_ZONE }).format(new Date(iso));
 

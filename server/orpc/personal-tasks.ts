@@ -1,37 +1,14 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
 import { personalArea, personalProject, personalTask } from "@server/db/schema";
+import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
 
-// South Africa observes no daylight saving, so a fixed offset is correct year-round and spares us a
-// date library. "Today" must be the operator's day, not the container's — the container runs UTC, and
-// a UTC day would start at 02:00 local, quietly reclassifying the small hours as yesterday.
-const OPERATOR_UTC_OFFSET_MINUTES = 120;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 // The states a task is still live in. `someday` is live but deliberately out of sight, and it is
 // therefore excluded here and surfaced only through listHidden.
 const ACTIVE_STATES = ["inbox", "open"] as const;
-
-const operatorDayStart = (at: Date = new Date()): Date => {
-  const shifted = new Date(at.getTime() + OPERATOR_UTC_OFFSET_MINUTES * 60_000);
-  shifted.setUTCHours(0, 0, 0, 0);
-  return new Date(shifted.getTime() - OPERATOR_UTC_OFFSET_MINUTES * 60_000);
-};
-
-const isoWeekOf = (at: Date = new Date()): string => {
-  const shifted = new Date(at.getTime() + OPERATOR_UTC_OFFSET_MINUTES * 60_000);
-  shifted.setUTCHours(0, 0, 0, 0);
-  // ISO 8601 pins a week to the year containing its Thursday, which is why the year cannot simply be
-  // read off the date: 2026-12-31 can belong to week 1 of 2027.
-  shifted.setUTCDate(shifted.getUTCDate() + 4 - (shifted.getUTCDay() || 7));
-  const year = shifted.getUTCFullYear();
-  const first_thursday = Date.UTC(year, 0, 1);
-  const week = Math.ceil(((shifted.getTime() - first_thursday) / DAY_MS + 1) / 7);
-  return `${year}-W${String(week).padStart(2, "0")}`;
-};
 
 type TaskRow = typeof personalTask.$inferSelect;
 

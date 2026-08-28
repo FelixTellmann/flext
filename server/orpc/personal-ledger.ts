@@ -1,12 +1,10 @@
 import { db } from "@server/db/drizzle";
 import { activityBucket, personalArea, personalProject } from "@server/db/schema";
+import { DAY_MS, OPERATOR_UTC_OFFSET_MINUTES, operatorDayStartOf } from "@server/operator-day";
 import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
 import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
-
-const OPERATOR_UTC_OFFSET_MINUTES = 120;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Not derived from anything — the spec fixes prime focus as running until roughly 16:00–18:00 and says the
 // US overlap falls after it, but never pins a clock window. 16:00–22:00 local covers US Eastern 09:00–15:00
@@ -73,8 +71,8 @@ export const personalLedgerProcedures = {
   // Seconds per stream per operator-day. The screen renders both the day strip and the table from this one
   // shape, which is what keeps the two from ever disagreeing about a number.
   listRange: authed.input(range_schema).handler(async ({ input }) => {
-    const from = operatorDayStart(input.from);
-    const to = new Date(operatorDayStart(input.to).getTime() + DAY_MS);
+    const from = operatorDayStartOf(input.from);
+    const to = new Date(operatorDayStartOf(input.to).getTime() + DAY_MS);
 
     const rows = await db
       .select({ date: local_date, project: activityBucket.project, seconds: sql<number>`SUM(${activityBucket.seconds})` })
@@ -118,8 +116,8 @@ export const personalLedgerProcedures = {
   // only consume this window, so hours given to them there cost the local streams nothing — while local
   // work taking the best morning hours does cost the US ones. Counting only totals hides that entirely.
   listOverlap: authed.input(range_schema).handler(async ({ input }) => {
-    const from = operatorDayStart(input.from);
-    const to = new Date(operatorDayStart(input.to).getTime() + DAY_MS);
+    const from = operatorDayStartOf(input.from);
+    const to = new Date(operatorDayStartOf(input.to).getTime() + DAY_MS);
 
     const rows = await db
       .select({ project: activityBucket.project, seconds: sql<number>`SUM(${activityBucket.seconds})` })
@@ -146,7 +144,7 @@ export const personalLedgerProcedures = {
   // Every bucket of one day, for reading a day that looks wrong. The share column is the one place the
   // proportional split is visible, which is what makes a surprising total explainable rather than magic.
   listDay: authed.input(z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })).handler(async ({ input }) => {
-    const from = operatorDayStart(input.date);
+    const from = operatorDayStartOf(input.date);
     const to = new Date(from.getTime() + DAY_MS);
 
     const rows = await db

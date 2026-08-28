@@ -1,3 +1,4 @@
+import { DAY_MS, OPERATOR_UTC_OFFSET_MINUTES } from "@server/operator-day";
 import { createFileRoute } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { FC } from "react";
@@ -7,9 +8,6 @@ import { OsPanel } from "./-task-row";
 
 type LedgerRange = Awaited<ReturnType<typeof orpc.personalLedger.listRange>>;
 type LedgerStream = LedgerRange["streams"][number];
-
-const OPERATOR_UTC_OFFSET_MINUTES = 120;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // One scale for the whole screen, gridlines included. An earlier draft drew bars at 30px/h against
 // gridlines at 25 and 20, which made the axis decorative — a column could look taller than a column that

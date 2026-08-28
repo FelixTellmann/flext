@@ -1,23 +1,11 @@
 import { db } from "@server/db/drizzle";
 import { activityBucket, wakaHeartbeat } from "@server/db/schema";
+import { DAY_MS, operatorDateOf, operatorDayStartOf } from "@server/operator-day";
 import { bucketHeartbeats } from "@server/wakatime/bucket-heartbeats";
 import { fetchHeartbeats } from "@server/wakatime/client";
 import { and, asc, gte, lt, sql } from "drizzle-orm";
 
 const INSERT_CHUNK_SIZE = 200;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-// The tracker records in the operator's own timezone (Africa/Johannesburg, fixed at +02:00 — South Africa
-// observes no daylight saving). Asking Wakapi for a UTC date would fetch a window shifted two hours off
-// the day the operator actually worked, splitting every late evening across two requests.
-const OPERATOR_UTC_OFFSET_MINUTES = 120;
-
-const operatorDate = (at: Date): string => new Date(at.getTime() + OPERATOR_UTC_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
-
-// Local midnight expressed as the UTC instant it actually is: 2026-08-28 in Johannesburg begins at
-// 2026-08-27T22:00Z, which is the boundary the bucket rows are stored against.
-const operatorDayStart = (date: string): Date =>
-  new Date(new Date(`${date}T00:00:00.000Z`).getTime() - OPERATOR_UTC_OFFSET_MINUTES * 60_000);
 
 const clamp = (value: string | null, length: number): string | null => (value === null ? null : value.slice(0, length));
 
@@ -29,7 +17,7 @@ export type IngestSummary = { buckets_written: number; days: string[]; heartbeat
 // duplicate.
 export const runHeartbeatIngest = async (input: { days: number; now?: Date }): Promise<IngestSummary> => {
   const now = input.now ?? new Date();
-  const dates = Array.from({ length: input.days }, (_, offset) => operatorDate(new Date(now.getTime() - offset * DAY_MS))).reverse();
+  const dates = Array.from({ length: input.days }, (_, offset) => operatorDateOf(new Date(now.getTime() - offset * DAY_MS))).reverse();
 
   let heartbeats_seen = 0;
 
@@ -68,9 +56,9 @@ export const runHeartbeatIngest = async (input: { days: number; now?: Date }): P
   }
 
   const buckets_written = await rebucketRange({
-    from: operatorDayStart(dates[0] ?? operatorDate(now)),
+    from: operatorDayStartOf(dates[0] ?? operatorDateOf(now)),
     now,
-    to: new Date(operatorDayStart(dates.at(-1) ?? operatorDate(now)).getTime() + DAY_MS),
+    to: new Date(operatorDayStartOf(dates.at(-1) ?? operatorDateOf(now)).getTime() + DAY_MS),
   });
 
   return { buckets_written, days: dates, heartbeats_seen };
