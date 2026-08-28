@@ -16,6 +16,23 @@ export const formatTaskDay = (iso: string): string =>
 export const formatOperatorToday = (): string =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: OPERATOR_TIME_ZONE, weekday: "long" }).format(new Date());
 
+// A task that has bounced back has to look different from a fresh one, or the count is bookkeeping nobody
+// reads. Nothing is drawn at zero: the badge is news, not a field.
+export const DeferralBadge: FC<{ count: number }> = ({ count }) => {
+  if (count === 0) {
+    return null;
+  }
+
+  return (
+    <span
+      className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text"
+      title={`Pushed out ${count} time${count === 1 ? "" : "s"}`}
+    >
+      !{count}
+    </span>
+  );
+};
+
 // One row, shared by Today and the week pool, which differ only in the verb on the right: Today can push a
 // task out, the pool can pull one in. Everything else about a task looks the same wherever it is read.
 export const TaskRow: FC<{
@@ -45,14 +62,7 @@ export const TaskRow: FC<{
       </span>
     )}
 
-    {task.deferral_count > 0 && (
-      <span
-        className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text"
-        title={`Pushed out ${task.deferral_count} time${task.deferral_count === 1 ? "" : "s"}`}
-      >
-        !{task.deferral_count}
-      </span>
-    )}
+    <DeferralBadge count={task.deferral_count} />
 
     <button
       className="inline-flex items-center justify-center gap-1.5 rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
