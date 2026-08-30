@@ -112,6 +112,7 @@ describe("the scheduled classification's message batch", () => {
       batch_size: 500,
       unclassified_only: true,
       settled_sweep: null,
+      declined_sweep: null,
     }).toSQL().sql;
 
     expect(sql).toContain("not exists");
@@ -128,6 +129,7 @@ describe("the scheduled classification's message batch", () => {
       batch_size: 500,
       unclassified_only: false,
       settled_sweep: null,
+      declined_sweep: null,
     }).toSQL().sql;
 
     expect(sql).not.toContain("not exists");
@@ -147,6 +149,7 @@ describe("the settled sweep's message batch", () => {
       batch_size: 500,
       unclassified_only: false,
       settled_sweep: { dwell_days: 7, replied_dwell_days: 30, flavor, now: sweep_now },
+      declined_sweep: null,
     }).toSQL().sql;
   }
 
@@ -161,6 +164,7 @@ describe("the settled sweep's message batch", () => {
       batch_size: 500,
       unclassified_only: false,
       settled_sweep: { dwell_days: 7, replied_dwell_days: 30, flavor: "generic", now: sweep_now },
+      declined_sweep: null,
     }).toSQL();
 
     // Drizzle serialises a datetime bind to "YYYY-MM-DD HH:MM:SS.mmm", so the cutoff is asserted as the
@@ -209,6 +213,7 @@ describe("the settled sweep's message batch", () => {
       batch_size: 500,
       unclassified_only: true,
       settled_sweep: null,
+      declined_sweep: null,
     }).toSQL().sql;
     expect(scheduled).not.toContain("`Message`.`isSeen`");
   });

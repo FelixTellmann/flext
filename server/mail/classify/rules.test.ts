@@ -32,6 +32,8 @@ const base_input: DecisionInput = {
   sender_suppressed: false,
   policies: [],
   settled_sweep_candidate: false,
+  declined_exposures: null,
+  declined_threshold: 3,
 };
 
 const suspended_on = new Date("2026-08-01T00:00:00Z");
@@ -953,5 +955,99 @@ describe("calendar messages, in the derived rung", () => {
 
     expect(decision.action).toBe("keep_inbox");
     expect(decision.source).toBe("address_policy");
+  });
+});
+
+// Inbox-dwell 1.1/1.9, the unread half. The clock counts triage sessions survived rather than days
+// elapsed, and these cases pin why that choice was made rather than merely that it was.
+describe("the declined sweep, at step 6.4", () => {
+  const declined: DecisionInput = { ...base_input, declined_exposures: 3, declined_threshold: 3 };
+
+  test("archives mail offered and declined enough times", () => {
+    const decision = decide({ ...declined, signals: { ...base_signals, sender_known: true }, last_in_thread_is_mine: true });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_declined");
+    expect(decision.reasons.join(" ")).toContain("3 triage sessions");
+  });
+
+  test("below the threshold it does nothing", () => {
+    const decision = decide({
+      ...declined,
+      declined_exposures: 2,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+
+  test("AN ABSENCE CHANGES NOTHING - the reason this design beat a wall clock", () => {
+    // Five days away, no triage sessions, so the counter never advanced. Under wall-clock dwell this
+    // message would have been swept on day two while the operator was on a plane. Here it is untouched,
+    // and that is a property of the mechanism rather than a special case bolted onto it.
+    const decision = decide({
+      ...declined,
+      declined_exposures: 0,
+      signals: { ...base_signals, sender_known: true, age_days: 5 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+
+  test("null exposures means not a candidate, and is not treated as zero-and-eligible", () => {
+    const decision = decide({ ...declined, declined_exposures: null, signals: { ...base_signals, sender_known: true } });
+
+    expect(decision.source).not.toBe("sweep_declined");
+  });
+
+  test("mail somebody is waiting on gets a longer rope", () => {
+    // 1.9's double threshold. Six declines is roughly two full days of seeing that person's email and
+    // choosing not to open it, against three for a newsletter.
+    const waiting = { ...declined, declined_threshold: 6, declined_exposures: 4 };
+
+    expect(decide(waiting).source).not.toBe("sweep_declined");
+    expect(decide({ ...waiting, declined_exposures: 6 }).action).toBe("archive");
+  });
+
+  test("a flagged message is still untouchable", () => {
+    const decision = decide({ ...declined, is_flagged: true, signals: { ...base_signals, sender_known: true } });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("flagged");
+  });
+
+  test("an explicit policy still wins", () => {
+    const decision = decide({
+      ...declined,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+      policies: [{ id: "policy-1", scope: "address", value: "person@example.com", action: "keep_inbox", suspended_at: null }],
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("address_policy");
+  });
+
+  test("a snoozed thread still wins", () => {
+    const decision = decide({ ...declined, thread_state: "snoozed", signals: { ...base_signals, sender_known: true } });
+
+    expect(decision.source).toBe("thread_state");
+  });
+
+  test("mail under 24 hours old is still protected, however many sessions passed", () => {
+    // Someone checking mail four times in an afternoon must not sweep something that arrived that morning.
+    const decision = decide({
+      ...declined,
+      declined_exposures: 9,
+      signals: { ...base_signals, sender_known: true, age_days: 0 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.source).toBe("guard");
+    expect(decision.suppressed_by).toBe("too_recent");
   });
 });

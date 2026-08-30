@@ -1,9 +1,9 @@
 import { db } from "@server/db/drizzle";
-import { action, mailbox, message, sender, threadState } from "@server/db/schema";
+import { action, attentionSession, mailbox, message, sender, threadState } from "@server/db/schema";
 import { FILE_KIND } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
-import { decide, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import { decide, matchesNeedsActionSignals, SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import { deriveSignals } from "@server/mail/classify/signals";
 import type { PolicyFilingMapping } from "@server/mail/filing/paths";
 import { logicalPathFor } from "@server/mail/filing/paths";
@@ -125,6 +125,16 @@ async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_f
 // takes mail no Action row has ever named, this one takes mail that was classified, left alone, and has
 // since sat read in the inbox past the dwell. The two are complementary by design and must not be merged
 // — one is "decide about new mail", the other is "reconsider old mail because time passed".
+// Inbox-dwell 1.9's unread half. Held beside the settled scope rather than merged with it because the two
+// candidate sets are disjoint by definition — one is read mail, the other unread — and a single scope
+// carrying both would invite a query that asks for neither.
+export type DeclinedSweepScope = {
+  ordinary_threshold: number;
+  needs_action_threshold: number;
+  flavor: MailboxFlavor;
+  now: Date;
+};
+
 export type SettledSweepScope = {
   dwell_days: number;
   // 1.10's floor. A thread the operator replied in needs longer silence than ordinary settled mail before
@@ -140,6 +150,7 @@ type MessageBatchQueryInput = {
   batch_size: number;
   unclassified_only: boolean;
   settled_sweep: SettledSweepScope | null;
+  declined_sweep: DeclinedSweepScope | null;
 };
 
 // Exported unexecuted so server/mail/shadow/run.test.ts can assert the scheduled path's NOT EXISTS is
@@ -156,6 +167,25 @@ export function messageBatchQuery(input: MessageBatchQueryInput) {
     // because Action_messageId_kind_runId_key leads on messageId. The keyset cursor above still drives the
     // walk, so writing this batch's rows cannot make the next batch skip or repeat anything.
     conditions.push(notExists(db.select({ classified: sql`1` }).from(action).where(eq(action.message_id, message.id))));
+  }
+
+  if (input.declined_sweep !== null) {
+    const { flavor } = input.declined_sweep;
+
+    // Unread, in the inbox, and not already decided by this sweep. Deliberately NO age term: 1.1's whole
+    // argument is that elapsed time is the wrong clock, and the exposure count applied per message in
+    // buildDecisionInput is the real gate. An age floor here would quietly reintroduce the wall clock the
+    // design rejected.
+    conditions.push(eq(message.is_seen, false));
+    conditions.push(isInInboxSql(flavor));
+    conditions.push(
+      notExists(
+        db
+          .select({ swept: sql`1` })
+          .from(action)
+          .where(and(eq(action.message_id, message.id), eq(action.source, SWEEP_DECLINED_SOURCE))),
+      ),
+    );
   }
 
   if (input.settled_sweep !== null) {
@@ -242,10 +272,14 @@ function buildDecisionInput(
     thread_facts: Map<string, ThreadFacts>;
     now: Date;
     settled_sweep: Omit<SettledSweepScope, "flavor"> | null;
+    declined_sweep: Omit<DeclinedSweepScope, "flavor"> | null;
+    exposures: number | null;
   },
 ): DecisionInput {
   const from_address = row.from_address ?? "";
   const from_domain = row.from_domain ?? "";
+  const thread_state = resolveThreadState({ state: row.thread_state, snoozed_until: row.thread_snoozed_until, now: params.now });
+  const sender_suppressed = params.policy_index.suppressed.has(from_address.toLowerCase());
 
   const signals = deriveSignals({
     list_id: row.list_id,
@@ -279,15 +313,32 @@ function buildDecisionInput(
     has_attachment: row.has_attachment,
     replied_in_thread: thread_facts.replied_in_thread,
     never_touch_rules: params.policy_index.never_touch,
-    thread_state: resolveThreadState({ state: row.thread_state, snoozed_until: row.thread_snoozed_until, now: params.now }),
+    thread_state,
     last_in_thread_is_mine: thread_facts.last_in_thread_is_mine,
-    sender_suppressed: params.policy_index.suppressed.has(from_address.toLowerCase()),
+    sender_suppressed,
     policies: selectPolicies(params.policy_index, from_address, from_domain),
     // The SQL above cast a coarse net at the shorter dwell; the real threshold is applied here, because
     // which one applies depends on replied_in_thread and only this layer knows it.
     settled_sweep_candidate:
       params.settled_sweep !== null &&
       signals.age_days >= (thread_facts.replied_in_thread ? params.settled_sweep.replied_dwell_days : params.settled_sweep.dwell_days),
+    // Null unless this pass IS the unread sweep. A count of 0 would mean "candidate, no sessions yet",
+    // which is a different claim and one the ladder acts on differently.
+    declined_exposures: params.declined_sweep === null ? null : (params.exposures ?? 0),
+    // 1.9's double threshold for mail somebody is waiting on. Decided here because it depends on the
+    // Needs Action signal set, which is a fact about this message and this thread rather than about the
+    // pass — and decide() must not re-derive it, or the two spellings can disagree.
+    declined_threshold:
+      params.declined_sweep === null
+        ? 0
+        : matchesNeedsActionSignals({
+              signals,
+              last_in_thread_is_mine: thread_facts.last_in_thread_is_mine,
+              thread_state,
+              sender_suppressed,
+            })
+          ? params.declined_sweep.needs_action_threshold
+          : params.declined_sweep.ordinary_threshold,
   };
 }
 
@@ -375,7 +426,11 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
 }
 
 async function runPass(
-  input: RunShadowPassInput & { unclassified_only: boolean; settled_sweep: Omit<SettledSweepScope, "flavor"> | null },
+  input: RunShadowPassInput & {
+    unclassified_only: boolean;
+    settled_sweep: Omit<SettledSweepScope, "flavor"> | null;
+    declined_sweep: Omit<DeclinedSweepScope, "flavor"> | null;
+  },
 ): Promise<RunShadowPassResult> {
   const run_id = input.run_id ?? crypto.randomUUID();
   const now = new Date();
@@ -394,6 +449,14 @@ async function runPass(
   const sent_folders = parseStringList(mailbox_rows[0]?.sent_folders ?? null);
   const thread_facts = await loadThreadFacts(input.mailbox_id, flavor, sent_folders);
 
+  // Loaded once for the whole pass, not per message. A mailbox holds tens of thousands of rows and the
+  // session log holds a handful per day, so this is one small read against a per-row subquery — and the
+  // count is a filter over an in-memory array rather than a query per candidate.
+  const sessions_since =
+    input.declined_sweep === null
+      ? []
+      : (await db.select({ started_at: attentionSession.started_at }).from(attentionSession)).map((row) => row.started_at);
+
   const by_decision: Record<string, number> = {};
   let examined = 0;
   let journaled = 0;
@@ -406,6 +469,7 @@ async function runPass(
       batch_size: input.batch_size,
       unclassified_only: input.unclassified_only,
       settled_sweep: input.settled_sweep === null ? null : { ...input.settled_sweep, flavor },
+      declined_sweep: input.declined_sweep === null ? null : { ...input.declined_sweep, flavor },
     });
     if (batch.length === 0) {
       break;
@@ -414,7 +478,16 @@ async function runPass(
     const rows: ShadowActionRow[] = [];
     for (const row of batch) {
       examined += 1;
-      const decision_input = buildDecisionInput(row, { policy_index, thread_facts, now, settled_sweep: input.settled_sweep });
+      const decision_input = buildDecisionInput(row, {
+        policy_index,
+        thread_facts,
+        now,
+        settled_sweep: input.settled_sweep,
+        declined_sweep: input.declined_sweep,
+        // 1.2: derived, never stored. Sessions that BEGAN after the message arrived are the ones during
+        // which it was in the list and was passed over.
+        exposures: input.declined_sweep === null ? null : sessions_since.filter((started_at) => started_at > row.internal_date).length,
+      });
       const decision = decide(decision_input);
       by_decision[decision.action] = (by_decision[decision.action] ?? 0) + 1;
       input.onDecision?.({
@@ -461,7 +534,7 @@ async function runPass(
 // policy edit calls for, and it stays something a human asks for from /admin/shadow, because it is also
 // the expensive one — one Action row per message per run id.
 export async function runShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
-  return runPass({ ...input, unclassified_only: false, settled_sweep: null });
+  return runPass({ ...input, unclassified_only: false, settled_sweep: null, declined_sweep: null });
 }
 
 // The scheduled sync's pass: only messages that have never been classified. New mail is the only input a
@@ -474,7 +547,7 @@ export async function runShadowPass(input: RunShadowPassInput): Promise<RunShado
 // messages because a rule changed is exactly what the shadow-and-review cycle exists to prevent. The
 // operator re-sweeps from /admin/shadow when they mean to.
 export async function runNewMailShadowPass(input: RunShadowPassInput): Promise<RunShadowPassResult> {
-  return runPass({ ...input, unclassified_only: true, settled_sweep: null });
+  return runPass({ ...input, unclassified_only: true, settled_sweep: null, declined_sweep: null });
 }
 
 // Inbox-dwell 1.9's settled sweep. Runs as its own stage after classify-and-execute, never inside it: the
@@ -497,5 +570,30 @@ export async function runSettledSweepPass(
     ...input,
     unclassified_only: false,
     settled_sweep: { dwell_days: input.dwell_days, replied_dwell_days: input.replied_dwell_days, now: input.now },
+    declined_sweep: null,
+  });
+}
+
+// Inbox-dwell 1.9's unread half, and the last piece of the operator's original ask: zero unread within
+// roughly three days, without opening folders.
+//
+// It counts triage sessions survived, not days elapsed (1.1). An absence therefore pauses it as a
+// property of the mechanism rather than as a special case bolted on: no sessions occur, so the counter
+// does not advance, so nothing ages out. That is the whole reason this design was chosen over a wall
+// clock, and it is why there is no age term anywhere in its candidate query.
+//
+// Journals at `shadow` like every other new rule. Nothing moves until the operator promotes it.
+export async function runDeclinedSweepPass(
+  input: RunShadowPassInput & { ordinary_threshold: number; needs_action_threshold: number; now: Date },
+): Promise<RunShadowPassResult> {
+  return runPass({
+    ...input,
+    unclassified_only: false,
+    settled_sweep: null,
+    declined_sweep: {
+      ordinary_threshold: input.ordinary_threshold,
+      needs_action_threshold: input.needs_action_threshold,
+      now: input.now,
+    },
   });
 }

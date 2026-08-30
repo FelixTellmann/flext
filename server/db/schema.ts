@@ -130,6 +130,11 @@ export const mailbox = mysqlTable(
     // — an 8-day live client thread whose subject said "continuation of last week's". Age is what
     // separates finished from merely quiet, so the exemption gets a floor rather than being reversed.
     dwell_replied_days: int("dwellRepliedDays").default(30).notNull(),
+    // 1.9's two decline thresholds. Ordinary unread mail leaves after three triage sessions it survived
+    // untouched; mail somebody is waiting on gets six, which at two or three checks a day is two full
+    // days of seeing that person's email and choosing not to open it.
+    dwell_decline_count: int("dwellDeclineCount").default(3).notNull(),
+    dwell_needs_action_decline_count: int("dwellNeedsActionDeclineCount").default(6).notNull(),
     // 1.11: SenderPolicy.suspendedAt's sibling. A sweep action carries no senderPolicyId, so rescue
     // detection has nothing to suspend and would discard every rescue against the newest, least-proven
     // rule in the system for want of an id to blame. Suspension is per mailbox because the sweep is.
@@ -221,6 +226,42 @@ export const message = mysqlTable(
     senderIndex: index("Message_senderId_idx").on(table.sender_id),
     fromAddressIndex: index("Message_fromAddress_idx").on(table.from_address),
     internalDateIndex: index("Message_internalDate_idx").on(table.internal_date),
+  }),
+);
+
+// ─── AttentionSession ────────────────────────────────────────────────────────
+// A stretch of time the operator was demonstrably reading mail.
+//
+// GLOBAL, not per mailbox, and that is the load-bearing decision (inbox-dwell §1.3). He reads one unified
+// all-inboxes list, so a check that produces two \Seen transitions in Gmail is a check during which the
+// other five mailboxes' mail was also in front of him. Scoping sessions per mailbox would record no
+// session for those five and their unread mail would never age — and those are precisely the quiet
+// mailboxes that fill with noise. It fails safe (nothing is swept) and fails at the job.
+//
+// Valid only while every mailbox is in that unified view. If one ever leaves it, this must gain a
+// per-mailbox `in_unified_view` flag, or the counter credits declines he never had the chance to make.
+export const attentionSession = mysqlTable(
+  "AttentionSession",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    started_at: datetime("startedAt", { fsp: 3 }).notNull(),
+    // Moves as consecutive qualifying sync windows collapse into one sitting. Only startedAt is read by
+    // the exposure count; endedAt exists so the Sessions strip can show how long a session ran.
+    ended_at: datetime("endedAt", { fsp: 3 }).notNull(),
+    // The evidence, kept rather than reduced to a boolean, so §1.4's threshold can be corrected from what
+    // actually happened instead of only being guessed at up front.
+    seen_transitions: int("seenTransitions").default(0).notNull(),
+    flag_changes: int("flagChanges").default(0).notNull(),
+    replies_sent: int("repliesSent").default(0).notNull(),
+    // Which mailboxes supplied the evidence. Not used by the counter — a session counts everywhere — but
+    // the Sessions strip is uninterpretable without it.
+    evidence_mailbox_ids: text("evidenceMailboxIds"),
+  },
+  (table) => ({
+    // §1.2's count is a range scan on exactly this column, once per candidate batch.
+    startedAtIndex: index("AttentionSession_startedAt_idx").on(table.started_at),
   }),
 );
 

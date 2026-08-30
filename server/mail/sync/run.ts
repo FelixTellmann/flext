@@ -4,6 +4,7 @@ import { createDatabaseAutonomyPort, promoteAutoPolicies } from "@server/mail/ac
 import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
+import { createDatabaseAttentionPort, recordAttention } from "@server/mail/attention/record";
 import type { MailboxFailureKind } from "@server/mail/errors";
 import { classifyMailboxError, formatMailboxFailure, readMailboxFailureKind } from "@server/mail/errors";
 import type { MailboxRow } from "@server/mail/mailbox";
@@ -15,7 +16,7 @@ import type { RescuePort } from "@server/mail/rescue/detect";
 import { detectRescues } from "@server/mail/rescue/detect";
 import { createDatabaseRescuePort } from "@server/mail/rescue/journal";
 import type { RunShadowPassInput, RunShadowPassResult } from "@server/mail/shadow/run";
-import { runNewMailShadowPass, runSettledSweepPass } from "@server/mail/shadow/run";
+import { runDeclinedSweepPass, runNewMailShadowPass, runSettledSweepPass } from "@server/mail/shadow/run";
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
@@ -182,6 +183,36 @@ async function runSettledSweepForMailbox(input: {
   }
 }
 
+// Inbox-dwell 1.9's unread half. Journals at `shadow` only, and skips a suspended mailbox entirely for
+// the same reason the settled sweep does.
+async function runDeclinedSweepForMailbox(input: {
+  mailbox_row: MailboxRow;
+  run_id: string;
+  sweepPass: typeof runDeclinedSweepPass;
+}): Promise<string | null> {
+  if (input.mailbox_row.dwell_suspended_at !== null) {
+    return null;
+  }
+
+  try {
+    const sweep = await input.sweepPass({
+      mailbox_id: input.mailbox_row.id,
+      batch_size: SHADOW_BATCH_SIZE,
+      run_id: input.run_id,
+      ordinary_threshold: input.mailbox_row.dwell_decline_count,
+      needs_action_threshold: input.mailbox_row.dwell_needs_action_decline_count,
+      now: new Date(),
+    });
+    if (sweep.examined === 0) {
+      return null;
+    }
+    return `declined sweep: examined ${sweep.examined}, journaled ${sweep.journaled}`;
+  } catch (error) {
+    const failure = classifyMailboxError(error);
+    return `declined sweep failed: ${failure.kind}: ${failure.message}`;
+  }
+}
+
 export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExecuteInput): Promise<string | null> {
   const notes: string[] = [];
 
@@ -265,18 +296,44 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
     return totals;
   }
 
+  let seen_transitions = 0;
+  let flag_changes = 0;
   for (const folder of walked) {
     const result = await syncFolderIncrementally({ provider: input.provider, mailbox_row: input.mailbox_row, folder });
     totals.new_messages += result.new_messages;
     totals.flag_updates += result.flag_updates;
     totals.vanished += result.vanished;
+    seen_transitions += result.seen_transitions;
+    flag_changes += result.flag_changes;
   }
+
+  // Inbox-dwell 1.3/1.4. Immediately after the fetch, while the transitions this run witnessed are the
+  // freshest thing known, and before rescue detection — which stamps rows and would otherwise be
+  // indistinguishable from the operator's own activity on the next pass.
+  //
+  // Transitions, never the raw flag_updates count above: that one includes every message CONDSTORE
+  // re-reported after a bulk apply, and feeding it here would let the sweeps manufacture the very
+  // sessions that advance their clock.
+  const attention = await recordAttention({
+    port: createDatabaseAttentionPort(),
+    evidence: {
+      observed_at: new Date(),
+      mailbox_id: input.mailbox_row.id,
+      seen_transitions,
+      flag_changes,
+      // Replies are counted by the Sent scan further down, which has not run yet this pass. Left at zero
+      // rather than guessed: a reply is sufficient evidence on its own, and inventing one here would open
+      // a session off no evidence at all.
+      replies_sent: 0,
+    },
+  });
 
   // Rescue detection runs here: after the incremental fetch above has observed this run's `\Seen`
   // transitions (openedAt is only fresh once that happens), and before anything else new is added to this
   // mode. It must not run any earlier — a pass before the fetch reads stale rows and silently
   // under-reports, which for a safety net is worse than an error.
   const notes = [
+    attention.kind === "ignored" ? null : `attention: ${attention.kind}, ${attention.detail}`,
     await runRescuePassForMailbox({
       port: createDatabaseRescuePort(),
       mailbox_id: input.mailbox_row.id,
@@ -319,6 +376,17 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
       mailbox_row: input.mailbox_row,
       run_id: SCHEDULED_RUN_ID,
       sweepPass: runSettledSweepPass,
+    }),
+  );
+
+  // Stage 7. After the settled sweep, and after this run recorded its own attention session near the top
+  // of this function — the exposure count reads that log, so running earlier would judge every unread
+  // message one session short of the truth.
+  notes.push(
+    await runDeclinedSweepForMailbox({
+      mailbox_row: input.mailbox_row,
+      run_id: SCHEDULED_RUN_ID,
+      sweepPass: runDeclinedSweepPass,
     }),
   );
 

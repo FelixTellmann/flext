@@ -113,6 +113,20 @@
       "when": 1787924077946,
       "tag": "0015_sturdy_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1788076709907,
+      "tag": "0016_spooky_moon_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1788076976213,
+      "tag": "0017_talented_silverclaw",
+      "breakpoints": true
     }
   ]
 }

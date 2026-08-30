@@ -17,6 +17,11 @@ export type FolderSyncResult = {
   flag_updates: number;
   vanished: number;
   resynced: boolean;
+  // What a human demonstrably did, as opposed to how many rows the fetch touched. flag_updates counts
+  // CONDSTORE reports; these count transitions against the stored value, and only these may reach
+  // server/mail/attention/session.ts.
+  seen_transitions: number;
+  flag_changes: number;
 };
 
 export async function markVanished(input: { mailbox_id: string; folder: string; uid_validity: string; uids: number[] }): Promise<number> {
@@ -39,15 +44,62 @@ export async function markVanished(input: { mailbox_id: string; folder: string; 
   return input.uids.length;
 }
 
+// What the flag pass actually WITNESSED a human do, as opposed to what CONDSTORE re-reported. Counted
+// against the stored value, because any mutation bumps MODSEQ and the sync after a bulk apply is re-told
+// about every message it touched, each carrying flags it has held for years. Feeding those to
+// server/mail/attention/session.ts would let the sweeps manufacture their own triage sessions and speed
+// up their own clock — 565fb58's bug class in a new component.
+export type FlagTransitions = { applied: number; seen_transitions: number; flag_changes: number };
+
 async function applyFlagChanges(input: {
   mailbox_id: string;
   folder: string;
   uid_validity: string;
   changes: Array<{ uid: number; flags: string[] }>;
-}): Promise<number> {
+}): Promise<FlagTransitions> {
   const now = new Date();
+
+  // One read for the batch, before anything is written. The UPDATE below cannot report this: it uses a
+  // SQL IF() over the stored value, so by the time it returns, the value it compared against is gone.
+  const stored = new Map<number, { is_seen: boolean; is_flagged: boolean }>();
+  if (input.changes.length > 0) {
+    const rows = await db
+      .select({ uid: message.uid, is_seen: message.is_seen, is_flagged: message.is_flagged })
+      .from(message)
+      .where(
+        and(
+          eq(message.mailbox_id, input.mailbox_id),
+          eq(message.folder, input.folder),
+          eq(message.uid_validity, input.uid_validity),
+          inArray(
+            message.uid,
+            input.changes.map((change) => change.uid),
+          ),
+        ),
+      );
+    for (const row of rows) {
+      stored.set(row.uid, { is_seen: row.is_seen, is_flagged: row.is_flagged });
+    }
+  }
+
+  let seen_transitions = 0;
+  let flag_changes = 0;
   for (const change of input.changes) {
     const is_seen = change.flags.includes("\\Seen");
+    const is_flagged = change.flags.includes("\\Flagged");
+    const before = stored.get(change.uid);
+
+    // A message this sync has never seen has no prior state to have transitioned FROM, so it counts as
+    // no evidence. Under-counting delays a sweep; over-counting sweeps something the operator never saw.
+    if (before !== undefined) {
+      if (is_seen && !before.is_seen) {
+        seen_transitions += 1;
+      }
+      if (is_flagged !== before.is_flagged) {
+        flag_changes += 1;
+      }
+    }
+
     const scope = and(
       eq(message.mailbox_id, input.mailbox_id),
       eq(message.folder, input.folder),
@@ -97,7 +149,7 @@ async function applyFlagChanges(input: {
       })
       .where(scope);
   }
-  return input.changes.length;
+  return { applied: input.changes.length, seen_transitions, flag_changes };
 }
 
 export async function syncFolderIncrementally(input: {
@@ -121,7 +173,7 @@ export async function syncFolderIncrementally(input: {
       last_seen_uid: 0,
       highest_modseq: null,
     });
-    return { folder: input.folder, new_messages: 0, flag_updates: 0, vanished: 0, resynced: true };
+    return { folder: input.folder, new_messages: 0, flag_updates: 0, vanished: 0, resynced: true, seen_transitions: 0, flag_changes: 0 };
   }
 
   if (cursor.uid_validity !== status.uid_validity) {
@@ -142,19 +194,33 @@ export async function syncFolderIncrementally(input: {
       last_seen_uid: 0,
       highest_modseq: null,
     });
-    return { folder: input.folder, new_messages: 0, flag_updates: rekey.rekeyed, vanished: rekey.disappeared, resynced: true };
+    // A re-key relocates every message in the folder; none of it is the operator reading anything.
+    return {
+      folder: input.folder,
+      new_messages: 0,
+      flag_updates: rekey.rekeyed,
+      vanished: rekey.disappeared,
+      resynced: true,
+      seen_transitions: 0,
+      flag_changes: 0,
+    };
   }
 
   let flag_updates = 0;
   let vanished = 0;
+  let seen_transitions = 0;
+  let flag_changes = 0;
   if (input.provider.capabilities.condstore && cursor.highest_modseq !== null) {
     const result = await input.provider.fetchFlagChanges(input.folder, cursor.highest_modseq);
-    flag_updates = await applyFlagChanges({
+    const transitions = await applyFlagChanges({
       mailbox_id: input.mailbox_row.id,
       folder: input.folder,
       uid_validity: status.uid_validity,
       changes: result.changes,
     });
+    flag_updates = transitions.applied;
+    seen_transitions = transitions.seen_transitions;
+    flag_changes = transitions.flag_changes;
     vanished = await markVanished({
       mailbox_id: input.mailbox_row.id,
       folder: input.folder,
@@ -183,5 +249,5 @@ export async function syncFolderIncrementally(input: {
     last_sync_at: new Date(),
   });
 
-  return { folder: input.folder, new_messages: written.inserted, flag_updates, vanished, resynced: false };
+  return { folder: input.folder, new_messages: written.inserted, flag_updates, vanished, resynced: false, seen_transitions, flag_changes };
 }
