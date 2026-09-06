@@ -38,6 +38,7 @@ import {
   upsertPolicy,
 } from "@server/mail/query/policies";
 import { listPromotionCandidates } from "@server/mail/query/promotion";
+import { approveProposalGroup, dismissProposalGroup, listProposalGroups } from "@server/mail/query/review";
 import { getDashboardSummary, getSenderProfile, listSenders } from "@server/mail/query/senders";
 import { getShadowReport, getShadowSummary } from "@server/mail/query/shadow";
 import { dismissThread, markThreadDone, snoozeThread } from "@server/mail/query/threads";
@@ -128,6 +129,18 @@ function sumUndoResults(summaries: UndoByPolicyMailboxSummary[]): UndoResult {
     { examined: 0, undone: 0, failed: 0, skipped: 0 },
   );
 }
+
+// One proposal group on the review page: a rule (a policy, or a scheduled source for rows that carry no
+// policy id) in one mailbox, split by what the rows would do. Mirrors ProposalGroupKey in query/review.ts.
+const proposal_group_key_schema = z.object({
+  mailbox_id: z.string().min(1),
+  rule: z.discriminatedUnion("by", [
+    z.object({ by: z.literal("policy"), policy_id: z.string().min(1) }),
+    z.object({ by: z.literal("source"), source: z.string().min(1) }),
+  ]),
+  action_kind: z.string().min(1),
+  target_path: z.string().nullable(),
+});
 
 // Every procedure here is `authed`: they read mailbox configuration and start IMAP work, so none of them
 // may answer an anonymous caller. The middleware in ./base also covers server-side callers, which a
@@ -807,4 +820,30 @@ export const mailProcedures = {
         offset: input.offset,
       }),
     ),
+
+  // The review page's proposal groups (Phase 8): one rule's waiting proposals in one mailbox, split by
+  // what they would do. Approval and dismissal take the same key and the same bound as approveDecision's
+  // policy scope, and never reach a second mailbox. The source arm exists because a first-contact or
+  // sweep row carries no policy id, so approveDecision's policy scope can never name it.
+  listProposalGroups: authed
+    .input(z.object({ limit: z.number().int().positive().max(100).default(40) }))
+    .handler(async ({ input }) => listProposalGroups({ limit: input.limit })),
+
+  approveProposalGroup: authed
+    .input(
+      z.object({
+        key: proposal_group_key_schema,
+        batch_size: z.number().int().positive().max(MAX_ACTION_BATCH_SIZE).default(MAX_ACTION_BATCH_SIZE),
+      }),
+    )
+    .handler(async ({ input }) => approveProposalGroup({ key: input.key, batch_size: input.batch_size, journal: createDatabaseJournal() })),
+
+  dismissProposalGroup: authed
+    .input(
+      z.object({
+        key: proposal_group_key_schema,
+        batch_size: z.number().int().positive().max(MAX_ACTION_BATCH_SIZE).default(MAX_ACTION_BATCH_SIZE),
+      }),
+    )
+    .handler(async ({ input }) => dismissProposalGroup({ key: input.key, batch_size: input.batch_size })),
 };

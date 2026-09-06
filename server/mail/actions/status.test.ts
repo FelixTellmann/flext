@@ -3,13 +3,23 @@ import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS, SUPERSE
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { ACTION_STATUS_MEANINGS, ACTION_STATUSES, classifyActionError, toActionStatus } from "@server/mail/actions/status";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
+import { DISMISSED_STATUS } from "@server/mail/query/review";
 
 describe("ACTION_STATUSES", () => {
-  test("covers exactly the seven statuses in play, spelled by their owning modules", () => {
+  test("covers exactly the eight statuses in play, spelled by their owning modules", () => {
     expect([...ACTION_STATUSES].sort()).toEqual(
-      [SHADOW_STATUS, PENDING_STATUS, APPLIED_STATUS, FAILED_STATUS, DEFERRED_STATUS, UNDONE_STATUS, SUPERSEDED_STATUS].sort(),
+      [
+        SHADOW_STATUS,
+        PENDING_STATUS,
+        APPLIED_STATUS,
+        FAILED_STATUS,
+        DEFERRED_STATUS,
+        UNDONE_STATUS,
+        SUPERSEDED_STATUS,
+        DISMISSED_STATUS,
+      ].sort(),
     );
-    expect(new Set(ACTION_STATUSES).size).toBe(7);
+    expect(new Set(ACTION_STATUSES).size).toBe(8);
   });
 
   test.each([...ACTION_STATUSES])("toActionStatus round-trips %s", (status) => {

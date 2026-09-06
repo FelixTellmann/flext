@@ -24,6 +24,7 @@ export const status_meaning: Record<KnownStatus, string> = {
   deferred: "Deliberately not executed in this phase — there is no plan for it yet, and nothing was sent to the mailbox.",
   undone: "Applied and then reversed. The message is back at its recorded pre-state.",
   superseded: "Proposed, then another action moved the message first. Nothing was sent to the mailbox for this row, and nothing will be.",
+  dismissed: "Proposed, then declined on the review page. Nothing was sent to the mailbox for this row, and nothing will be.",
 };
 
 export const status_label: Record<KnownStatus, string> = {
@@ -34,6 +35,7 @@ export const status_label: Record<KnownStatus, string> = {
   deferred: "Deferred",
   undone: "Undone",
   superseded: "Superseded",
+  dismissed: "Dismissed",
 };
 
 export const status_style: Record<KnownStatus, string> = {
@@ -44,6 +46,7 @@ export const status_style: Record<KnownStatus, string> = {
   deferred: "bg-info/10 text-info",
   undone: "bg-info/10 text-info",
   superseded: "bg-gray-100 text-gray-500 dark:bg-dark-bg dark:text-dark-text",
+  dismissed: "bg-gray-100 text-gray-500 dark:bg-dark-bg dark:text-dark-text",
 };
 
 // `error` is non-null in three different states and only one of them is a failure, so the presentation is

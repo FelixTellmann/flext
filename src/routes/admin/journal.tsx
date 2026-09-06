@@ -20,7 +20,7 @@ import { ActionButton, accent_button, field, Panel, secondary_button } from "./-
 // Mirrors ACTION_JOURNAL_STATUS_FILTERS in server/mail/query/actions.ts — an admin route can't import a
 // server value without pulling the action modules (and the db handle) into the client bundle, the same
 // reasoning shadow.tsx and senders.tsx already carry. The server re-validates this enum on every call.
-const journal_status_filters = ["all", "shadow", "pending", "applied", "failed", "deferred", "undone", "superseded"] as const;
+const journal_status_filters = ["all", "shadow", "pending", "applied", "failed", "deferred", "undone", "superseded", "dismissed"] as const;
 
 const journal_search_schema = z.object({
   mailbox_id: z.string().optional(),
@@ -153,7 +153,7 @@ function whereaboutsNote(row: JournalRow): string {
   if (row.known_status === "pending") {
     return "Unconfirmed — the mutation may already have landed.";
   }
-  if (row.known_status === "shadow" || row.known_status === "deferred") {
+  if (row.known_status === "shadow" || row.known_status === "deferred" || row.known_status === "dismissed") {
     return "Untouched — nothing was sent to the mailbox.";
   }
   if (row.known_status === "superseded") {
@@ -163,7 +163,7 @@ function whereaboutsNote(row: JournalRow): string {
 }
 
 function missingStateNote(row: JournalRow): string {
-  if (row.known_status === "shadow" || row.known_status === "superseded") {
+  if (row.known_status === "shadow" || row.known_status === "superseded" || row.known_status === "dismissed") {
     return "not read — a shadow decision never opens the mailbox";
   }
   if (row.known_status === "deferred") {
@@ -400,6 +400,14 @@ const RowActions: FC<{ busy_key: string | null; onApprove: () => void; onUndo: (
     return (
       <span className="block max-w-48 text-gray-500 text-xs dark:text-dark-text">
         Another action moved this message first. Not approvable; undo the applied row instead.
+      </span>
+    );
+  }
+
+  if (row.known_status === "dismissed") {
+    return (
+      <span className="block max-w-48 text-gray-500 text-xs dark:text-dark-text">
+        Declined on the review page. Not approvable; a fresh shadow pass proposes it again if the rule still applies.
       </span>
     );
   }
