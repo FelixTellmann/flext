@@ -22,21 +22,26 @@
 
 Each phase is one subagent, fresh context, one commit, type-check and one review pass before the next starts.
 
-### Phase 1 — repairs
-- [ ] IMAP auth failures disable a mailbox only after three consecutive failures on separate scheduled runs (`server/mail/errors.ts`, `server/mail/sync/run.ts`; a counter on `Mailbox`, migration).
-- [ ] Session evidence pooled across all mailboxes over a rolling two-hour window before the two-event threshold applies (`server/mail/attention/session.ts`, `record.ts`, the call site in `sync/run.ts`). Tests from fixtures: three single reads across three mailboxes inside two hours make one session; one read alone does not.
+### Phase 1 — repairs (done 2026-09-06, bd53165 + 7df567a, deployed 16:29 UTC)
+- [x] IMAP auth failures disable a mailbox only after three consecutive failures on separate scheduled runs (`server/mail/errors.ts`, `server/mail/sync/run.ts`; a counter on `Mailbox`, migration 0018).
+- [x] Session evidence pooled across all mailboxes over a rolling two-hour window before the two-event threshold applies (`server/mail/attention/session.ts`, `record.ts`, the call site in `sync/run.ts`). Tests from fixtures: three single reads across three mailboxes inside two hours make one session; one read alone does not.
 - [ ] `bun tmp/attention-report.ts` shows sessions within a day of deploy.
 
-### Phase 2 — Junk to Quarantine
-- [ ] A stage in the incremental sync for generic mailboxes: any message whose folder is the host's Junk or spambucket is moved to Quarantine with `\Seen` set. Uses the existing quarantine plan shape (`pre_mutations` flag write, then move).
-- [ ] Journaled as an applied action with its own source so the journal page shows it and the inverse restores to Junk.
-- [ ] A keep-inbox address rule wins over it (a whitelisted false positive is never moved twice).
+### Phase 2 — Junk to Quarantine (done 2026-09-06, f9f223f + a47629c; first tick moved 1)
+- [x] A stage in the incremental sync for generic mailboxes: any message whose folder is the host's Junk or spambucket is moved to Quarantine with `\Seen` set. Uses the existing quarantine plan shape (`pre_mutations` flag write, then move).
+- [x] Journaled as an applied action with its own source so the journal page shows it and the inverse restores to Junk.
+- [x] A keep-inbox address rule wins over it (a whitelisted false positive is never moved twice).
 
-### Phase 3 — flat filing
-- [ ] `server/mail/filing/paths.ts` renders one segment: client rules to `<Client>`, topic rules to `<Topic>`; a rule carrying both renders the client. Slashes in `topic` are rejected at the ORPC boundary.
-- [ ] Existing policy `noreply@booking.com` topic `Personal/Travel` becomes `Travel` (script, `--write`).
-- [ ] Rename on the server: `Clients.Listify` to `Listify`, `Ops.Shopify` to `Shopify`, `Personal.Restaurants` to `Restaurants`, `Personal.Tennis` to `Tennis`, and the matching `Message.folder` rows. Handover file, DESTRUCTIVE step, 723 messages.
-- [ ] `/admin/filing` shows flat paths.
+### Phase 3 — flat filing (code done 2026-09-06, 76f8433 + fe3844f; the two operator scripts are written and dry-run clean, not yet run)
+- [x] `server/mail/filing/paths.ts` renders one segment: client rules to `<Client>`, topic rules to `<Topic>`; a rule carrying both renders the client. Slashes in `topic` are rejected at the ORPC boundary.
+- [ ] Existing policies with nested topics (13, not 1) become their last segment (`tmp/flatten-filing-policies.ts --write`, runs AFTER the folder renames).
+- [ ] Rename on the server: `Clients.Listify` to `Listify`, `Ops.Shopify` to `Shopify`, `Personal.Restaurants` to `Restaurants`, `Personal.Tennis` to `Tennis`, and the matching `Message.folder`, cursor, binding and action rows (`tmp/flatten-tellmann-folders.ts --write`). Handover file, DESTRUCTIVE step, 723 messages.
+- [x] `/admin/filing` shows flat paths.
+
+### Repairs found on the way (all done 2026-09-06, deployed)
+- [x] The declined sweep journals only what it authored (2760c99); 675 duplicate proposals deleted.
+- [x] tellmann.co.za UIDVALIDITY flip-and-revert: re-key planner resurrects vanished occupants (f64bd59).
+- [x] `/api/mail-sync` acknowledges at once and runs in the background with a lock (76a8c53, 38413a7); Coolify tasks re-created with the reconcile at minute 7.
 
 ### Phase 4 — first contact and mark-read rules
 - [ ] `decide()` first-contact rung splits: human-shaped stays (`keep_inbox`, source `first_contact_human`), machine-shaped quarantines. Signals already exist: `is_bulk`, `is_automated`, `dkim_aligned`, `addressed_to_me`.
