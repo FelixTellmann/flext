@@ -118,3 +118,19 @@ A: exclude any message with an action of ANY executable kind (EXECUTABLE_ACTION_
    not: keep the quarantine-only check and tolerate the failed rows — one per such message, forever, and
         a misleading `failed N` in every note once phase 5's domain rules land
 why: a message another action has already claimed is not in Junk any more, whatever its row says
+
+[2026-09-06 15:20] repair — sync endpoint
+Q: POST /api/mail-sync awaited the whole run; Nitro's bun preset passes no idleTimeout to Bun.serve, so the
+   10 s default closes any socket silent that long, and the Coolify tick saw ECONNRESET on every
+   incremental run (8 to 40 s) while the sync completed fine server-side. Fix where?
+A: acknowledge-then-run: the handler takes an in-process lock, reads needs_operator, starts the run
+   without awaiting it and answers 202 at once (409 if a run already holds the lock, stale after 30 min).
+   The 503-on-disabled-mailbox rule stays, now lagged one tick because needs_operator is read before the
+   run it describes. Summaries leave the body; the SyncRun table is the record.
+   not: raise Bun's idleTimeout via a custom Nitro entry — a hand-rolled server entry to keep in step with
+        every nitro/srvx upgrade, and reclassify/backfill would still need a value in the minutes, which
+        turns a real hang into a request that never fails
+   not: a lock in the database — the deployment is one process, and a row-lock needs its own stale-guard
+        and migration for no extra safety
+why: the scheduled task only needs to know the run started and the previous one left no dead mailbox; a
+     one-tick delay on the red signal costs nothing, a red signal on every tick was the alarm going mute
