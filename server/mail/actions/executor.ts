@@ -402,9 +402,11 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
     }
     outcome = await performMutation(provider, group.folder, uids, group.mutation);
   } catch (error) {
-    // Every row keeps its pre-state and becomes failed rather than applied. Nothing re-runs a failed row —
-    // loadPendingActions selects only pending ones — so the pre-state stands for reconciliation and for the
-    // operator, not for a retry. A move that succeeded server-side and threw on the way back lands here
+    // Every row keeps its pre-state and becomes failed rather than applied. Nothing here re-runs a failed
+    // row — loadPendingActions selects only pending ones — so the pre-state stands for reconciliation and
+    // for the operator, not for a retry. The one exception is the unsubscribe press: a re-press reopens its
+    // own run's failed archive rows to shadow via claimSenderArchives and claims them again as new pending
+    // rows. A move that succeeded server-side and threw on the way back lands here
     // too, which is why this status is a report of what we observed rather than a fact about the mailbox.
     const message = toRecordedError(error);
     await journal.markFailed(live_rows.map((row) => ({ action_id: row.action_id, error: message })));
@@ -420,7 +422,8 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
     if (address === undefined) {
       // §11: mark only the unconfirmed UIDs failed. After a partial UID MOVE this message's state is
       // genuinely unknown — moved but unreported, or not moved — and a blind retry would move an already
-      // moved message a second time. Nothing is retried and nothing is guessed; the next sync resolves it.
+      // moved message a second time. Nothing is retried here and nothing is guessed; the next sync resolves
+      // it. (A re-press of the unsubscribe button reopens its own failed archive rows — see the catch above.)
       unconfirmed_failures.push({
         action_id: row.action_id,
         error: `the server confirmed no destination for UID ${row.uid} in ${group.folder}, so its state is unknown: it may have been relocated without being reported, or not relocated at all. Not retried — the next sync re-reads the mailbox and reconciles against from_state.`,

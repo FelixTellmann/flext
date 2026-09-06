@@ -646,8 +646,8 @@ export const UNSUBSCRIBE_BULK_RUN_ID = "unsubscribe-bulk";
 // The two writes the claim needs, and nothing else of the journal: a press that could reach markApplied
 // through this port would be a press that could bypass the executor.
 export type SenderArchivePort = Pick<ActionJournal, "promoteShadowActions"> & {
-  // Flips this run's `failed` rows on these messages back to `shadow` with the error cleared, and returns
-  // the ids it actually flipped — a re-press is the operator's retry of an archive that did not land.
+  // Flips this run's `failed` archive rows on these messages back to `shadow` with the error cleared, and
+  // returns the ids it actually flipped — a re-press is the operator's retry of an archive that did not land.
   reopenFailedActions: (input: { run_id: string; message_ids: string[] }) => Promise<string[]>;
 };
 
@@ -711,7 +711,11 @@ export async function claimSenderArchives(input: {
       : await input.port.reopenFailedActions({ run_id: UNSUBSCRIBE_BULK_RUN_ID, message_ids: failed.map((row) => row.message_id) }),
   );
   for (const action_id of reopened) {
-    countsFor(by_sender, sender_by_action.get(action_id) ?? "").retried += 1;
+    const sender_key = sender_by_action.get(action_id);
+    if (sender_key === undefined) {
+      continue;
+    }
+    countsFor(by_sender, sender_key).retried += 1;
   }
 
   const claimable = input.rows.filter((row) => row.status === SHADOW_STATUS || reopened.has(row.action_id));
@@ -740,7 +744,14 @@ async function reopenFailedActions(input: { run_id: string; message_ids: string[
   const failed = await db
     .select({ action_id: action.id })
     .from(action)
-    .where(and(eq(action.run_id, input.run_id), eq(action.status, FAILED_STATUS), inArray(action.message_id, input.message_ids)));
+    .where(
+      and(
+        eq(action.run_id, input.run_id),
+        eq(action.kind, "archive"),
+        eq(action.status, FAILED_STATUS),
+        inArray(action.message_id, input.message_ids),
+      ),
+    );
 
   // Per row and guarded, like promoteShadowActions: only affectedRows says which rows THIS press reopened
   // when two presses meet the same failure.

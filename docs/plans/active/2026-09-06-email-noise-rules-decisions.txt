@@ -969,3 +969,34 @@ why: one grouped query spans both flavors, so the per-flavor helper has to be co
 Q: the review asked for a test only, but the function was module-private?
 A: exported with no behaviour change, tested from digest/query.test.ts
 why: a fixture test cannot reach a private function, and a wrapper would test the wrapper
+
+[2026-09-06 23:05] phase 6 fix 2 — testing untilAborted's already-aborted branch
+Q: how to prove the swallowed late rejection without reaching the internal AbortController?
+A: export untilAborted and test it directly with process.on("unhandledRejection"); the test fails
+   without the promise.catch line and passes with it
+   not: drive it through performOneClick — the controller is internal and timeout_ms: 0 aborts on a
+   later macrotask, so signal.aborted is never true at the first lookup
+why: the branch is the unit under test; one more named export is cheaper than a seam for the controller
+
+[2026-09-06 23:05] phase 6 fix 2 — testing the kind = archive scope on reopenFailedActions
+Q: the kind filter sits in the module-private database function; what does run.test.ts assert?
+A: the caller-side consequence: a fake port that hands back an id outside the archive candidates is
+   skipped (no "" sender bucket, retried unchanged), which is exactly what the dropped `?? ""` did
+   wrong. The SQL-side eq(action.kind, "archive") is asserted by read, not by test
+   not: a source-string test like the ON DUPLICATE KEY one — brittle for one predicate
+why: every DATABASE_URL is production, so the query cannot be executed in a test
+
+[2026-09-06 23:05] phase 6 fix 2 — executor's recorded error string still says "Not retried"
+Q: the error text at executor.ts (partial UID MOVE, unconfirmed destination) says "Not retried", which
+   an unsubscribe re-press now contradicts for its own archive rows — fix it here?
+A: no; this fix is comments-only in executor.ts. Accepted gap: the recorded string is still true for
+   every path except an unsubscribe re-press on an archive row
+why: scope of this fix; the string is journal data other agents' review work reads
+
+[2026-09-06 23:05] phase 6 fix 2 — one_click on /admin/unsubscribe is a MAX() across the sender
+Q: the page's one_click flag is MAX(list_unsubscribe) with MAX(list_unsubscribe_post) across all of a
+   sender's messages, while the press needs both headers on ONE message; a sender can tick as one-click
+   and then be refused
+A: accepted gap, code left alone; the outcome panel reports the refusal with its reason
+   not: change the query to a per-message EXISTS — a second grouped subquery for a rare edge
+why: the mismatch only surfaces where a sender changed its headers mid-history

@@ -166,11 +166,14 @@ export async function refusalFor(url_text: string, lookup_impl: LookupLike): Pro
 
 // node's dns.promises.lookup cannot be aborted, so the lookup is raced against the deadline instead: the
 // abort rejects this promise and the answer that arrives later is dropped unread. The listener is removed
-// on settle because this runs in a long-lived server and the controller outlives the lookup.
-function untilAborted<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {
+// on settle because this runs in a long-lived server and the controller outlives the lookup. A lookup
+// that rejects after the abort is swallowed for the same reason: nobody is listening any more, and an
+// unhandled rejection in the server process is not the way to say so.
+export function untilAborted<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {
   return new Promise<Value>((resolve, reject) => {
     const onAbort = () => reject(new Error("aborted"));
     if (signal.aborted) {
+      promise.catch(() => undefined);
       onAbort();
       return;
     }

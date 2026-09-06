@@ -328,6 +328,19 @@ describe("claimSenderArchives", () => {
     expect(port.rows.get("a-1")?.error).toBeNull();
   });
 
+  test("a failed row the port reopened under the same run id but outside the archive candidates is skipped", async () => {
+    const rows = [candidate("a-1", "shadow"), candidate("a-2", "failed")];
+    const port = createFakePort(rows);
+    const reopen = port.reopenFailedActions;
+    port.reopenFailedActions = async (input) => [...(await reopen(input)), "a-other-kind"];
+
+    const claim = await claimSenderArchives({ rows, pending_cap: 50, port });
+
+    expect(claim.pending.map((row) => row.action_id)).toEqual(["a-1", "a-2"]);
+    expect(claim.by_sender.get("")).toBeUndefined();
+    expect(claim.by_sender.get("news@example.com")).toEqual({ pending: 2, waiting: 0, retried: 1, refused: 0 });
+  });
+
   test("an archive that already landed, or a row another press still holds, is neither claimed nor waiting", async () => {
     const rows = [candidate("a-1", "applied"), candidate("a-2", "pending"), candidate("a-3", "shadow")];
     const port = createFakePort(rows);

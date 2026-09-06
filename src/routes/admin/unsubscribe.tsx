@@ -100,6 +100,7 @@ const Unsubscribe: FC = () => {
     .filter((address, index, addresses) => addresses.findIndex((other) => other.toLowerCase() === address.toLowerCase()) === index);
   const distinct_addresses = selected_addresses.length;
   const all_one_click_selected = one_click.length > 0 && one_click.every((candidate) => selected.has(candidateKey(candidate)));
+  const pressed_count = Math.min(distinct_addresses, BULK_LIMIT);
 
   const toggle = (key: string) => {
     setSelected((previous) => {
@@ -117,7 +118,7 @@ const Unsubscribe: FC = () => {
     setBusy(true);
     setResult(null);
     setBanner({
-      text: `Unsubscribing ${distinct_addresses} sender${distinct_addresses === 1 ? "" : "s"} — sending, writing rules, archiving…`,
+      text: `Unsubscribing ${pressed_count} sender${pressed_count === 1 ? "" : "s"} — sending, writing rules, archiving…`,
       tone: "info",
     });
     try {
@@ -174,7 +175,7 @@ const Unsubscribe: FC = () => {
             <ActionButton
               busy={busy}
               disabled={busy || distinct_addresses === 0}
-              label={`Unsubscribe and archive ${distinct_addresses} sender${distinct_addresses === 1 ? "" : "s"}`}
+              label={`Unsubscribe and archive ${pressed_count} sender${pressed_count === 1 ? "" : "s"}`}
               onClick={() => void runBulk()}
               variant={accent_button_focus}
             />

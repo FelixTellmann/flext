@@ -399,7 +399,7 @@ const RowActions: FC<{ busy_key: string | null; onApprove: () => void; onUndo: (
   if (row.known_status === "superseded") {
     return (
       <span className="block max-w-48 text-gray-500 text-xs dark:text-dark-text">
-        Another action moved this message first. Not approvable; undo the applied row instead.
+        Another row for this message took over. Not approvable; undo that one once it has applied.
       </span>
     );
   }

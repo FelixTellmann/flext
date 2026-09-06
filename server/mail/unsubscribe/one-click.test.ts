@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { FetchLike, LookupLike } from "@server/mail/unsubscribe/one-click";
-import { isPublicAddress, performOneClick, refusalFor } from "@server/mail/unsubscribe/one-click";
+import { isPublicAddress, performOneClick, refusalFor, untilAborted } from "@server/mail/unsubscribe/one-click";
 
 const public_lookup: LookupLike = async () => [{ address: "93.184.216.34", family: 4 }];
 
@@ -295,5 +295,32 @@ describe("performOneClick", () => {
     expect(outcome.status).toBe("failed");
     await new Promise((resolve) => setTimeout(resolve, 40));
     expect(requested).toBe(false);
+  });
+});
+
+describe("untilAborted", () => {
+  test("an already-aborted signal rejects at once, and the lookup that rejects later is swallowed", async () => {
+    const unhandled: unknown[] = [];
+    const collect = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", collect);
+    try {
+      let reject_lookup: (reason: Error) => void = () => undefined;
+      const lookup = new Promise<never>((_resolve, reject) => {
+        reject_lookup = reject;
+      });
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(untilAborted(lookup, controller.signal)).rejects.toThrow("aborted");
+
+      reject_lookup(new Error("ENOTFOUND after the deadline"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", collect);
+    }
   });
 });
