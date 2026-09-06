@@ -61,9 +61,10 @@ Decision: `2026-09-06-clear-suspension-resets-the-window.md`.
 - [ ] The senders page's bulk-assign gets the same mark-read checkbox as single assign (today bulk silently resets it).
 
 ### Phase 5 — the rules themselves
-- [ ] `tmp/create-noise-policies.ts`, dry-run by default, `--write` to apply, idempotent against rows that exist (noreply-iam@booking.com is also in `create-throwaway-policies.ts`). Domain rules: logalert.app, github.com, npmjs.com, vercel.com, planetscale.com, wakatime.com to `Notifications`, mark read. booking.com domain to `Travel`; `noreply-iam@booking.com` address to `auto_trash`. fnb.co.za, standardbank.co.za, bobpay.co.za to `Finances`.
-- [ ] `tmp/promote-reference-policies.ts`: Housing and VitaminShoppe rules from 2026-08-26 to `auto` via `promotePolicyAutonomy`.
-- [ ] Every rule starts `shadow`; the dry run prints, as a table, what each would have done to the last 30 days.
+- [x] `tmp/create-noise-policies.ts` (written, dry-run clean; realigns the 11 notification address rules first, decision `2026-09-06-notification-address-rules-realigned.md`), dry-run by default, `--write` to apply, idempotent against rows that exist (noreply-iam@booking.com is also in `create-throwaway-policies.ts`). Domain rules: logalert.app, github.com, npmjs.com, vercel.com, planetscale.com, wakatime.com to `Notifications`, mark read. booking.com domain to `Travel`; `noreply-iam@booking.com` address to `auto_trash`. fnb.co.za, standardbank.co.za, bobpay.co.za to `Finances`.
+- [x] `tmp/promote-reference-policies.ts` (written, dry-run clean: 5 rules, 22 proposals waiting): Housing and VitaminShoppe rules from 2026-08-26 to `auto` via `promotePolicyAutonomy`.
+- [x] Every rule starts `shadow`; the dry run prints, as a table, what each would have done to the last 30 days.
+- [x] `tmp/repair-quarantine-snapshots.ts` (written, dry-run clean: 58 applied quarantine rows whose to-state lacks `\Seen`; rebuilt through planFor + applyToState so undo can match them).
 - [ ] The dry-run table for `flatten-tellmann-folders.ts` and `flatten-filing-policies.ts` is shown to the operator before the batch; both run in the batch, folders first.
 
 ### Phase 6 — one-click unsubscribe
@@ -89,7 +90,7 @@ Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-b
 
 ### Deploy and operator batch (session-run, after the review)
 - [ ] Operator runs `bun run db:migrate` once. Session pushes `main`, verifies the engine after the next quarter-hour tick.
-- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write`; `promote-reference-policies.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
+- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write` (realign, then create); `promote-reference-policies.ts --write`; `repair-quarantine-snapshots.ts --write`; `rewrite-first-contact-backlog.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
 - [ ] Coolify: add the Monday digest task, narrated in the browser.
 - [ ] GitHub: disconnect the dead Vercel integration, narrated in the browser.
 - [ ] `git mv` this plan to `docs/plans/completed/` with the closing marker.
