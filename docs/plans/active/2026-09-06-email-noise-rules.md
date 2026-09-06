@@ -71,7 +71,7 @@ Decision: `2026-09-06-clear-suspension-resets-the-window.md`.
 Decision: `2026-09-06-unsubscribe-button-and-digest-links.md`.
 - [x] Fetch and store `List-Unsubscribe-Post` (475cedd: header, `Message.listUnsubscribePost`, migration 0021, reclassify backfill).
 - [x] `UnsubscribeAttempt` table (475cedd, migration 0021).
-- [x] ORPC `unsubscribeBulk` (6d152c0; SSRF hardening 10d48f2; review fixes follow, decision `2026-09-06-superseded-proposals.md`): per ticked sender, POST `List-Unsubscribe=One-Click` from the server (mailto senders wait for phase 7's sender); record the attempt; upsert an `archive` rule for the address and promote it to `auto`; journal `pending` archive rows (mark read) for the sender's inbox messages and apply them through the same path `/admin` uses for operator-approved rows.
+- [x] ORPC `unsubscribeBulk` (6d152c0; SSRF hardening 10d48f2; review fixes 506cdf7, e8f8190, 4941b57, b8b2dc2; decision `2026-09-06-superseded-proposals.md`): per ticked sender, POST `List-Unsubscribe=One-Click` from the server (mailto senders wait for phase 7's sender); record the attempt; upsert an `archive` rule for the address and promote it to `auto`; journal `pending` archive rows (mark read) for the sender's inbox messages and apply them through the same path `/admin` uses for operator-approved rows.
 - [x] `/admin/unsubscribe` (c81632c) gains checkboxes, select-all for the one-click group, one button, and the last attempt's outcome per row.
 
 ### Phase 7 — SMTP and the Monday digest
