@@ -8,6 +8,11 @@ import { SessionsStrip } from "./-sessions-strip";
 const SESSION_STRIP_LIMIT = 7;
 
 const admin_links = [
+  {
+    to: "/admin/review",
+    label: "Inbox review",
+    description: "The Monday pass in one page: rules to switch on, proposals to approve, senders to unsubscribe.",
+  },
   { to: "/admin/needs-action", label: "Needs Action", description: "Threads waiting on a reply from you." },
   { to: "/admin/senders", label: "Senders", description: "Who is writing in, and whether you've replied." },
   { to: "/admin/mail", label: "Mailboxes", description: "Connections, sync runs, and certificates." },
@@ -39,7 +44,7 @@ const AdminHome: FC = () => {
 
   return (
     <div className="flex flex-col gap-3">
-      <SessionsStrip loaded_at={loaded_at} sessions={sessions} />
+      <SessionsStrip loaded_at={loaded_at} sessions={sessions} title="Triage sessions" />
       <p className="text-zinc-600 dark:text-dark-text">
         Mail dashboards: what the engine proposes, what it did, and when it last saw you reading.
       </p>

@@ -13,11 +13,11 @@ import { Panel } from "./-ui";
 // The calibration surface for the session threshold (inbox-dwell §3): if this disagrees with the
 // operator's memory of when he last checked mail, the threshold is wrong. `loaded_at` is the instant the
 // loader ran, so the relative time is the same string on the server render and after hydration.
-export const SessionsStrip: FC<{ sessions: SessionEvidence[]; loaded_at: string }> = ({ sessions, loaded_at }) => {
+export const SessionsStrip: FC<{ sessions: SessionEvidence[]; loaded_at: string; title: string }> = ({ sessions, loaded_at, title }) => {
   const [latest, ...previous] = sessions;
 
   return (
-    <Panel title="Triage sessions">
+    <Panel title={title}>
       {latest === undefined && (
         <p className="text-sm text-zinc-600 dark:text-dark-text">
           No triage session recorded yet. Sessions started counting on {SESSIONS_COUNTING_SINCE}.
