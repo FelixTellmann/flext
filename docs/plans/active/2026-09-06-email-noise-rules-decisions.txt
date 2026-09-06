@@ -166,3 +166,71 @@ A: planRekey(rows, identities, occupants, gmail) returns moves/resurrected/disap
    it. A row the server lists twice now gets ONE update to its final UID instead of two
    not: an integration test against the production database — read-only for this repair
 why: the collision rule is a decision over three sets and is only trustworthy from fixtures
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: a rule carrying both client and topic files to which?
+A: the client — the brief's call, kept: the client is the more specific fact about the sender, and the
+   operator reads folder counts per client
+   not: the topic — a topic on a client rule ("Invoices") describes the mail, not whose it is
+why: no reason found for the topic to win; the seed data never set both
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: a column value that still carries "/" (rows written before the flattening) — refuse, or render?
+A: render its LAST segment ("Personal/Travel" -> "Travel"), the same rewrite tmp/flatten-filing-policies.ts
+   applies, so code and script agree on what an old row means
+   not: return null (queue as no_mapping) — 13 policies and 568 unexecuted Action rows would stall until the
+        script ran, for a value whose meaning is unambiguous
+why: logicalPathFor's output never contains "/" either way; the test pins that
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: CLIENT_SEGMENT_RULE — rename?
+A: FOLDER_SEGMENT_RULE, and it now refines `topic` in both Zod schemas (ORPC upsertPolicy and
+   upsert_policy_schema), not only `client`
+why: the rule is about a folder name, and topic was the column slashes came in through
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: the brief said add renameFolder to MailboxProvider if the provider had none — done?
+A: no. imap.ts exports connectImapClient (the connected ImapFlow, TLS pin and dual-stack workaround
+   included) and the rename script calls imapflow's mailboxRename on it directly. createImapProvider now
+   builds on the same function.
+   not: a renameFolder member — types.ts says the enumeration exists to list what the product may do to a
+        mailbox and that a member no one calls is worse than a missing one; imap.test.ts pins the list at
+        four mutating members; a one-off operator script is not a caller
+why: the provider contract stays what the product needs; the script gets the one command it needs
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: scripts/seed-filing-mapping.ts imported CLIENTS_ROOT and columnsForPath — delete the script, or flatten it?
+A: flatten it: mapping groups carry explicit client/topic, paths and bindings are one segment
+   not: delete — -filing-reasons.ts tells the operator to "add a binding in scripts/seed-filing-mapping.ts
+        and re-run it", so it has to stay runnable and must not re-nest anything
+why: the script is the only writer of FilingBinding
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: which stored rows do the two scripts rewrite, and who owns what?
+A: folders script (after a verified RENAME, one transaction, tellmann only): Message.folder,
+   MailboxCursor.folder, FilingBinding.folder, Action.targetPath for the four old logical paths at every
+   status, and the folder inside Action.fromStateJson/toStateJson. Policies script (all mailboxes):
+   SenderPolicy.client/topic, FilingBinding.logicalPath, and Action.targetPath only at shadow/pending/
+   deferred/failed. Applied and undone rows elsewhere (Gmail labels "Clients/Listify" etc., 683 rows) are
+   reported and left: undo re-resolves targetPath and replays it against to_state_json, so the two must
+   keep describing the same folder, and no label rename happens on Gmail.
+   not: rewrite every targetPath — breaks undo's replay for every applied Gmail file action
+why: the brief's step 5 asked for update-or-report; this is the line between the two
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: the policies script rewrites pending rows to flat paths — before or after the server rename?
+A: after; --write refuses while live Message rows still sit in the four nested folders, and both headers
+   say the order
+   not: order-free — a pending "Clients/Listify" row rewritten first would create INBOX.Listify on the next
+        run and the RENAME onto that name would be refused
+why: one guard is cheaper than a recovery
+
+[2026-09-06 19:20] phase 3 — flat filing
+Q: the server reports a different UIDVALIDITY than the rows and cursor for three of the four folders
+   (1507200345 vs 1788514863 on Listify; Restaurants and Tennis likewise; synced 13:45 UTC today) — refuse?
+A: warn, and still mirror the rename. The post-rename check compares the new folder's STATUS to the old
+   folder's STATUS on the same connection; the DB validity is informational. The next sync re-keys those
+   folders by Message-ID (rekeyFolder) whatever happens, and the moved cursor is what makes that a re-key
+   rather than a refetch-as-new.
+   not: refuse — the mismatch predates the rename and a refusal would leave it nested for no gain
+why: the cause of the flapping validity is outside this phase; reported to the operator

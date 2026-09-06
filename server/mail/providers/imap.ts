@@ -456,7 +456,11 @@ export function buildImapProvider(client: ImapFlow, capabilities: MailboxCapabil
   };
 }
 
-export async function createImapProvider(connection: MailboxConnection): Promise<MailboxProvider> {
+// The connected client on its own, for operator scripts that need an IMAP command the provider
+// deliberately does not offer (a folder RENAME, for tmp/flatten-tellmann-folders.ts). MailboxProvider
+// enumerates what the product may do to a mailbox and a one-off script is not the product; this keeps
+// the TLS pin and the dual-stack workaround in one place without widening that enumeration.
+export async function connectImapClient(connection: MailboxConnection): Promise<ImapFlow> {
   const client = new ImapFlow({
     host: connection.host,
     port: connection.port,
@@ -490,6 +494,10 @@ export async function createImapProvider(connection: MailboxConnection): Promise
   });
 
   await client.connect();
+  return client;
+}
 
+export async function createImapProvider(connection: MailboxConnection): Promise<MailboxProvider> {
+  const client = await connectImapClient(connection);
   return buildImapProvider(client, readCapabilities(client), connection.flavor);
 }
