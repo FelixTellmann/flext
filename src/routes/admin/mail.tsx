@@ -20,6 +20,50 @@ type ObservedAddress = {
   last_seen_at: string | null;
 };
 
+type MailboxEntry = Awaited<ReturnType<typeof orpc.mail.listMailboxes>>[number];
+type SourceSwitch = "first_contact" | "settled_sweep" | "declined_sweep";
+type Suspension = "first_contact" | "dwell";
+
+// One row per scheduled source. The dwell suspension is shown under both sweeps because one suspension
+// covers both (inbox-dwell 1.11).
+const source_switch_rows: { source: SourceSwitch; label: string; detail: string; suspension: Suspension }[] = [
+  {
+    source: "first_contact",
+    label: "First contact quarantine",
+    detail: "A first email that does not look like a person wrote it goes to Quarantine. Only mail arriving after the switch is thrown.",
+    suspension: "first_contact",
+  },
+  {
+    source: "settled_sweep",
+    label: "7-day rule (settled sweep)",
+    detail: "Read mail that has sat in the inbox past the dwell is archived.",
+    suspension: "dwell",
+  },
+  {
+    source: "declined_sweep",
+    label: "Declined sweep",
+    detail: "Unread mail that survived enough triage sessions untouched is archived.",
+    suspension: "dwell",
+  },
+];
+
+function switchState(entry: MailboxEntry, source: SourceSwitch): { autonomy: "shadow" | "auto"; set_at: string | null } {
+  if (source === "first_contact") {
+    return { autonomy: entry.first_contact_autonomy, set_at: entry.first_contact_autonomy_set_at };
+  }
+  if (source === "settled_sweep") {
+    return { autonomy: entry.settled_sweep_autonomy, set_at: entry.settled_sweep_autonomy_set_at };
+  }
+  return { autonomy: entry.declined_sweep_autonomy, set_at: entry.declined_sweep_autonomy_set_at };
+}
+
+function suspensionState(entry: MailboxEntry, which: Suspension): { at: string | null; reason: string | null } {
+  if (which === "first_contact") {
+    return { at: entry.first_contact_suspended_at, reason: entry.first_contact_suspension_reason };
+  }
+  return { at: entry.dwell_suspended_at, reason: entry.dwell_suspension_reason };
+}
+
 export const Route = createFileRoute("/admin/mail")({
   loader: async () => {
     const [mailboxes, runs] = await Promise.all([orpc.mail.listMailboxes(), orpc.mail.listSyncRuns({ limit: 20 })]);
@@ -170,6 +214,82 @@ function AdminMailPage() {
           </dl>
 
           {entry.last_error !== null && <p className="mb-3 rounded bg-danger/10 p-2 text-danger text-sm">{entry.last_error}</p>}
+
+          <div className="mb-3 rounded border border-gray-200 p-3 dark:border-dark-border">
+            <h3 className="mb-1 font-medium text-gray-900 text-sm dark:text-dark-headings">Scheduled rules</h3>
+            <p className="mb-2 text-gray-500 text-xs dark:text-dark-text">
+              Watch-only records what each rule would have done; on lets it act on this mailbox unattended. A rescue suspends the rule until
+              you clear it here.
+            </p>
+            <ul className="flex flex-col gap-2">
+              {source_switch_rows.map((row) => {
+                const state = switchState(entry, row.source);
+                const suspension = suspensionState(entry, row.suspension);
+                const switch_key = `${entry.id}:switch:${row.source}`;
+                const clear_key = `${entry.id}:clear:${row.suspension}`;
+                return (
+                  <li className="flex flex-col gap-1 border-gray-100 border-t pt-2 dark:border-dark-border" key={row.source}>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium text-gray-900 dark:text-dark-headings">{row.label}</span>
+                      <span
+                        className={clsx(
+                          "rounded px-1.5 py-0.5 text-xs",
+                          state.autonomy === "auto"
+                            ? "bg-success/10 text-success"
+                            : "bg-gray-100 text-gray-700 dark:bg-dark-bg dark:text-dark-text",
+                        )}
+                      >
+                        {state.autonomy === "auto" ? "on" : "watch-only"}
+                      </span>
+                      {state.set_at !== null && (
+                        <span className="text-gray-500 text-xs dark:text-dark-text">
+                          since {state.set_at.replace("T", " ").slice(0, 16)} UTC
+                        </span>
+                      )}
+                      <ActionButton
+                        busy={pending === switch_key}
+                        disabled={pending !== null}
+                        label={state.autonomy === "auto" ? "Switch to watch-only" : "Switch on"}
+                        onClick={() =>
+                          void runAction(switch_key, `${row.label}: ${state.autonomy === "auto" ? "watch-only" : "on"}`, () =>
+                            orpc.mail.setSourceAutonomy({
+                              mailbox_id: entry.id,
+                              source: row.source,
+                              autonomy: state.autonomy === "auto" ? "shadow" : "auto",
+                            }),
+                          )
+                        }
+                        variant={secondary_button}
+                      />
+                    </div>
+                    <p className="text-gray-500 text-xs dark:text-dark-text">{row.detail}</p>
+                    {suspension.at !== null && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded bg-warning/10 px-1.5 py-0.5 text-warning text-xs">
+                          Suspended {suspension.at.slice(0, 10)}
+                          {row.suspension === "dwell" ? " (both sweeps)" : ""}
+                        </span>
+                        <ActionButton
+                          busy={pending === clear_key}
+                          disabled={pending !== null}
+                          label="Clear suspension"
+                          onClick={() =>
+                            void runAction(clear_key, `${row.label}: clear suspension`, () =>
+                              orpc.mail.clearMailboxSuspension({ mailbox_id: entry.id, which: row.suspension }),
+                            )
+                          }
+                          variant={secondary_button}
+                        />
+                        <span className="break-words text-gray-600 text-xs dark:text-dark-text">
+                          {suspension.reason ?? "(no reason recorded)"}
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
 
           <div className="flex flex-wrap gap-2">
             <ActionButton

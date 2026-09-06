@@ -25,6 +25,7 @@ import type { MailboxProvider } from "@server/mail/providers/types";
 import { ACTION_JOURNAL_STATUS_FILTERS, listActionJournal } from "@server/mail/query/actions";
 import { listRecentAttentionSessions } from "@server/mail/query/attention-sessions";
 import { listFilingQueue } from "@server/mail/query/filing";
+import { clearMailboxSuspension, MAILBOX_SUSPENSIONS, SOURCE_SWITCHES, setSourceAutonomy } from "@server/mail/query/mailbox-switches";
 import { listNeedsAction } from "@server/mail/query/needs-action";
 import {
   clearPolicySuspension,
@@ -151,8 +152,37 @@ export const mailProcedures = {
       backfilled_at: row.backfilled_at?.toISOString() ?? null,
       last_error: row.last_error,
       last_error_at: row.last_error_at?.toISOString() ?? null,
+      first_contact_autonomy: row.first_contact_autonomy,
+      first_contact_autonomy_set_at: row.first_contact_autonomy_set_at?.toISOString() ?? null,
+      settled_sweep_autonomy: row.settled_sweep_autonomy,
+      settled_sweep_autonomy_set_at: row.settled_sweep_autonomy_set_at?.toISOString() ?? null,
+      declined_sweep_autonomy: row.declined_sweep_autonomy,
+      declined_sweep_autonomy_set_at: row.declined_sweep_autonomy_set_at?.toISOString() ?? null,
+      first_contact_suspended_at: row.first_contact_suspended_at?.toISOString() ?? null,
+      first_contact_suspension_reason: row.first_contact_suspension_reason,
+      dwell_suspended_at: row.dwell_suspended_at?.toISOString() ?? null,
+      dwell_suspension_reason: row.dwell_suspension_reason,
     }));
   }),
+
+  // docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md: the per-mailbox switch for the
+  // three sources that carry no policy. Unconditional both ways, like demotePolicyAutonomy: the tick's
+  // eligibility check is what honours a suspension, so a switch thrown on a suspended source waits there
+  // until the operator clears it.
+  setSourceAutonomy: authed
+    .input(z.object({ mailbox_id: z.string().min(1), source: z.enum(SOURCE_SWITCHES), autonomy: z.enum(["shadow", "auto"]) }))
+    .handler(async ({ input }) => {
+      await setSourceAutonomy({ mailbox_id: input.mailbox_id, source: input.source, autonomy: input.autonomy, now: new Date() });
+      return { ok: true };
+    }),
+
+  // The mailbox counterpart of clearPolicySuspension. Nothing else clears dwellSuspendedAt.
+  clearMailboxSuspension: authed
+    .input(z.object({ mailbox_id: z.string().min(1), which: z.enum(MAILBOX_SUSPENSIONS) }))
+    .handler(async ({ input }) => {
+      await clearMailboxSuspension({ mailbox_id: input.mailbox_id, which: input.which, now: new Date() });
+      return { ok: true };
+    }),
 
   addMailbox: authed
     .input(

@@ -490,3 +490,54 @@ Q: does SenderPolicyInput / matchPolicy carry mark_read?
 A: no; it is read at execution time through the executor's existing SenderPolicy left join (PendingActionRow)
    not: adding it to SenderPolicyInput — nothing in decide() would read it
 why: the decision is the same either way; only the plan differs
+
+[2026-09-06 21:50] phase 4b — the switch's name in the ORPC input
+Q: "settled_sweep" | "declined_sweep" (the column names) or "sweep_settled" | "sweep_declined" (the
+   DecisionSource spellings)?
+A: the column names, as the brief spelled them; the type is SourceSwitch in
+   server/mail/query/mailbox-switches.ts, deliberately not ScheduledSource
+   not: reusing ScheduledSource — the procedure writes columns, and the two spellings would then meet in
+   one signature
+why: one module names columns, the other names decide() sources; the helper's test pins the mapping
+
+[2026-09-06 21:50] phase 4b — throwing a switch on a suspended source
+Q: does setSourceAutonomy refuse "auto" while the source is suspended?
+A: no; unconditional both ways, like demotePolicyAutonomy. eligibleScheduledSources already refuses a
+   suspended source, so the switch waits until the operator clears the suspension on the same page
+   not: a refusal in the procedure — a second copy of the eligibility rule
+why: making it easy to stop is what makes it safe to start; the tick owns the rule
+
+[2026-09-06 21:50] phase 4b — the mailboxes page shows the dwell suspension twice
+Q: where does dwellSuspendedAt render, given it covers both sweeps?
+A: under both sweep rows, labelled "(both sweeps)", with one Clear button each doing the same clear
+   not: a fourth row for "the sweeps" — the operator reads per rule, and the reason text names the sweep
+why: the row is the unit the page is read in
+
+[2026-09-06 21:50] phase 4b — rewrite-first-contact-backlog writes kind and source only
+Q: the brief says rewrite kind / source / reasons; Action has no reasons column. What is rewritten?
+A: kind + source + updatedAt on rows that become human-shaped; machine-shaped rows are left byte-for-byte
+   (reasons are computed by decide() at read time and never stored); guard-suppressed rows are found by
+   (kind keep_inbox, source first_contact) since suppressed_by is not stored either; a "collides" bucket
+   counts rows the unique key (messageId, kind, runId) would refuse — 0 today — and --write skips them
+   not: deleting and re-journalling — the decision says nothing is deleted
+why: the shadow page reads kind/source; there is nothing else on the row the split changes
+
+[2026-09-06 21:50] phase 4b — signals for the rewrite
+Q: what does the rewrite pass to deriveSignals for sender_message_count / my_reply_count?
+A: 1 and 0 — the row's source already proves is_first_contact, and only the four human-shaped tests are
+   read; every header input comes from the Message row through the same deriveSignals the pass uses
+   not: recomputing the Sender aggregate per row
+why: the brief allows it, and it keeps the script to one join
+
+[2026-09-06 21:50] phase 4b — set-source-autonomy leaves a switch already at auto alone
+Q: does --write re-stamp set-at on a mailbox whose switch is already on?
+A: no; the row is reported "(unchanged)" and gets no UPDATE. Re-stamping first contact's set-at would move
+   the promotion cutoff forward and hold back every proposal since
+   not: an idempotent overwrite
+why: set-at is the cutoff, not an audit stamp
+
+[2026-09-06 21:50] phase 4b — set-source-autonomy dry run against production
+Q: could the dry run be exercised?
+A: no: production has not had migration 0019 applied (Unknown column 'firstContactAutonomy'), and the plan's
+   batch runs db:migrate first. The script type-checks; its table is unproven against live rows
+why: every DATABASE_URL is production and no schema command is run from a session
