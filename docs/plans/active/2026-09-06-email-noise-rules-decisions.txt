@@ -1000,3 +1000,60 @@ Q: the page's one_click flag is MAX(list_unsubscribe) with MAX(list_unsubscribe_
 A: accepted gap, code left alone; the outcome panel reports the refusal with its reason
    not: change the query to a per-message EXISTS — a second grouped subquery for a rare edge
 why: the mismatch only surfaces where a sender changed its headers mid-history
+
+[2026-09-06 23:40] phase 8b — Dismiss on a proposal group
+Q: the plan says Approve all / Dismiss per group, but nothing writes "the operator declined this"
+A: a new Action status, dismissed, owned by server/mail/query/review.ts and written only by
+   dismissProposalGroup, guarded on shadow like supersedeSiblingsUpdate. Every promotion loader and
+   count reads status = shadow, so a dismissed row is never promoted and never counted; the journal
+   shows it with its meaning; the scheduled UPSERT never touches status, so the tick does not
+   resurrect it. A fresh operator Run-pass writes a new row under its own run id, as for any row
+   not: reuse superseded — its meaning text says another action moved the message, which would be false
+   not: delete the rows — the superseded decision already lost that alternative
+why: an honest status costs one enum entry and its pinned tables; a borrowed one lies in the journal
+
+[2026-09-06 23:40] phase 8b — approving a group is a new procedure pair, not approveDecision
+Q: reuse approveDecision for Approve all?
+A: no. First-contact, sweep and derived rows carry no policy id, so its policy scope can never name
+   them, and it has no dismiss arm. approveProposalGroup / dismissProposalGroup take one key —
+   (mailbox, policy or source, kind, destination) — never wider than one mailbox, bounded by
+   MAX_ACTION_BATCH_SIZE, and approval hands the ids to the journal's own guarded promote
+   not: extend approveDecision's union with a source arm — that block is shared and the file is append-only
+why: Ruling 3's scope kept, one write path for shadow → pending kept
+
+[2026-09-06 23:40] phase 8b — Approve all is bounded by the count on screen
+Q: a 412-row group and a 200-row cap: one press and "212 remain", or loop?
+A: loop, as many passes as the shown count needs, stopping when a pass changes nothing; a group that
+   grew under the loop says "N still waiting, press again"
+   not: one press per 200 — "Approve all" would be a lie on any group over the cap
+why: the operator clicked a named group with its count next to the button
+
+[2026-09-06 23:40] phase 8b — no one-click approve on a destructive group
+Q: the shadow page demands a typed phrase before bulk-approving auto_trash; the review page?
+A: destructive groups (auto_trash, purge) render the count and a link to the shadow page instead of an
+   Approve button; Dismiss stays. Organisational groups (archive, file, quarantine) are one click, with
+   the standing note that approval only queues a move for the next apply run
+   not: copy the phrase ceremony onto the review page — a second copy of the gate is the drift -shadow-kinds.ts warns about
+why: under-gating a deletion is the one failure that cannot be taken back; zero auto_trash rows in shadow today
+
+[2026-09-06 23:40] phase 8b — the Switch on gate
+Q: the promote page's tick asserts reviewed_shadow_record; a bare Switch on button would assert it silently
+A: each row carries an "I've read this one" tick that enables its Switch on button; the click then calls
+   promotePolicyAutonomy with reviewed_shadow_record: true, the same single-policy procedure the Senders
+   control uses. A refusal renders the gate's own detail in amber
+why: the gate is the operator's assertion, and a button cannot make it for him
+
+[2026-09-06 23:40] phase 8b — the unsubscribe picker is duplicated, not shared
+Q: extract unsubscribe.tsx's checkbox block into -unsubscribe-picker.tsx and use it on both pages?
+A: the picker exists and the review page uses it; unsubscribe.tsx is untouched. Another agent was editing
+   that file's mailto group during this phase, and a commit of it would sweep their hunks in. The picker
+   mirrors the widened tickable predicate (one-click OR mailto) and the outcome wording
+   not: edit unsubscribe.tsx's imports only — same file, same commit hazard
+why: follow-up once phase 7b lands: point unsubscribe.tsx's one-click panel at the picker
+
+[2026-09-06 23:40] phase 8b — no collapse URL param, and groups are per mailbox
+Q: collapsible sections via a URL param? group proposals across mailboxes?
+A: no param: every section is capped (ten rules, ten groups, sixty senders, seven sessions) so nothing
+   gets long enough to collapse. Groups are per mailbox because approval writes rows the executor runs
+   against that mailbox; the sketch's mailbox selector is the same idea, one line per mailbox instead
+why: the parameter would carry state the page never needs
