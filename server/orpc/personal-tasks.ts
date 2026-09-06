@@ -8,7 +8,7 @@ import {
   personalTask,
   personalTaskDeferral,
 } from "@server/db/schema";
-import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
+import { DAY_MS, isoWeekOf, operatorDayStart, operatorDayStartOf, operatorWeekRange } from "@server/operator-day";
 import { readSetting } from "@server/personal-settings";
 import { resolveStreams } from "@server/personal-streams";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
@@ -74,6 +74,28 @@ const deleteWakaNameRows = async (normalised_name: string): Promise<void> => {
 };
 
 const id_schema = z.object({ id: z.string().min(1) });
+
+const settable_state_schema = z.enum(["open", "someday", "completed", "cancelled"]);
+
+// The one place a state change decides its timestamps, shared by setState and updateTask: completed_at
+// and cancelled_at are set on the way in and cleared on the way out, so a revived task carries neither.
+const stateColumns = (state: z.infer<typeof settable_state_schema>, now: Date) => ({
+  state,
+  completed_at: state === "completed" ? now : null,
+  cancelled_at: state === "cancelled" ? now : null,
+});
+
+// A calendar day from the editor, YYYY-MM-DD. Converted to the operator's midnight on this side so a
+// `when` of today lands exactly where pullToToday puts it and the screens agree about which day it is.
+const day_schema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const dayToInstant = (day: string | null | undefined): Date | null | undefined => {
+  if (day === undefined || day === null) {
+    return day;
+  }
+
+  return operatorDayStartOf(day);
+};
 
 export const capture_input_schema = z.object({ title: z.string().min(1).max(512) });
 
@@ -211,20 +233,146 @@ export const personalTaskProcedures = {
     return { id: row.id, deferral_count, blocked: false };
   }),
 
-  setState: authed.input(id_schema.extend({ state: z.enum(["open", "someday", "completed", "cancelled"]) })).handler(async ({ input }) => {
+  setState: authed.input(id_schema.extend({ state: settable_state_schema })).handler(async ({ input }) => {
     const now = new Date();
 
     await db
       .update(personalTask)
-      .set({
-        state: input.state,
-        completed_at: input.state === "completed" ? now : null,
-        cancelled_at: input.state === "cancelled" ? now : null,
-        updatedAt: now,
-      })
+      .set({ ...stateColumns(input.state, now), updatedAt: now })
       .where(eq(personalTask.id, input.id));
 
     return { id: input.id, state: input.state };
+  }),
+
+  // The task detail editor's one write. Partial: an absent key is untouched, a null clears the column.
+  // Filing does not triage — an inbox task given an area is still in the inbox — and a `when` set here
+  // leaves plan_week alone, since the pool already excludes anything dated.
+  updateTask: authed
+    .input(
+      id_schema.extend({
+        title: z.string().min(1).max(512).optional(),
+        notes: z.string().max(20_000).nullable().optional(),
+        area_id: z.string().min(1).nullable().optional(),
+        project_id: z.string().min(1).nullable().optional(),
+        when_date: day_schema.nullable().optional(),
+        deadline: day_schema.nullable().optional(),
+        estimate_minutes: z.number().int().min(0).max(100_000).nullable().optional(),
+        focus: z.boolean().optional(),
+        state: settable_state_schema.optional(),
+      }),
+    )
+    .handler(async ({ input }) => {
+      const [row] = await db.select().from(personalTask).where(eq(personalTask.id, input.id)).limit(1);
+
+      if (!row) {
+        throw new ORPCError("NOT_FOUND");
+      }
+
+      const { id, state, when_date, deadline, ...fields } = input;
+      const area_id = fields.area_id === undefined ? row.area_id : fields.area_id;
+      let project_id = fields.project_id === undefined ? row.project_id : fields.project_id;
+
+      // A project belongs to exactly one area, so the pair is checked as a pair: a project named
+      // explicitly must sit under the effective area, and a project the task already had is dropped
+      // rather than kept when the area moves out from under it.
+      if (project_id !== null) {
+        const [project] = await db
+          .select({ area_id: personalProject.area_id })
+          .from(personalProject)
+          .where(and(eq(personalProject.id, project_id), isNull(personalProject.archived_at)))
+          .limit(1);
+
+        if (fields.project_id !== undefined && (project === undefined || project.area_id !== area_id)) {
+          throw new ORPCError("BAD_REQUEST", { message: "project does not belong to the area" });
+        }
+
+        if (fields.project_id === undefined && (project === undefined || project.area_id !== area_id)) {
+          project_id = null;
+        }
+      }
+
+      const now = new Date();
+
+      await db
+        .update(personalTask)
+        .set({
+          ...fields,
+          area_id,
+          project_id,
+          when_date: dayToInstant(when_date),
+          deadline: dayToInstant(deadline),
+          ...(state === undefined ? {} : stateColumns(state, now)),
+          updatedAt: now,
+        })
+        .where(eq(personalTask.id, id));
+
+      const [updated] = await db.select().from(personalTask).where(eq(personalTask.id, id)).limit(1);
+
+      if (!updated) {
+        throw new ORPCError("NOT_FOUND");
+      }
+
+      return mapTask(updated);
+    }),
+
+  // Everything the detail screen shows in one round trip. Null rather than NOT_FOUND so the loader can
+  // answer with the router's own not-found page, as the other dynamic routes do.
+  getTask: authed.input(id_schema).handler(async ({ input }) => {
+    const [row] = await db.select().from(personalTask).where(eq(personalTask.id, input.id)).limit(1);
+
+    if (!row) {
+      return null;
+    }
+
+    const [area, project, deferrals, deferral_limit] = await Promise.all([
+      row.area_id === null
+        ? Promise.resolve([])
+        : db.select({ name: personalArea.name }).from(personalArea).where(eq(personalArea.id, row.area_id)).limit(1),
+      row.project_id === null
+        ? Promise.resolve([])
+        : db.select({ name: personalProject.name }).from(personalProject).where(eq(personalProject.id, row.project_id)).limit(1),
+      db.select().from(personalTaskDeferral).where(eq(personalTaskDeferral.task_id, row.id)).orderBy(desc(personalTaskDeferral.createdAt)),
+      readSetting("deferral_limit", DEFERRAL_LIMIT),
+    ]);
+
+    return {
+      task: mapTask(row),
+      area_name: area[0]?.name ?? null,
+      project_name: project[0]?.name ?? null,
+      deferral_limit,
+      deferrals: deferrals.map((deferral) => ({
+        id: deferral.id,
+        from_date: deferral.from_date?.toISOString() ?? null,
+        to_date: deferral.to_date?.toISOString() ?? null,
+        reason: deferral.reason,
+        created_at: deferral.createdAt.toISOString(),
+      })),
+    };
+  }),
+
+  // Undated tasks whose deadline falls in the operator's current week. Read-only by design: a deadline
+  // hides nothing and schedules nothing, so this list never puts a task into Today — it only says what
+  // is owed before Sunday. Someday is included because a deadline is imposed from outside and does not
+  // care what state the task is parked in.
+  listDeadlinesThisWeek: authed.handler(async () => {
+    const { from, to } = operatorWeekRange();
+    const week_start = operatorDayStartOf(from);
+    const week_end = new Date(operatorDayStartOf(to).getTime() + DAY_MS);
+
+    const rows = await db
+      .select()
+      .from(personalTask)
+      .where(
+        and(
+          inArray(personalTask.state, ["inbox", "open", "someday"]),
+          isNull(personalTask.when_date),
+          gte(personalTask.deadline, week_start),
+          lt(personalTask.deadline, week_end),
+        ),
+      )
+      .orderBy(asc(personalTask.deadline), asc(personalTask.createdAt));
+
+    return rows.map(mapTask);
   }),
 
   reorderPool: authed.input(z.object({ ids: z.array(z.string().min(1)).max(500) })).handler(async ({ input }) => {
