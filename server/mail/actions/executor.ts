@@ -405,8 +405,8 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
     // Every row keeps its pre-state and becomes failed rather than applied. Nothing here re-runs a failed
     // row — loadPendingActions selects only pending ones — so the pre-state stands for reconciliation and
     // for the operator, not for a retry. The one exception is the unsubscribe press: a re-press reopens its
-    // own run's failed archive rows to shadow via claimSenderArchives and claims them again as new pending
-    // rows. A move that succeeded server-side and threw on the way back lands here
+    // own run's failed archive rows to shadow via claimSenderArchives and promotes the same rows to pending
+    // again. A move that succeeded server-side and threw on the way back lands here
     // too, which is why this status is a report of what we observed rather than a fact about the mailbox.
     const message = toRecordedError(error);
     await journal.markFailed(live_rows.map((row) => ({ action_id: row.action_id, error: message })));
