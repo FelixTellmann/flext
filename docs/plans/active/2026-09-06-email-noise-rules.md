@@ -55,6 +55,11 @@ Decisions: `2026-09-06-first-contact-human-or-machine.md`, `2026-09-06-scheduled
 - [ ] `tmp/rewrite-first-contact-backlog.ts` (dry-run, `--write`): re-runs the split over every shadow `first_contact` row and rewrites kind/source/reasons in place. Nothing deleted.
 - [ ] `tmp/set-source-autonomy.ts` (dry-run, `--write`): tellmann `first_contact_autonomy = auto`; `settled_sweep_autonomy = auto` on all four. Run in the operator batch, after the deploy.
 
+### Phase 4c — after the 4b review
+Decision: `2026-09-06-clear-suspension-resets-the-window.md`.
+- [ ] `Mailbox.first_contact_suspension_cleared_at` and `dwell_suspension_cleared_at` (migration); clearMailboxSuspension stamps them; rescue detection counts rescues since `max(now - 30d, cleared_at)` for each pair.
+- [ ] The senders page's bulk-assign gets the same mark-read checkbox as single assign (today bulk silently resets it).
+
 ### Phase 5 — the rules themselves
 - [ ] `tmp/create-noise-policies.ts`, dry-run by default, `--write` to apply, idempotent against rows that exist (noreply-iam@booking.com is also in `create-throwaway-policies.ts`). Domain rules: logalert.app, github.com, npmjs.com, vercel.com, planetscale.com, wakatime.com to `Notifications`, mark read. booking.com domain to `Travel`; `noreply-iam@booking.com` address to `auto_trash`. fnb.co.za, standardbank.co.za, bobpay.co.za to `Finances`.
 - [ ] `tmp/promote-reference-policies.ts`: Housing and VitaminShoppe rules from 2026-08-26 to `auto` via `promotePolicyAutonomy`.
