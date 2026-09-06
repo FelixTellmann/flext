@@ -35,12 +35,18 @@ function parseIpv4(text: string): number[] | null {
   return parsed.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255) ? parsed : null;
 }
 
+// Refused: this host (0/8), private (10/8, 172.16/12, 192.168/16), loopback (127/8), carrier-grade NAT
+// (100.64/10), link-local (169.254/16), IETF protocol assignments (192.0.0/24), benchmarking (198.18/15),
+// multicast (224/4) and reserved (240/4, broadcast included).
 function isPublicIpv4(octets: number[]): boolean {
-  const [a, b] = octets;
-  if (a === undefined || b === undefined) {
+  const [a, b, c] = octets;
+  if (a === undefined || b === undefined || c === undefined) {
     return false;
   }
-  if (a === 0 || a === 10 || a === 127) {
+  if (a === 0 || a === 10 || a === 127 || a >= 224) {
+    return false;
+  }
+  if (a === 100 && b >= 64 && b <= 127) {
     return false;
   }
   if (a === 169 && b === 254) {
@@ -49,7 +55,10 @@ function isPublicIpv4(octets: number[]): boolean {
   if (a === 172 && b >= 16 && b <= 31) {
     return false;
   }
-  if (a === 192 && b === 168) {
+  if (a === 192 && (b === 168 || (b === 0 && c === 0))) {
+    return false;
+  }
+  if (a === 198 && (b === 18 || b === 19)) {
     return false;
   }
   return true;
@@ -155,8 +164,34 @@ export async function refusalFor(url_text: string, lookup_impl: LookupLike): Pro
   return non_public === undefined ? null : `${hostname} resolves to ${non_public.address}, which is not a public address`;
 }
 
+// node's dns.promises.lookup cannot be aborted, so the lookup is raced against the deadline instead: the
+// abort rejects this promise and the answer that arrives later is dropped unread. The listener is removed
+// on settle because this runs in a long-lived server and the controller outlives the lookup.
+function untilAborted<Value>(promise: Promise<Value>, signal: AbortSignal): Promise<Value> {
+  return new Promise<Value>((resolve, reject) => {
+    const onAbort = () => reject(new Error("aborted"));
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 // Never throws: a network error, a timeout, a refused target and a non-2xx are all one outcome with
 // the evidence carried on it — the caller records the row either way and a throw would skip the record.
+// The timeout budget covers the DNS lookups as well as the requests: a resolver that hangs is refused
+// at the deadline like a server that hangs.
 export async function performOneClick(input: {
   url: string;
   fetch_impl?: FetchLike;
@@ -168,11 +203,16 @@ export async function performOneClick(input: {
   const timeout_ms = input.timeout_ms ?? ONE_CLICK_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout_ms);
+  const timed_out: OneClickOutcome = { status: "failed", response_code: null, error: `timed out after ${timeout_ms} ms` };
+  const deadline_lookup: LookupLike = (hostname) => untilAborted(lookup_impl(hostname), controller.signal);
 
   try {
     let url = input.url;
     for (let hop = 0; hop <= ONE_CLICK_MAX_REDIRECTS; hop += 1) {
-      const refusal = await refusalFor(url, lookup_impl);
+      const refusal = await refusalFor(url, deadline_lookup);
+      if (controller.signal.aborted) {
+        return timed_out;
+      }
       if (refusal !== null) {
         return hop === 0
           ? { status: "skipped", response_code: null, error: refusal }
@@ -211,7 +251,7 @@ export async function performOneClick(input: {
     return { status: "failed", response_code: null, error: `more than ${ONE_CLICK_MAX_REDIRECTS} redirects` };
   } catch (error) {
     if (controller.signal.aborted) {
-      return { status: "failed", response_code: null, error: `timed out after ${timeout_ms} ms` };
+      return timed_out;
     }
     return { status: "failed", response_code: null, error: error instanceof Error ? error.message : String(error) };
   } finally {

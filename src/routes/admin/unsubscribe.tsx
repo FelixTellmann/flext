@@ -89,8 +89,13 @@ const Unsubscribe: FC = () => {
   const mailto_only = candidates.filter((candidate) => candidate.target.http === null);
   const reachable = one_click.reduce((sum, candidate) => sum + candidate.in_inbox, 0);
 
-  const selected_senders = one_click.filter((candidate) => selected.has(candidateKey(candidate)));
-  const distinct_addresses = new Set(selected_senders.map((candidate) => candidate.from_address.toLowerCase())).size;
+  // The list keys rows by (mailbox, address), so one address ticked in two mailboxes is one sender: the
+  // count, the cap hint and what the press sends all come from this one deduped list.
+  const selected_addresses = one_click
+    .filter((candidate) => selected.has(candidateKey(candidate)))
+    .map((candidate) => candidate.from_address)
+    .filter((address, index, addresses) => addresses.findIndex((other) => other.toLowerCase() === address.toLowerCase()) === index);
+  const distinct_addresses = selected_addresses.length;
   const all_one_click_selected = one_click.length > 0 && one_click.every((candidate) => selected.has(candidateKey(candidate)));
 
   const toggle = (key: string) => {
@@ -114,9 +119,7 @@ const Unsubscribe: FC = () => {
     });
     try {
       const outcome = await orpc.mail.unsubscribeBulk({
-        senders: selected_senders
-          .slice(0, BULK_LIMIT)
-          .map((candidate) => ({ from_address: candidate.from_address, mailbox_label: candidate.mailbox_label })),
+        senders: selected_addresses.slice(0, BULK_LIMIT).map((from_address) => ({ from_address })),
       });
       setResult(outcome);
       const archived = outcome.senders.reduce((sum, sender) => sum + sender.archived, 0);

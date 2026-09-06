@@ -58,7 +58,9 @@ function describeError(error: unknown): string {
 }
 
 // Step (a): the newest message from this sender that offers the one-click route, POSTed once. Skipped,
-// and recorded as such, when no message does — a mailto-only sender waits for phase 7's sender.
+// and recorded as such, when no message does — a mailto-only sender waits for phase 7's sender. Every
+// message with the header is read, not the newest few: the page's one_click is MAX over all of the
+// sender's mail, and the button must find the same target the page promised.
 async function attemptOneClick(from_address: string, now: Date): Promise<UnsubscribeAttemptRecord> {
   const rows = await db
     .select({
@@ -71,11 +73,11 @@ async function attemptOneClick(from_address: string, now: Date): Promise<Unsubsc
       and(
         sql`LOWER(${message.from_address}) = LOWER(${from_address})`,
         isNotNull(message.list_unsubscribe_post),
+        isNotNull(message.list_unsubscribe),
         isNull(message.disappeared_at),
       ),
     )
-    .orderBy(desc(message.internal_date))
-    .limit(10);
+    .orderBy(desc(message.internal_date));
 
   const target = pickOneClickTarget(rows);
   if (target === null) {

@@ -882,3 +882,18 @@ why: the same one-tap hazard, one level up
 compile-forced: link-action.test.ts's UnsubscribeBulkResult fixture spreads its counts because
    outcome.ts's SenderArchiveSummary gains `retried` in a parallel uncommitted edit; a literal fails
    the excess-property check on one side or the other
+
+[2026-09-06 23:05] phase 6 fix — the DNS lookup under the one-click deadline
+Q: node's dns.promises.lookup cannot be aborted; how does it share the 10 s?
+A: raced against the AbortController's signal (untilAborted); the abort rejects the race, performOneClick
+   checks signal.aborted after refusalFor and returns "timed out after N ms", and an answer arriving
+   after the deadline is dropped unread — nothing is requested on it. The abort listener is removed on
+   settle because the server is long-lived
+   not: a second timer per lookup — one budget covers lookups and requests, as the review asked
+why: a hanging resolver must not outlive the deadline a hanging server already respects
+
+[2026-09-06 23:05] phase 6 fix — what the page says about a disabled mailbox's rows
+Q: the per-sender line still says "N waiting for the next tick" for rows in a disabled mailbox?
+A: yes; the mailbox line beside it says "mailbox disabled, nothing will run until it is re-enabled",
+   and the counts cannot tell which mailbox a waiting row is in without a second shape
+why: the disabled state is per mailbox and is reported per mailbox

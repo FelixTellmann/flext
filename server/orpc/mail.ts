@@ -508,7 +508,7 @@ export const mailProcedures = {
     .input(
       z.object({
         senders: z
-          .array(z.object({ from_address: z.string().min(1).max(320), mailbox_label: z.string().optional() }))
+          .array(z.object({ from_address: z.string().min(1).max(320) }))
           .min(1)
           .max(50),
       }),

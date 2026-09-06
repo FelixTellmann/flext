@@ -31,6 +31,37 @@ describe("isPublicAddress", () => {
     expect(isPublicAddress("172.32.0.1")).toBe(true);
   });
 
+  test("IPv4: carrier-grade NAT, IETF assignments, benchmarking, multicast, reserved and broadcast", () => {
+    for (const address of [
+      "100.64.0.1",
+      "100.127.255.254",
+      "192.0.0.1",
+      "192.0.0.255",
+      "198.18.0.1",
+      "198.19.255.254",
+      "224.0.0.1",
+      "239.255.255.255",
+      "240.0.0.1",
+      "255.255.255.255",
+    ]) {
+      expect(isPublicAddress(address)).toBe(false);
+    }
+    expect(isPublicAddress("100.63.255.255")).toBe(true);
+    expect(isPublicAddress("100.128.0.1")).toBe(true);
+    expect(isPublicAddress("192.0.1.1")).toBe(true);
+    expect(isPublicAddress("198.17.255.255")).toBe(true);
+    expect(isPublicAddress("198.20.0.1")).toBe(true);
+    expect(isPublicAddress("223.255.255.255")).toBe(true);
+  });
+
+  test("the mapped form inherits every IPv4 range", () => {
+    expect(isPublicAddress("::ffff:100.64.0.1")).toBe(false);
+    expect(isPublicAddress("::ffff:192.0.0.1")).toBe(false);
+    expect(isPublicAddress("::ffff:198.18.0.1")).toBe(false);
+    expect(isPublicAddress("::ffff:224.0.0.1")).toBe(false);
+    expect(isPublicAddress("::ffff:240.0.0.1")).toBe(false);
+  });
+
   test("IPv6: loopback, unspecified, link-local, unique-local", () => {
     for (const address of ["::1", "::", "fe80::1", "febf::1", "fc00::1", "fd12:3456::1"]) {
       expect(isPublicAddress(address)).toBe(false);
@@ -235,5 +266,34 @@ describe("performOneClick", () => {
     const outcome = await performOneClick({ url: "https://example.com/out", fetch_impl, lookup_impl: public_lookup, timeout_ms: 10 });
 
     expect(outcome).toEqual({ status: "failed", response_code: null, error: "timed out after 10 ms" });
+  });
+
+  test("a resolver that never answers is refused at the same deadline, and nothing is requested", async () => {
+    let requested = false;
+    const fetch_impl: FetchLike = async () => {
+      requested = true;
+      return new Response("", { status: 200 });
+    };
+    const hanging: LookupLike = () => new Promise(() => undefined);
+
+    const outcome = await performOneClick({ url: "https://slow.example/out", fetch_impl, lookup_impl: hanging, timeout_ms: 10 });
+
+    expect(outcome).toEqual({ status: "failed", response_code: null, error: "timed out after 10 ms" });
+    expect(requested).toBe(false);
+  });
+
+  test("a resolver answering after the deadline is not believed", async () => {
+    let requested = false;
+    const fetch_impl: FetchLike = async () => {
+      requested = true;
+      return new Response("", { status: 200 });
+    };
+    const late: LookupLike = () => new Promise((resolve) => setTimeout(() => resolve([{ address: "93.184.216.34", family: 4 }]), 30));
+
+    const outcome = await performOneClick({ url: "https://slow.example/out", fetch_impl, lookup_impl: late, timeout_ms: 10 });
+
+    expect(outcome.status).toBe("failed");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(requested).toBe(false);
   });
 });
