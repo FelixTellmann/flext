@@ -541,3 +541,138 @@ Q: could the dry run be exercised?
 A: no: production has not had migration 0019 applied (Unknown column 'firstContactAutonomy'), and the plan's
    batch runs db:migrate first. The script type-checks; its table is unproven against live rows
 why: every DATABASE_URL is production and no schema command is run from a session
+
+[2026-09-06 21:55] phase 5 — create-noise-policies skips every existing rule, not only noreply-iam@booking.com
+Q: the brief asks for idempotency on the one rule create-throwaway-policies also creates; what about the rest?
+A: every proposal: same scope+value with the same action/topic/mark_read reports "exists" and is skipped; a
+   different shape reports CONFLICT and is skipped. --write only inserts rows that do not exist
+   not: upsert over an existing row, as create-reference-policies does — upsertPolicy's schema defaults
+        autonomy to shadow, so a re-run would silently demote a rule the operator has since promoted
+why: a batch that can demote a promoted rule is not idempotent
+
+[2026-09-06 21:55] phase 5 — thirteen address rules already sit under the noise domains and outrank them
+Q: the dry run showed 0 for github.com against 178 messages in the window. Why, and what does the script do?
+A: matchPolicy resolves address before domain, and address rules exist for notifications@/no-reply@/
+   noreply@github.com, alerts@logalert.app, notifications@vercel.com, support@npmjs.com, three
+   planetscale.com addresses, noreply@wakatime.com, incontact@fnb.co.za, no-reply@bobpay.co.za and
+   noreply@booking.com (file into "Personal/Travel", pre-flattening). The table now prints sender_30d,
+   rule_30d and outranked_by so the gap is visible; the script does not delete or rewrite them
+   not: deleting the address rules in the same --write — the brief scopes the script to creating rules,
+        and whether notifications@github.com stays "archive" or yields to "file Notifications, read" is
+        the operator's call (docs/decisions/2026-09-06-mark-read-and-rule-scope.md names github as one
+        domain rule, but says nothing about the address rules already there)
+why: handed up as a fork; until it is decided the domain rules cover only wakatime's billing@/support@
+
+[2026-09-06 21:55] phase 5 — attachments are informational in the noise table
+Q: does the dry run refuse a rule whose senders carry attachments, as create-throwaway-policies does?
+A: no; it prints the count, and a NOTE line under the table for an auto_trash rule with attach > 0.
+   human_attachment (classify/guards.ts) blocks auto_trash and purge only, never file, and isBlocked
+   skips every non-absolute guard for an address-scoped policy — so the guard would not stop
+   noreply-iam@booking.com either way
+   not: a throw — the rule is created at shadow and acts on nothing until promoted
+why: the dry run's job is to show, and the guard's real reach is what the note states
+
+[2026-09-06 21:55] phase 5 — the two policy scripts run their dry run before migration 0020
+Q: production has no SenderPolicy.markRead column (0020 unapplied); the reference-script shape's select() fails
+A: promote-reference-policies names its columns and needs no markRead at all. create-noise-policies
+   catches the Unknown-column error on the existence lookup, retries without markRead, treats mark_read
+   as unknown for the exists/conflict test, prints a migrate-first line, and refuses --write
+   not: leaving the dry run broken until db:migrate, as set-source-autonomy's was — the table is what
+        the operator reads before the batch
+why: every DATABASE_URL is production and no schema command is run from a session
+
+[2026-09-06 21:55] phase 5 — promote-reference-policies refuses suspended and already-auto rules itself
+Q: promotePolicyAutonomy checks neither suspension nor current autonomy; does the script?
+A: yes, both, before calling it: a suspended row is "skip: suspended", a row already at auto is
+   "skip: already auto" and is not re-stamped. Eligible rows go through promotePolicyAutonomy with
+   reviewed_shadow_record: true and createDatabasePromotionPort(), the same call /admin/promote makes
+   not: re-promoting an auto row for a fresh autonomyPromotedAt — that is §8.1's cutoff, not an audit stamp
+   not: promoteToAuto directly — the gate is the point
+why: the same reasoning as set-source-autonomy leaving a switch already at auto alone
+
+[2026-09-06 21:55] phase 5 — repair-quarantine-snapshots rebuilds to_state through applyToState
+Q: how is \Seen added to the stale to_state_json rows?
+A: planFor(quarantine, flavor, from_state.folder, quarantine target read off the recorded states: the
+   to_state folder on generic, the one label added on gmail), then applyToState over pre_mutations +
+   mutation from the recorded from_state, exactly the fold the fixed executor runs. A row is repaired
+   only when the rebuilt state minus \Seen equals the stored to_state on folder/flags/labels; otherwise
+   it lands in a named bucket (unparseable / no_label_diff / mismatch) and is left alone. --write sets
+   toStateJson and updatedAt only, guarded on the stored JSON so a row that changed since the read is
+   skipped. Action.error (a stale undo refusal) and Message.isSeen are untouched
+   not: JSON-patching "\Seen" into the flags array — a second spelling of what the executor records
+why: undo replays the same fold, so the repair has to come from the same definition
+
+[2026-09-06 23:20] phase 6 — which rows the button executes
+Q: applyPending drains a mailbox's whole pending set; does the unsubscribe button do the same?
+A: no: executeActions is called with action_ids narrowed to the rows this press journaled, the scheduled
+   path's shape
+   not: the bare applyPending call — an approved-but-unapplied backlog the operator meant to review would
+        be swept along by an unsubscribe click
+why: the button's approval covers the ticked senders, nothing else
+
+[2026-09-06 23:20] phase 6 — the surplus past the cap
+Q: MAX_ACTION_BATCH_SIZE (200) per mailbox per press; what happens to a sender with more inbox mail?
+A: every inbox message is journaled in the same press: the first 200 per enabled mailbox born pending
+   and executed now, the rest (and every row in a disabled mailbox) born shadow with the policy id set,
+   which is exactly what promoteAutoPolicies reads for a policy at auto on the next tick
+   not: leaving them pending — a pending row the tick did not promote is indistinguishable from an
+        operator-approved one and would be stranded until a manual Apply
+   not: not journaling them — the new-mail pass skips any message that already has an Action row, so old
+        inbox mail with a derived row would never be re-decided
+why: the plan promises the tick picks up the rest, and shadow-with-policy-id is the only row shape it reads
+
+[2026-09-06 23:20] phase 6 — run id
+Q: a run id per press, or one constant?
+A: the constant "unsubscribe-bulk"; a second press on the same sender meets its own earlier rows on
+   Action_messageId_kind_runId_key and writeShadowBatch's SET leaves status alone, so an applied archive
+   is never re-issued; the pending set is read back from the database after the write for that reason
+   not: crypto.randomUUID() per press — a second press would journal a second pending row for a message
+        already moved and hand the executor a move it cannot reconcile
+why: idempotent per message is what makes the button safe to press twice
+
+[2026-09-06 23:20] phase 6 — promotion gate
+Q: promotePolicyAutonomy refuses archive without reviewed_shadow_record; what does the button pass?
+A: true. The decision doc says pressing the button on a checked list is the operator's approval, the same
+   act as approving proposals on the shadow page
+why: a shadow cycle after the button would be ceremony (the decision's own words)
+
+[2026-09-06 23:20] phase 6 — the rule's shape and an existing rule
+Q: source string, and what if the address already has a rule?
+A: source "unsubscribe" (UNSUBSCRIBE_POLICY_SOURCE) so /admin/senders can tell it from "operator";
+   an existing rule with another action is left and reported "left" (its mail is not archived, decide()
+   would apply that rule anyway); an existing archive rule is promoted and, when it lacked mark_read,
+   re-upserted with mark_read true keeping its value/client/topic/source, because the decision says
+   "marked read" and the executor reads that flag off the policy
+   not: promote only — the immediate archive would leave the mail unread against the decision
+why: one policy row per address, and the decision names the read state
+
+[2026-09-06 23:20] phase 6 — which senders the button offers
+Q: a sender with an http link but no List-Unsubscribe-Post header?
+A: listed under "Link only" with the link, no checkbox: RFC 8058 is the promise that a POST unsubscribes,
+   and a POST to a page that never made it is a form nobody reads
+why: the button must not report "sent 200" for a request that did nothing
+
+[2026-09-06 23:20] phase 6 — a skipped attempt, and duplicates
+Q: how is "no one-click header" recorded, and what about one address ticked in two mailboxes?
+A: an UnsubscribeAttempt row with method http, status skipped and the reason in error, so the chip shows
+   it; addresses are deduped case-insensitively server-side before anything is sent
+why: the chip is the operator's record that the press happened; two POSTs for one list is one too many
+
+[2026-09-06 23:20] phase 6 — the candidate's one_click
+Q: how does the grouped query decide one_click?
+A: MAX(listUnsubscribePost) per (address, mailbox) run through isOneClick in JS, AND target.http; MAX
+   is "any message carries it" because the header's value is the RFC's fixed string
+   not: a SQL predicate on the literal — a second spelling of the RFC value
+why: one spelling, in parse.ts
+
+[2026-09-06 23:20] phase 6 — reclassify's header derivation
+Q: keep the stored value when the fetched header block lacks List-Unsubscribe-Post, as is_calendar does?
+A: no: null. A header block always comes back, so a missing key is the sender not sending it, unlike a
+   BODYSTRUCTURE the server withheld; clamp is exported from writer.ts rather than spelled a second time
+why: a fallback would make a header the sender dropped stick forever
+
+[2026-09-06 23:20] phase 6 — tsc
+Q: bun run tsc reports 5 errors; are they this phase's?
+A: no: all in actions/executor.ts:347 (applyToState reduce) and actions/kinds.test.ts:562, both clean in
+   git and untouched here; every file this phase changed type-checks. Left for the owner of that change
+why: not this phase's scope, and a fix would touch the executor's fold
