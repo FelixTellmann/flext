@@ -1,9 +1,9 @@
 import { db } from "@server/db/drizzle";
-import { attentionSession } from "@server/db/schema";
-import type { AttentionEvidence, OpenSession } from "@server/mail/attention/session";
-import { foldEvidence } from "@server/mail/attention/session";
+import { attentionSession, syncRun } from "@server/db/schema";
+import type { AttentionEvidence, EvidenceRun, OpenSession } from "@server/mail/attention/session";
+import { EVIDENCE_WINDOW_MS, foldEvidence } from "@server/mail/attention/session";
 import { serializeStringList } from "@server/mail/types";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, gte } from "drizzle-orm";
 
 // Behind a port for the same reason ActionJournal and RescuePort are: a test reaching the real
 // implementation would write sessions into production and change what every unread sweep decides.
@@ -11,17 +11,23 @@ export type AttentionPort = {
   // The most recent session, whatever its age. foldEvidence decides whether it is close enough to extend
   // — the gap rule lives there, so it stays testable, and this stays a plain read.
   loadLatestSession: () => Promise<OpenSession | null>;
+  // Every incremental run started at or after `since`, across all mailboxes and whatever its status — a
+  // run that failed after its fetch still witnessed what it witnessed. foldEvidence makes the window cut
+  // itself, so this is a plain read too.
+  loadEvidenceSince: (since: Date) => Promise<EvidenceRun[]>;
   openSession: (session: Omit<OpenSession, "id">) => Promise<void>;
   extendSession: (session: OpenSession) => Promise<void>;
 };
 
 export type RecordAttentionResult = { kind: "ignored" | "opened" | "extended"; detail: string };
 
-// One sync's worth of evidence, folded into the session log. Global: no mailbox scope anywhere in here,
-// because §1.3's whole point is that a check of the unified inbox is a check of all of them.
+// One sync's worth of evidence, pooled with every mailbox's runs of the last EVIDENCE_WINDOW_MS and
+// folded into the session log. Global: no mailbox scope anywhere in here, because §1.3's whole point is
+// that a check of the unified inbox is a check of all of them.
 export async function recordAttention(input: { port: AttentionPort; evidence: AttentionEvidence }): Promise<RecordAttentionResult> {
-  const open = await input.port.loadLatestSession();
-  const outcome = foldEvidence({ open, evidence: input.evidence });
+  const since = new Date(input.evidence.observed_at.getTime() - EVIDENCE_WINDOW_MS);
+  const [open, window] = await Promise.all([input.port.loadLatestSession(), input.port.loadEvidenceSince(since)]);
+  const outcome = foldEvidence({ open, evidence: input.evidence, window });
 
   if (outcome.kind === "ignored") {
     return { kind: "ignored", detail: outcome.reason };
@@ -51,6 +57,18 @@ export function createDatabaseAttentionPort(): AttentionPort {
         replies_sent: row.replies_sent,
         evidence_mailbox_ids: row.evidence_mailbox_ids === null ? [] : (JSON.parse(row.evidence_mailbox_ids) as string[]),
       };
+    },
+    loadEvidenceSince: async (since) => {
+      return db
+        .select({
+          started_at: syncRun.started_at,
+          mailbox_id: syncRun.mailbox_id,
+          seen_transitions: syncRun.seen_transitions,
+          flag_changes: syncRun.flag_changes,
+          replies_sent: syncRun.replies_sent,
+        })
+        .from(syncRun)
+        .where(and(eq(syncRun.kind, "incremental"), gte(syncRun.started_at, since)));
     },
     openSession: async (session) => {
       const now = new Date();

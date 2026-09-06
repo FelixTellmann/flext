@@ -144,6 +144,11 @@ export const mailbox = mysqlTable(
     backfilled_at: datetime("backfilledAt", { fsp: 3 }),
     last_error: text("lastError"),
     last_error_at: datetime("lastErrorAt", { fsp: 3 }),
+    // Consecutive runs that ended in an IMAP auth failure; any successful run resets it. On 2026-09-04
+    // xneelo refused connections for an hour, then answered one login with an auth error, and the mailbox
+    // stayed off for two days with a valid password. One auth error from that host is not evidence of a
+    // changed password until it repeats, so a mailbox is disabled only when this reaches the threshold.
+    auth_failure_count: int("authFailureCount").default(0).notNull(),
   },
   (table) => ({
     hostUsernameUnique: uniqueIndex("Mailbox_host_username_key").on(table.host, table.username),
@@ -334,6 +339,13 @@ export const syncRun = mysqlTable(
     // column is where the failure becomes visible in the sync-run list; `errorMessage` stays reserved for
     // a run whose status is `failed`.
     note: text("note"),
+    // The triage evidence an incremental run witnessed, kept per run so later runs can pool it: the
+    // operator reads one to three messages an hour across four mailboxes, so no single run ever holds
+    // the two events a session needs, and five days of real use produced none. Same three counters as
+    // AttentionSession, same transition-not-CONDSTORE rule (server/mail/attention/session.ts).
+    seen_transitions: int("seenTransitions").default(0).notNull(),
+    flag_changes: int("flagChanges").default(0).notNull(),
+    replies_sent: int("repliesSent").default(0).notNull(),
   },
   (table) => ({
     mailboxStartedIndex: index("SyncRun_mailboxId_startedAt_idx").on(table.mailbox_id, table.started_at),

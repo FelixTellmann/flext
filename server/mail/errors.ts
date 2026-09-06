@@ -5,7 +5,6 @@ export type MailboxFailureKind = (typeof MAILBOX_FAILURE_KINDS)[number];
 export type MailboxFailure = {
   kind: MailboxFailureKind;
   message: string;
-  disable_mailbox: boolean;
 };
 
 function readStringField(value: unknown, field: string): string | null {
@@ -55,19 +54,52 @@ export function classifyMailboxError(error: unknown): MailboxFailure {
   const code = readStringField(cause, "code") ?? readStringField(error, "code") ?? "";
 
   if (message.includes("pinned SPKI mismatch")) {
-    return { kind: "tls_pin", message, disable_mailbox: true };
+    return { kind: "tls_pin", message };
   }
   if (
     readBooleanField(cause, "authenticationFailed") ||
     readBooleanField(error, "authenticationFailed") ||
     code === "AUTHENTICATIONFAILED"
   ) {
-    return { kind: "auth", message, disable_mailbox: true };
+    return { kind: "auth", message };
   }
   if (["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "ECONNRESET", "EAI_AGAIN", "CONNECT_TIMEOUT"].includes(code)) {
-    return { kind: "network", message, disable_mailbox: false };
+    return { kind: "network", message };
   }
-  return { kind: "unknown", message, disable_mailbox: false };
+  return { kind: "unknown", message };
+}
+
+// Consecutive auth failures on separate runs before a mailbox is disabled (docs/decisions/2026-09-06-auth-failure-three-strikes.md).
+export const AUTH_FAILURE_DISABLE_THRESHOLD = 3;
+
+export type MailboxStateAfterFailure = {
+  enabled: boolean;
+  auth_failure_count: number;
+  last_error: string;
+};
+
+// What a failed run does to its mailbox, given the failure and the counter the row carried in. Pure, so
+// the three-strike rule can be argued with from fixtures instead of from a live IMAP host.
+//
+// A changed certificate disables at once: a pinned SPKI that no longer matches is never transient. An
+// auth error only counts a strike — on 2026-09-04 xneelo answered one login with an auth error after an
+// hour of refused connections, and the stored password was valid the whole time. Network and unknown
+// failures leave the counter alone: they say nothing about the password either way, and only a run that
+// actually logged in (runMailboxSync's success path) resets it.
+export function nextMailboxStateAfterFailure(input: { failure: MailboxFailure; auth_failure_count: number }): MailboxStateAfterFailure {
+  const { failure, auth_failure_count } = input;
+  if (failure.kind === "tls_pin") {
+    return { enabled: false, auth_failure_count, last_error: formatMailboxFailure(failure) };
+  }
+  if (failure.kind === "auth") {
+    const strikes = auth_failure_count + 1;
+    return {
+      enabled: strikes < AUTH_FAILURE_DISABLE_THRESHOLD,
+      auth_failure_count: strikes,
+      last_error: `${formatMailboxFailure(failure)} (strike ${strikes} of ${AUTH_FAILURE_DISABLE_THRESHOLD})`,
+    };
+  }
+  return { enabled: true, auth_failure_count, last_error: formatMailboxFailure(failure) };
 }
 
 // The one spelling of what Mailbox.lastError and SyncRun.errorMessage hold. Both are plain text columns,

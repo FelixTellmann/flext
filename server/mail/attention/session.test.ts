@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AttentionEvidence, OpenSession } from "@server/mail/attention/session";
+import type { AttentionEvidence, EvidenceRun, OpenSession } from "@server/mail/attention/session";
 import { foldEvidence, qualifiesAsAttention, SESSION_GAP_MS } from "@server/mail/attention/session";
 
 const NOON = new Date("2026-08-26T12:00:00.000Z");
@@ -23,6 +23,10 @@ function openSession(overrides: Partial<OpenSession> = {}): OpenSession {
 
 function at(minutes: number): Date {
   return new Date(NOON.getTime() + minutes * 60_000);
+}
+
+function run(minutes: number, overrides: Partial<EvidenceRun> = {}): EvidenceRun {
+  return { started_at: at(minutes), mailbox_id: "mailbox-1", seen_transitions: 0, flag_changes: 0, replies_sent: 0, ...overrides };
 }
 
 describe("qualifiesAsAttention", () => {
@@ -52,14 +56,14 @@ describe("qualifiesAsAttention", () => {
 
 describe("foldEvidence", () => {
   test("opens a session when there is none", () => {
-    const outcome = foldEvidence({ open: null, evidence: evidence({ seen_transitions: 3 }) });
+    const outcome = foldEvidence({ open: null, evidence: evidence({ seen_transitions: 3 }), window: [] });
 
     expect(outcome.kind).toBe("opened");
     expect(outcome.kind === "opened" && outcome.session.started_at).toEqual(NOON);
   });
 
   test("a quiet window opens nothing and disturbs nothing", () => {
-    const outcome = foldEvidence({ open: null, evidence: evidence({ seen_transitions: 1 }) });
+    const outcome = foldEvidence({ open: null, evidence: evidence({ seen_transitions: 1 }), window: [] });
 
     expect(outcome.kind).toBe("ignored");
   });
@@ -70,6 +74,7 @@ describe("foldEvidence", () => {
     const outcome = foldEvidence({
       open: openSession(),
       evidence: evidence({ observed_at: at(20), seen_transitions: 2 }),
+      window: [],
     });
 
     expect(outcome.kind).toBe("extended");
@@ -82,6 +87,7 @@ describe("foldEvidence", () => {
     const outcome = foldEvidence({
       open: openSession(),
       evidence: evidence({ observed_at: at(SESSION_GAP_MS / 60_000 + 1), seen_transitions: 2 }),
+      window: [],
     });
 
     expect(outcome.kind).toBe("opened");
@@ -91,7 +97,7 @@ describe("foldEvidence", () => {
     // Measuring from started_at would split any triage running longer than the gap into two, and count
     // one sitting twice against every unread message in the inbox.
     const long_running = openSession({ started_at: NOON, ended_at: at(150) });
-    const outcome = foldEvidence({ open: long_running, evidence: evidence({ observed_at: at(200), seen_transitions: 2 }) });
+    const outcome = foldEvidence({ open: long_running, evidence: evidence({ observed_at: at(200), seen_transitions: 2 }), window: [] });
 
     expect(outcome.kind).toBe("extended");
     expect(outcome.kind === "extended" && outcome.session.started_at).toEqual(NOON);
@@ -103,15 +109,89 @@ describe("foldEvidence", () => {
     const outcome = foldEvidence({
       open: openSession(),
       evidence: evidence({ observed_at: at(10), mailbox_id: "mailbox-2", seen_transitions: 2 }),
+      window: [],
     });
 
     expect(outcome.kind === "extended" && outcome.session.evidence_mailbox_ids).toEqual(["mailbox-1", "mailbox-2"]);
   });
 
-  test("a non-qualifying window does not extend an open session either", () => {
+  test("a non-qualifying run does not extend an open session either", () => {
     // Otherwise a stray preview-pane transition would keep a session alive indefinitely, and a session
     // that never ends is a session that never counts a second time.
-    const outcome = foldEvidence({ open: openSession(), evidence: evidence({ observed_at: at(10), seen_transitions: 1 }) });
+    const outcome = foldEvidence({ open: openSession(), evidence: evidence({ observed_at: at(10), seen_transitions: 1 }), window: [] });
+
+    expect(outcome.kind).toBe("ignored");
+  });
+});
+
+describe("foldEvidence pools the last two hours across mailboxes", () => {
+  test("three single reads across three mailboxes inside two hours make one session that starts at the first read", () => {
+    // The observed pattern: one to three reads an hour spread over four mailboxes, which judged one run
+    // at a time never held two events and produced zero sessions in five days.
+    const outcome = foldEvidence({
+      open: null,
+      evidence: evidence({ observed_at: at(90), mailbox_id: "mailbox-3", seen_transitions: 1 }),
+      window: [run(0, { mailbox_id: "mailbox-1", seen_transitions: 1 }), run(45, { mailbox_id: "mailbox-2", seen_transitions: 1 })],
+    });
+
+    expect(outcome.kind).toBe("opened");
+    expect(outcome.kind === "opened" && outcome.session.started_at).toEqual(NOON);
+    expect(outcome.kind === "opened" && outcome.session.ended_at).toEqual(at(90));
+    expect(outcome.kind === "opened" && outcome.session.seen_transitions).toBe(3);
+    expect(outcome.kind === "opened" && outcome.session.evidence_mailbox_ids).toEqual(["mailbox-1", "mailbox-2", "mailbox-3"]);
+  });
+
+  test("one read alone makes none", () => {
+    const outcome = foldEvidence({ open: null, evidence: evidence({ seen_transitions: 1 }), window: [run(-30), run(-15)] });
+
+    expect(outcome.kind).toBe("ignored");
+  });
+
+  test("a read three hours after a lone earlier read makes none", () => {
+    // The port hands over whatever it loaded; the window cut is the fold's own, so a stale row cannot
+    // qualify a session however it got here.
+    const outcome = foldEvidence({
+      open: null,
+      evidence: evidence({ observed_at: at(180), seen_transitions: 1 }),
+      window: [run(0, { seen_transitions: 1 })],
+    });
+
+    expect(outcome.kind).toBe("ignored");
+  });
+
+  test("a reply alone opens a session", () => {
+    const outcome = foldEvidence({ open: null, evidence: evidence({ replies_sent: 1 }), window: [] });
+
+    expect(outcome.kind).toBe("opened");
+    expect(outcome.kind === "opened" && outcome.session.replies_sent).toBe(1);
+  });
+
+  test("evidence inside the gap of an open session extends it without re-counting the window", () => {
+    // The 12:00 and 12:45 reads were folded in when the session opened; a third read at 13:00 pools with
+    // them to qualify, but adds only itself to the counters.
+    const open = openSession({ started_at: NOON, ended_at: at(45), seen_transitions: 2, evidence_mailbox_ids: ["mailbox-1", "mailbox-2"] });
+    const outcome = foldEvidence({
+      open,
+      evidence: evidence({ observed_at: at(60), mailbox_id: "mailbox-3", seen_transitions: 1 }),
+      window: [run(0, { mailbox_id: "mailbox-1", seen_transitions: 1 }), run(45, { mailbox_id: "mailbox-2", seen_transitions: 1 })],
+    });
+
+    expect(outcome.kind).toBe("extended");
+    expect(outcome.kind === "extended" && outcome.session.started_at).toEqual(NOON);
+    expect(outcome.kind === "extended" && outcome.session.ended_at).toEqual(at(60));
+    expect(outcome.kind === "extended" && outcome.session.seen_transitions).toBe(3);
+    expect(outcome.kind === "extended" && outcome.session.evidence_mailbox_ids).toEqual(["mailbox-1", "mailbox-2", "mailbox-3"]);
+  });
+
+  test("a run that saw nothing itself is ignored however much the window holds", () => {
+    // Otherwise every empty fifteen-minute run for two hours after a triage would slide the session's
+    // end forward, and the gap would in practice be four hours.
+    const open = openSession({ started_at: NOON, ended_at: at(45), seen_transitions: 2 });
+    const outcome = foldEvidence({
+      open,
+      evidence: evidence({ observed_at: at(60) }),
+      window: [run(0, { seen_transitions: 1 }), run(45, { seen_transitions: 1 })],
+    });
 
     expect(outcome.kind).toBe("ignored");
   });

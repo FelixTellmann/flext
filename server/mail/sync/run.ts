@@ -6,7 +6,7 @@ import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
 import { createDatabaseAttentionPort, recordAttention } from "@server/mail/attention/record";
 import type { MailboxFailureKind } from "@server/mail/errors";
-import { classifyMailboxError, formatMailboxFailure, readMailboxFailureKind } from "@server/mail/errors";
+import { classifyMailboxError, nextMailboxStateAfterFailure, readMailboxFailureKind } from "@server/mail/errors";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxConnection } from "@server/mail/mailbox";
 import { createImapProvider } from "@server/mail/providers/imap";
@@ -47,8 +47,17 @@ type RunTotals = {
   new_messages: number;
   flag_updates: number;
   vanished: number;
+  // The triage evidence this run witnessed, persisted on SyncRun so later runs can pool it. Non-zero only
+  // for an incremental run — the other modes never observe a transition.
+  seen_transitions: number;
+  flag_changes: number;
+  replies_sent: number;
   note: string | null;
 };
+
+function emptyTotals(folders: number): RunTotals {
+  return { folders, new_messages: 0, flag_updates: 0, vanished: 0, seen_transitions: 0, flag_changes: 0, replies_sent: 0, note: null };
+}
 
 // Matches BACKFILL_BATCH_SIZE: the reclassify walks the same UID space with the same per-batch fetch.
 const RECLASSIFY_BATCH_SIZE = 100;
@@ -266,7 +275,7 @@ export async function runClassifyAndExecutePassForMailbox(input: ClassifyAndExec
 async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxRow; mode: SyncMode }): Promise<RunTotals> {
   if (input.mode === "backfill") {
     const result = await backfillMailbox({ provider: input.provider, mailbox_row: input.mailbox_row });
-    return { folders: result.folders, new_messages: result.messages, flag_updates: 0, vanished: 0, note: null };
+    return { ...emptyTotals(result.folders), new_messages: result.messages };
   }
   if (input.mode === "repair") {
     throw new Error("repair is database-wide and must not run per mailbox; call repairSenderLinks directly");
@@ -274,7 +283,7 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
 
   const folders = await input.provider.listFolders();
   const walked = selectSyncFolders({ flavor: parseMailboxFlavor(input.mailbox_row.flavor), folders });
-  const totals: RunTotals = { folders: walked.length, new_messages: 0, flag_updates: 0, vanished: 0, note: null };
+  const totals = emptyTotals(walked.length);
 
   if (input.mode === "reclassify") {
     const result = await reclassifyMailbox({
@@ -296,15 +305,13 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
     return totals;
   }
 
-  let seen_transitions = 0;
-  let flag_changes = 0;
   for (const folder of walked) {
     const result = await syncFolderIncrementally({ provider: input.provider, mailbox_row: input.mailbox_row, folder });
     totals.new_messages += result.new_messages;
     totals.flag_updates += result.flag_updates;
     totals.vanished += result.vanished;
-    seen_transitions += result.seen_transitions;
-    flag_changes += result.flag_changes;
+    totals.seen_transitions += result.seen_transitions;
+    totals.flag_changes += result.flag_changes;
   }
 
   // Inbox-dwell 1.3/1.4. Immediately after the fetch, while the transitions this run witnessed are the
@@ -314,13 +321,17 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
   // Transitions, never the raw flag_updates count above: that one includes every message CONDSTORE
   // re-reported after a bulk apply, and feeding it here would let the sweeps manufacture the very
   // sessions that advance their clock.
+  //
+  // This run's evidence is judged together with what the other mailboxes' runs of the last two hours
+  // witnessed (recordAttention pools SyncRun rows); this run's own row is still at zero at this point,
+  // so it contributes nothing to that pool and is not counted twice.
   const attention = await recordAttention({
     port: createDatabaseAttentionPort(),
     evidence: {
       observed_at: new Date(),
       mailbox_id: input.mailbox_row.id,
-      seen_transitions,
-      flag_changes,
+      seen_transitions: totals.seen_transitions,
+      flag_changes: totals.flag_changes,
       // Replies are counted by the Sent scan further down, which has not run yet this pass. Left at zero
       // rather than guessed: a reply is sufficient evidence on its own, and inventing one here would open
       // a session off no evidence at all.
@@ -426,6 +437,9 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
         messages_new: totals.new_messages,
         messages_updated: totals.flag_updates,
         messages_vanished: totals.vanished,
+        seen_transitions: totals.seen_transitions,
+        flag_changes: totals.flag_changes,
+        replies_sent: totals.replies_sent,
         // The stage notes are persisted, not merely returned: rescue detection, the shadow pass and the
         // promote/execute pair each swallow their own failure into a note so a broken safety net cannot
         // cost the operator their mail. Returning that note only to the scheduled task's stdout would
@@ -441,6 +455,8 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
       .set({
         last_error: null,
         last_error_at: null,
+        // Any mode that got this far logged in, which is all the counter measures.
+        auth_failure_count: 0,
         ...(input.mode === "backfill" ? { backfilled_at: finished_at } : {}),
         updatedAt: finished_at,
       })
@@ -461,20 +477,24 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
   } catch (error) {
     // Per-mailbox isolation: a dead connection, an expired app password or an SPKI change fails this
     // mailbox's run and leaves the other five untouched (§11).
-    const failure = classifyMailboxError(error);
+    const next = nextMailboxStateAfterFailure({
+      failure: classifyMailboxError(error),
+      auth_failure_count: input.mailbox_row.auth_failure_count,
+    });
     const finished_at = new Date();
 
     await db
       .update(syncRun)
-      .set({ status: "failed", finished_at, error_message: formatMailboxFailure(failure), updatedAt: finished_at })
+      .set({ status: "failed", finished_at, error_message: next.last_error, updatedAt: finished_at })
       .where(eq(syncRun.id, run_id));
 
     await db
       .update(mailbox)
       .set({
-        last_error: formatMailboxFailure(failure),
+        last_error: next.last_error,
         last_error_at: finished_at,
-        ...(failure.disable_mailbox ? { enabled: false } : {}),
+        auth_failure_count: next.auth_failure_count,
+        ...(next.enabled ? {} : { enabled: false }),
         updatedAt: finished_at,
       })
       .where(eq(mailbox.id, input.mailbox_row.id));
@@ -488,7 +508,7 @@ export async function runMailboxSync(input: { mailbox_row: MailboxRow; mode: Syn
       new_messages: 0,
       flag_updates: 0,
       vanished: 0,
-      error: `${failure.kind}: ${failure.message}`,
+      error: next.last_error,
       note: null,
     };
   } finally {
@@ -581,8 +601,8 @@ export async function runSyncForAllMailboxes(input: { mode: SyncMode; mailbox_id
 export type MailboxNeedingOperator = { label: string; host: string; reason: MailboxFailureKind | null; error: string | null };
 
 // Mailboxes the sync can no longer reach and will not recover on its own. Both kinds that disable a
-// mailbox land here — a rotated certificate needs the operator to look at it and re-pin, a revoked app
-// password needs a new credential — and neither resolves by waiting.
+// mailbox land here — a rotated certificate needs the operator to look at it and re-pin, a password
+// refused on three consecutive runs needs a new credential — and neither resolves by waiting.
 export async function listMailboxesNeedingOperator(): Promise<MailboxNeedingOperator[]> {
   const rows = await db
     .select({ label: mailbox.label, host: mailbox.host, last_error: mailbox.last_error })

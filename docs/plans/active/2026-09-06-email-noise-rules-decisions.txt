@@ -1,0 +1,53 @@
+[2026-09-06 16:40] phase 1 — auth three-strike
+Q: does a successful reconcile run reset the counter, or only incremental?
+A: any successful run
+   not: incremental only — reconcile proves the login just as well
+why: the counter measures consecutive login failures, not sync kinds
+
+[2026-09-06 16:40] phase 1 — auth three-strike
+Q: does a network or unknown failure between two auth failures reset the counter?
+A: no — it leaves the counter untouched; only a successful login resets it
+   not: reset on any non-auth failure — the 2026-09-04 shape was refused connections THEN an auth
+        error, and a counter that reset on the refusals would never reach three on that host
+why: a refused connection says nothing about the password either way
+
+[2026-09-06 16:40] phase 1 — auth three-strike
+Q: where does the disable decision live now that it depends on state?
+A: MailboxFailure loses disable_mailbox; nextMailboxStateAfterFailure(failure, count) in errors.ts returns
+   { enabled, auth_failure_count, last_error } and run.ts writes exactly that
+   not: keep the boolean and special-case auth in run.ts — a boolean that is wrong for one kind is worse
+        than no boolean
+why: the decision is pure and unit-tested; run.ts stays a database writer
+
+[2026-09-06 16:40] phase 1 — auth three-strike
+Q: a mailbox re-enabled by hand still carries count 3 — first failure after that disables at once?
+A: yes, left as is; a success resets it, and an operator resetting `enabled` can reset the counter alongside
+   not: reset the counter when disabling — hides how many strikes the row has taken
+why: no re-enable path exists in code to hook; noted for the operator in the report
+
+[2026-09-06 16:50] phase 1 — session pooling
+Q: a run that witnessed nothing itself but whose two-hour window qualifies: extend the open session?
+A: no — a run with zero evidence of its own is always "ignored"
+   not: extend — every empty fifteen-minute run for two hours after a triage would slide ended_at
+        forward, making the gap four hours in practice
+why: the window's runs were judged when they happened; only new evidence re-judges
+
+[2026-09-06 16:50] phase 1 — session pooling
+Q: who cuts the window to two hours, the port's query or the fold?
+A: both — the port loads since observed_at - EVIDENCE_WINDOW_MS, the fold filters again
+   not: port only — then the "three hours later" fixture would test nothing
+why: the rule has to be complete from fixtures
+
+[2026-09-06 16:50] phase 1 — session pooling
+Q: is the pooling window its own constant or SESSION_GAP_MS?
+A: EVIDENCE_WINDOW_MS = SESSION_GAP_MS, exported separately with the why
+   not: a second independent 2h value — if they drifted apart a pooled session's start could land inside
+        the previous session
+why: the equality is what keeps sessions non-overlapping
+
+[2026-09-06 16:50] phase 1 — session pooling
+Q: SyncRun.repliesSent is written — from what?
+A: RunTotals.replies_sent, still 0: scanSentFolder returns scanned/senders, not an authored-this-run count
+   not: derive it from scanSentFolder's `scanned` — that counts every Sent entry, not replies, and the
+        first scan of a folder would count the whole folder
+why: the brief said leave replies at 0; the column exists so a later change writes it without a migration

@@ -73,7 +73,7 @@ const policy_autonomy_schema = z
 const MAX_ACTION_BATCH_SIZE = 200;
 
 // A mutation must not run against a mailbox whose connection is not trusted: `enabled` is cleared by
-// classifyMailboxError's disable_mailbox path after an auth failure or an SPKI change, and the sync
+// nextMailboxStateAfterFailure after an SPKI change or a third consecutive auth failure, and the sync
 // runner skips those mailboxes for the same reason (§11). One definition, because the refusal reaches the
 // operator two different ways — thrown when a mailbox is named, reported as an entry when undoByPolicy
 // sweeps every mailbox — and the two must not drift into saying different things.
