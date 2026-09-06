@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { SOURCE_SWITCHES, sourceAutonomyColumn, sourceAutonomyColumns, suspensionClearColumns } from "@server/mail/query/mailbox-switches";
+import {
+  SOURCE_SWITCHES,
+  sourceAutonomyColumn,
+  sourceAutonomyColumns,
+  suspendedAtColumn,
+  suspensionClearColumns,
+} from "@server/mail/query/mailbox-switches";
 
 const now = new Date("2026-09-06T21:00:00.000Z");
 
@@ -70,5 +76,12 @@ describe("sourceAutonomyColumn", () => {
     expect(sourceAutonomyColumn("first_contact").name).toBe("firstContactAutonomy");
     expect(sourceAutonomyColumn("settled_sweep").name).toBe("settledSweepAutonomy");
     expect(sourceAutonomyColumn("declined_sweep").name).toBe("declinedSweepAutonomy");
+  });
+});
+
+describe("suspendedAtColumn", () => {
+  test("each pair names its own suspended-at column, the one a clear is guarded on", () => {
+    expect(suspendedAtColumn("first_contact").name).toBe("firstContactSuspendedAt");
+    expect(suspendedAtColumn("dwell").name).toBe("dwellSuspendedAt");
   });
 });

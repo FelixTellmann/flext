@@ -1,7 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { mailbox } from "@server/db/schema";
 import type { PolicyAutonomy } from "@server/mail/query/policies";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 
 // docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md: the three scheduled sources that
 // carry no policy id each get a switch per mailbox. Named after the Mailbox columns rather than the
@@ -57,7 +57,9 @@ type SuspensionClearColumns = Partial<
 >;
 
 // The operator-only inverse of rescue detection's two mailbox suspensions (server/mail/rescue/journal.ts).
-// Unconditional, like clearPolicySuspension: no precondition can make it unsafe. Autonomy is untouched —
+// The SET is unconditional; the writer below guards on the pair being suspended, because the cleared-at
+// moves the rescue window and a clear on a mailbox that is not suspended would excuse rescues for
+// nothing. Autonomy is untouched —
 // clearing a suspension is neither a promotion nor a demotion. The cleared-at is the floor of the next
 // rescue window (docs/decisions/2026-09-06-clear-suspension-resets-the-window.md): a JS Date rather than
 // sql`NOW()` because detect.ts compares it against Date.now() in JS.
@@ -99,6 +101,17 @@ export async function setSourceAutonomy(input: {
     .where(and(eq(mailbox.id, input.mailbox_id), ne(sourceAutonomyColumn(input.source), input.autonomy)));
 }
 
+// The suspended-at column a clear is guarded on: only a suspended pair may be cleared.
+export function suspendedAtColumn(which: MailboxSuspension) {
+  if (which === "first_contact") {
+    return mailbox.first_contact_suspended_at;
+  }
+  return mailbox.dwell_suspended_at;
+}
+
 export async function clearMailboxSuspension(input: { mailbox_id: string; which: MailboxSuspension; now: Date }): Promise<void> {
-  await db.update(mailbox).set(suspensionClearColumns(input.which, input.now)).where(eq(mailbox.id, input.mailbox_id));
+  await db
+    .update(mailbox)
+    .set(suspensionClearColumns(input.which, input.now))
+    .where(and(eq(mailbox.id, input.mailbox_id), isNotNull(suspendedAtColumn(input.which))));
 }
