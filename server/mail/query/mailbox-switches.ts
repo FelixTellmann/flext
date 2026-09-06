@@ -1,7 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { mailbox } from "@server/db/schema";
 import type { PolicyAutonomy } from "@server/mail/query/policies";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 // docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md: the three scheduled sources that
 // carry no policy id each get a switch per mailbox. Named after the Mailbox columns rather than the
@@ -60,6 +60,20 @@ export function suspensionClearColumns(which: MailboxSuspension, now: Date): Sus
   return { dwell_suspended_at: null, dwell_suspension_reason: null, updatedAt: now };
 }
 
+// The autonomy column a switch writes, so a same-value call can be refused in SQL.
+export function sourceAutonomyColumn(source: SourceSwitch) {
+  if (source === "first_contact") {
+    return mailbox.first_contact_autonomy;
+  }
+  if (source === "settled_sweep") {
+    return mailbox.settled_sweep_autonomy;
+  }
+  return mailbox.declined_sweep_autonomy;
+}
+
+// Guarded on the current value: a second "auto" on a switch already at auto must not re-stamp set-at,
+// because for first contact that timestamp is the promotion cutoff and moving it forward would strand
+// every proposal that arrived in between. A same-value call is a no-op.
 export async function setSourceAutonomy(input: {
   mailbox_id: string;
   source: SourceSwitch;
@@ -69,7 +83,7 @@ export async function setSourceAutonomy(input: {
   await db
     .update(mailbox)
     .set(sourceAutonomyColumns(input.source, input.autonomy, input.now))
-    .where(eq(mailbox.id, input.mailbox_id));
+    .where(and(eq(mailbox.id, input.mailbox_id), ne(sourceAutonomyColumn(input.source), input.autonomy)));
 }
 
 export async function clearMailboxSuspension(input: { mailbox_id: string; which: MailboxSuspension; now: Date }): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { SOURCE_SWITCHES, sourceAutonomyColumns, suspensionClearColumns } from "@server/mail/query/mailbox-switches";
+import { SOURCE_SWITCHES, sourceAutonomyColumn, sourceAutonomyColumns, suspensionClearColumns } from "@server/mail/query/mailbox-switches";
 
 const now = new Date("2026-09-06T21:00:00.000Z");
 
@@ -49,5 +49,13 @@ describe("suspensionClearColumns", () => {
 
   test("dwell clears the pair that suspends both sweeps", () => {
     expect(suspensionClearColumns("dwell", now)).toEqual({ dwell_suspended_at: null, dwell_suspension_reason: null, updatedAt: now });
+  });
+});
+
+describe("sourceAutonomyColumn", () => {
+  test("each switch names its own autonomy column, the one the same-value guard compares against", () => {
+    expect(sourceAutonomyColumn("first_contact").name).toBe("firstContactAutonomy");
+    expect(sourceAutonomyColumn("settled_sweep").name).toBe("settledSweepAutonomy");
+    expect(sourceAutonomyColumn("declined_sweep").name).toBe("declinedSweepAutonomy");
   });
 });
