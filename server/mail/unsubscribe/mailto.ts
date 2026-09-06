@@ -144,7 +144,7 @@ export type MailtoDependencies = {
 
 const live_dependencies: MailtoDependencies = { send: sendMail, loadSources: loadMailtoSources, record: recordUnsubscribeAttempt };
 
-// The mailto counterpart of bulk.ts's attemptOneClick: one attempt, recorded whatever happened, so the
+// The mailto half of bulk.ts's attemptUnsubscribe: one attempt, recorded whatever happened, so the
 // chip on /admin/unsubscribe shows it. Skipped, and recorded as such, when no message offers a mailto.
 export async function unsubscribeMailtoSender(
   input: { from_address: string; now: Date },
