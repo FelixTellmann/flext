@@ -720,3 +720,31 @@ A: https only; the hostname resolved with dns.lookup({ all: true }) and refused 
    known gap: the address checked is the one resolved before the request; a record that changes between
    the two (rebinding) is not pinned, which would need a custom agent. Accepted for a 10 s POST
 why: a header any sender can write must not become a request to 127.0.0.1:8000
+
+[2026-09-07 00:20] phase 4c — how the cleared-at reaches the detector
+Q: pass the two columns in from run.ts's mailbox_row, or read them through the RescuePort?
+A: a ninth port operation, loadSuspensionClears, read once in finish() and only when the pass rescued
+   something; the structural "exactly N database operations" test moves from eight to nine
+   not: the mailbox_row the sync started with — a Clear pressed mid-sync would leave the floor stale
+   while the SQL guard on suspendMailboxDwell already passes, re-suspending on the same three
+   not: folding the floor into the COUNT query — the decision would live in SQL, untestable from fixtures
+why: the suspension guards are read at write time for the same reason; the floor should be as fresh
+compile-forced edit outside the file list: server/mail/sync/run.test.ts okPort gained the member
+
+[2026-09-07 00:20] phase 4c — clearing stays unconditional
+Q: suspensionClearColumns now moves the window floor; guard it on the pair being suspended?
+A: no; still unconditional. /admin/mail only offers Clear when the pair is suspended, and a clear of
+   an unsuspended pair discarding older rescues is what an operator pressing it would mean
+why: the existing comment's "no precondition can make it unsafe" still holds for the operator's intent
+
+[2026-09-07 00:20] phase 4c — suspension reason wording
+Q: keep "within the last 30 days" when the floor applied?
+A: the reason says "since you cleared the suspension on <date>" when the clear is the window start,
+   and the old sentence otherwise; existing tests check substrings so nothing else moved
+why: the operator reads the count against the window it was counted over
+
+[2026-09-07 00:20] phase 4c — bulk mark-read default
+Q: what does the bulk checkbox start at, with a mixed selection and no single policy to inherit?
+A: unchecked, reset only by the operator (state persists across selections in the session)
+why: the single assign inherits the row's policy; a mixed selection has none, and false is what the
+   bulk path wrote until now
