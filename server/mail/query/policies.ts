@@ -3,7 +3,7 @@ import { neverTouchRule, senderPolicy, senderSuppression } from "@server/db/sche
 import type { NeverTouchRuleInput, NeverTouchRuleKind } from "@server/mail/classify/guards";
 import type { PolicyAction, PolicyScope } from "@server/mail/classify/rules";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
-import { CLIENT_SEGMENT_RULE } from "@server/mail/filing/paths";
+import { FOLDER_SEGMENT_RULE } from "@server/mail/filing/paths";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, isNotNull, isNull, like, or } from "drizzle-orm";
 import { z } from "zod";
@@ -93,8 +93,8 @@ export const upsert_policy_schema = z.object({
   // Phase 8 job (§1.7). POLICY_ACTIONS is the same allowlist rules.ts enforces on read; this is the write
   // side of that defence, and it must reject a bad value here rather than let it reach a stored row.
   action: z.enum(POLICY_ACTIONS),
-  client: z.string().max(191).refine(CLIENT_SEGMENT_RULE.test, { message: CLIENT_SEGMENT_RULE.message }).nullable().default(null),
-  topic: z.string().max(191).nullable().default(null),
+  client: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
+  topic: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
   autonomy: z
     .enum(["shadow", "auto"])
     // This default is also §8's demotion-on-edit, not a side effect of one: upsertPolicy carries no field

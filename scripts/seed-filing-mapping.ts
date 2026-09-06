@@ -1,7 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { filingBinding, mailbox, senderPolicy } from "@server/db/schema";
 import type { PolicyScope } from "@server/mail/classify/rules";
-import { CLIENT_SEGMENT_RULE, CLIENTS_ROOT, LOGICAL_SEPARATOR, logicalPathFor } from "@server/mail/filing/paths";
+import { FOLDER_SEGMENT_RULE, logicalPathFor } from "@server/mail/filing/paths";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex } from "@server/mail/query/policies";
 import { eq } from "drizzle-orm";
@@ -12,19 +12,14 @@ import { eq } from "drizzle-orm";
 //   bun scripts/seed-filing-mapping.ts             # dry run — prints the plan, writes nothing
 //   bun scripts/seed-filing-mapping.ts --apply     # writes the mapping and bindings (operator only)
 //
-// THE TRAP: the mapping table's left column is a LOGICAL PATH, not a column value. `client =
-// "Clients/Listify"` is rejected by upsertPolicy's Zod refine (a client is one segment), and `topic =
-// "Clients/Listify"` would silently render `Clients/Clients/Listify`. columnsForPath() below is the one
-// place that turns a path into columns: a `Clients/<name>` path sets `client`, everything else sets
-// `topic` verbatim. Every mapping AND every binding is asserted against logicalPathFor() before anything
-// is printed or written, so a wrong split fails loudly here rather than shipping a silently wrong folder.
+// Every path is ONE folder name (docs/decisions/2026-09-06-flat-folders.md): a client group sets `client`,
+// a topic group sets `topic`, and neither may carry "/". Every mapping AND every binding is asserted
+// against logicalPathFor() before anything is printed or written, so a group whose columns do not derive
+// its path fails loudly here rather than shipping a silently wrong folder.
 //
-// NO Finances/Tax split: `noreply@sars.gov.za` and `donotreply@usvisa-info.com` go to `Finances` with
-// the rest of the financial records, not a `Finances/Tax` sub-path. Bindings match a logical path
-// EXACTLY and a sub-path does not inherit its parent's binding — `Finances` is bound to
-// `INBOX.Finances - Ref`, so `Finances/Tax` would render as `INBOX.Finances.Tax`, a folder under a
-// different parent than the one the operator's Finances binding points at. The design spec splits by
-// topic only where volume earns it, and two senders don't.
+// NO separate Tax folder: `noreply@sars.gov.za` and `donotreply@usvisa-info.com` go to `Finances` with
+// the rest of the financial records. `Finances` is bound to `INBOX.Finances - Ref`, and the design spec
+// splits by topic only where volume earns it; two senders don't.
 //
 // `contact-form@tellmann.co.za` is `file`-classed but deliberately NOT mapped anywhere below: it's
 // inbound leads from the operator's own site, and the triage doc calls it "worth a look before filing" —
@@ -51,7 +46,15 @@ function domain(value: string): MappingSender {
   return { scope: "domain", value };
 }
 
-type MappingGroup = { path: string; senders: readonly MappingSender[] };
+type MappingGroup = { path: string; client: string | null; topic: string | null; senders: readonly MappingSender[] };
+
+function clientGroup(client: string, senders: readonly MappingSender[]): MappingGroup {
+  return { path: client, client, topic: null, senders };
+}
+
+function topicGroup(topic: string, senders: readonly MappingSender[]): MappingGroup {
+  return { path: topic, client: null, topic, senders };
+}
 
 const CLIENTS_LISTIFY: readonly MappingSender[] = [
   address("no-reply@listifyregistry.com"),
@@ -115,32 +118,27 @@ const PERSONAL_TRAVEL: readonly MappingSender[] = [
 ];
 
 const MAPPING_GROUPS: readonly MappingGroup[] = [
-  { path: "Clients/Listify", senders: CLIENTS_LISTIFY },
-  { path: "Clients/KidsLiving", senders: CLIENTS_KIDSLIVING },
-  { path: "Ops/Shopify", senders: OPS_SHOPIFY },
-  { path: "Finances", senders: FINANCES },
-  { path: "Personal/Tennis", senders: PERSONAL_TENNIS },
-  { path: "Personal/Restaurants", senders: PERSONAL_RESTAURANTS },
-  { path: "Personal/Medical", senders: PERSONAL_MEDICAL },
-  { path: "Personal/Travel", senders: PERSONAL_TRAVEL },
+  clientGroup("Listify", CLIENTS_LISTIFY),
+  clientGroup("KidsLiving", CLIENTS_KIDSLIVING),
+  topicGroup("Shopify", OPS_SHOPIFY),
+  topicGroup("Finances", FINANCES),
+  topicGroup("Tennis", PERSONAL_TENNIS),
+  topicGroup("Restaurants", PERSONAL_RESTAURANTS),
+  topicGroup("Medical", PERSONAL_MEDICAL),
+  topicGroup("Travel", PERSONAL_TRAVEL),
 ];
-
-// The one place a mapping table's left column becomes `client`/`topic` columns. See the file-level
-// comment for why this can't be done any other way.
-function columnsForPath(path: string): { client: string | null; topic: string | null } {
-  const clients_prefix = `${CLIENTS_ROOT}${LOGICAL_SEPARATOR}`;
-  if (path.startsWith(clients_prefix)) {
-    return { client: path.slice(clients_prefix.length), topic: null };
-  }
-  return { client: null, topic: path };
-}
 
 type SeedMapping = { scope: PolicyScope; value: string; client: string | null; topic: string | null; intended_path: string };
 
-const SEED_MAPPINGS: readonly SeedMapping[] = MAPPING_GROUPS.flatMap((group) => {
-  const columns = columnsForPath(group.path);
-  return group.senders.map((sender) => ({ scope: sender.scope, value: sender.value, ...columns, intended_path: group.path }));
-});
+const SEED_MAPPINGS: readonly SeedMapping[] = MAPPING_GROUPS.flatMap((group) =>
+  group.senders.map((sender) => ({
+    scope: sender.scope,
+    value: sender.value,
+    client: group.client,
+    topic: group.topic,
+    intended_path: group.path,
+  })),
+);
 
 // Fails loudly rather than shipping a silently wrong folder: every mapping must round-trip through the
 // same function filing/resolver.ts calls at execution time.
@@ -159,18 +157,18 @@ function assertMappingsRoundTrip(mappings: readonly SeedMapping[]): void {
 // EXACTLY (Ruling 3), so a one-character typo in a logical_path here is silent and inert — nothing ever
 // matches it, the path renders instead, and createFolder mints a brand-new folder beside the operator's
 // real one. That is the harm the --apply preflight was added to prevent, arriving through the other door.
-// Asserting the path derives from columnsForPath is what turns "bound but unmatchable" into a loud
-// failure at the top of the script, before anything is printed or written.
+// Asserting the path round-trips through logicalPathFor is what turns "bound but unmatchable" into a
+// loud failure at the top of the script, before anything is printed or written.
 //
 // NOT asserted: that some mapping targets the path. Ruling 4 keeps `Personal -> INBOX.Personal` bound
 // with no policy pointing at it, deliberately, as documentation of an existing folder for a later mapping
 // edit. So an unmatched binding is REPORTED rather than refused, and the operator judges each one.
 function assertBindingsRoundTrip(bindings: readonly Binding[]): void {
   for (const binding of bindings) {
-    const derived = logicalPathFor(columnsForPath(binding.logical_path));
+    const derived = logicalPathFor({ client: null, topic: binding.logical_path });
     if (derived !== binding.logical_path) {
       throw new Error(
-        `binding "${binding.logical_path}" -> "${binding.folder}" is not a derivable logical path: columnsForPath + logicalPathFor produce ${JSON.stringify(derived)}. Nothing would ever match it, so the path would render into a fresh folder next to "${binding.folder}".`,
+        `binding "${binding.logical_path}" -> "${binding.folder}" is not a derivable logical path: logicalPathFor produces ${JSON.stringify(derived)}. Nothing would ever match it, so the path would render into a fresh folder next to "${binding.folder}".`,
       );
     }
   }
@@ -203,13 +201,13 @@ const TELLMANN_MAILBOX_LABEL = "felix@tellmann.co.za";
 type Binding = { logical_path: string; folder: string };
 
 const BINDINGS: readonly Binding[] = [
-  { logical_path: "Clients/KidsLiving", folder: "INBOX.KidsLiving" },
-  { logical_path: "Clients/Broadwayjewellers", folder: "INBOX.Broadwayjewellers" },
-  { logical_path: "Clients/VW", folder: "INBOX.VW" },
-  { logical_path: "Clients/Moritz", folder: "INBOX.Moritz" },
+  { logical_path: "KidsLiving", folder: "INBOX.KidsLiving" },
+  { logical_path: "Broadwayjewellers", folder: "INBOX.Broadwayjewellers" },
+  { logical_path: "VW", folder: "INBOX.VW" },
+  { logical_path: "Moritz", folder: "INBOX.Moritz" },
   { logical_path: "Finances", folder: "INBOX.Finances - Ref" },
-  { logical_path: "Ops/Invoices", folder: "INBOX.Invoices" },
-  { logical_path: "Personal/Travel", folder: "INBOX.Travel" },
+  { logical_path: "Invoices", folder: "INBOX.Invoices" },
+  { logical_path: "Travel", folder: "INBOX.Travel" },
   { logical_path: "Personal", folder: "INBOX.Personal" },
 ];
 
@@ -240,8 +238,7 @@ async function main(): Promise<void> {
 
   console.log("=== Mapping: client/topic on existing sender policies ===\n");
   for (const group of MAPPING_GROUPS) {
-    const columns = columnsForPath(group.path);
-    console.log(`${group.path}  (client=${columns.client ?? "null"}, topic=${JSON.stringify(columns.topic)})`);
+    console.log(`${group.path}  (client=${group.client ?? "null"}, topic=${JSON.stringify(group.topic)})`);
     for (const mapping of resolved) {
       if (mapping.intended_path !== group.path) {
         continue;
@@ -277,7 +274,7 @@ async function main(): Promise<void> {
     );
   }
   console.log(`mailbox: ${TELLMANN_MAILBOX_LABEL} (id ${tellmann.id})\n`);
-  console.log("every logical path below round-trips through columnsForPath + logicalPathFor, so the resolver's exact match can find it.\n");
+  console.log("every logical path below round-trips through logicalPathFor, so the resolver's exact match can find it.\n");
   const inert_bindings: Binding[] = [];
   for (const binding of BINDINGS) {
     const targeting = mappingGroupsTargeting(binding.logical_path);
@@ -339,8 +336,10 @@ async function main(): Promise<void> {
   await db.transaction(async (tx) => {
     for (const mapping of resolved) {
       const existing = mapping.existing as PolicyRow;
-      if (mapping.client !== null && !CLIENT_SEGMENT_RULE.test(mapping.client)) {
-        throw new Error(CLIENT_SEGMENT_RULE.message);
+      for (const column of [mapping.client, mapping.topic]) {
+        if (column !== null && !FOLDER_SEGMENT_RULE.test(column)) {
+          throw new Error(FOLDER_SEGMENT_RULE.message);
+        }
       }
       const now = new Date();
       const values = {

@@ -92,7 +92,7 @@ const ResolveControl: FC<{
           className={clsx(field, focus_ring, "w-56")}
           disabled={busy}
           onChange={(event) => onChangeDraft(event.target.value)}
-          placeholder="Clients/Acme/Invoices"
+          placeholder="Invoices"
           type="text"
           value={draft}
         />
@@ -123,7 +123,7 @@ const FilingQueueTableRow: FC<{
     </td>
     <td className="max-w-56 py-2 pr-3">
       {row.target_path === null ? (
-        <span className="text-gray-400 text-xs dark:text-dark-border">No proposal — type a path</span>
+        <span className="text-gray-400 text-xs dark:text-dark-border">No proposal — type a folder name</span>
       ) : (
         <span className={clsx("block max-w-56 truncate", neutral_chip)}>{row.target_path}</span>
       )}

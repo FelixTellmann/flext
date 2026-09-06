@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
-  CLIENT_SEGMENT_RULE,
   FILING_QUEUE_REASONS,
+  FOLDER_SEGMENT_RULE,
   filingDecisionFor,
   filingQueueReason,
   LOGICAL_SEPARATOR,
@@ -9,27 +9,41 @@ import {
 } from "@server/mail/filing/paths";
 
 describe("logicalPathFor", () => {
-  test("composes client and topic under the Clients root", () => {
-    expect(logicalPathFor({ client: "Listify", topic: "Invoices" })).toBe("Clients/Listify/Invoices");
+  test("a client rule files to the client, one segment", () => {
+    expect(logicalPathFor({ client: "KidsLiving", topic: null })).toBe("KidsLiving");
   });
 
-  test("uses the client alone when there is no topic", () => {
-    expect(logicalPathFor({ client: "KidsLiving", topic: null })).toBe("Clients/KidsLiving");
-  });
-
-  test("passes a client-less topic through verbatim, hierarchy included", () => {
-    expect(logicalPathFor({ client: null, topic: "Ops/Shopify" })).toBe("Ops/Shopify");
+  test("a topic rule files to the topic, one segment", () => {
     expect(logicalPathFor({ client: null, topic: "Finances" })).toBe("Finances");
+  });
+
+  test("a rule carrying both files to the client", () => {
+    expect(logicalPathFor({ client: "Listify", topic: "Invoices" })).toBe("Listify");
   });
 
   test("returns null when neither axis is set", () => {
     expect(logicalPathFor({ client: null, topic: null })).toBeNull();
   });
 
-  test("normalizes empty and whitespace segments away", () => {
-    expect(logicalPathFor({ client: null, topic: "Ops//Shopify " })).toBe("Ops/Shopify");
+  // Rows stored before the flat-folders decision may still carry a separator; they render the same name
+  // tmp/flatten-filing-policies.ts rewrites them to, never a nested path.
+  test("a pre-flattening value renders its last segment, and never a separator", () => {
+    expect(logicalPathFor({ client: null, topic: "Personal/Travel" })).toBe("Travel");
+    expect(logicalPathFor({ client: null, topic: "Ops//Shopify " })).toBe("Shopify");
+    expect(logicalPathFor({ client: "Clients/Acme", topic: "Personal/Travel" })).toBe("Acme");
+    for (const mapping of [
+      { client: "A/B/C", topic: null },
+      { client: null, topic: "A/B/C" },
+      { client: "A/B", topic: "C/D" },
+    ]) {
+      expect(logicalPathFor(mapping)).not.toContain(LOGICAL_SEPARATOR);
+    }
+  });
+
+  test("normalizes empty and whitespace values away", () => {
     expect(logicalPathFor({ client: "  ", topic: null })).toBeNull();
     expect(logicalPathFor({ client: null, topic: "///" })).toBeNull();
+    expect(logicalPathFor({ client: "  ", topic: "Finances" })).toBe("Finances");
   });
 });
 
@@ -71,7 +85,7 @@ describe("filingDecisionFor", () => {
   // LEFT join hands this shape over for any `file` row whose policy was deleted after it was proposed.
   test("a deleted domain-scoped policy cannot file an unaligned message by losing its scope", () => {
     const decision = filingDecisionFor({
-      logical_path: "Clients/Acme",
+      logical_path: "Acme",
       policy_scope: null,
       dkim_aligned: false,
       filing_confirmed_at: null,
@@ -116,16 +130,17 @@ describe("filingDecisionFor", () => {
   });
 });
 
-describe("CLIENT_SEGMENT_RULE", () => {
-  // The rule is shared by two Zod schemas that both validate on the live path. Pinning it here is what
-  // stops the separator acquiring a third spelling as a literal inside one of them.
-  test("rejects a client name carrying the logical separator", () => {
-    expect(CLIENT_SEGMENT_RULE.test("Clients/Listify")).toBe(false);
-    expect(CLIENT_SEGMENT_RULE.test("Listify")).toBe(true);
+describe("FOLDER_SEGMENT_RULE", () => {
+  // The rule is shared by two Zod schemas that both validate client AND topic on the live path. Pinning
+  // it here is what stops the separator acquiring a third spelling as a literal inside one of them.
+  test("rejects a client or topic carrying the logical separator", () => {
+    expect(FOLDER_SEGMENT_RULE.test("Clients/Listify")).toBe(false);
+    expect(FOLDER_SEGMENT_RULE.test("Personal/Travel")).toBe(false);
+    expect(FOLDER_SEGMENT_RULE.test("Listify")).toBe(true);
   });
 
   test("names the separator it rejects, so the message cannot drift from the rule", () => {
-    expect(CLIENT_SEGMENT_RULE.message).toContain(LOGICAL_SEPARATOR);
+    expect(FOLDER_SEGMENT_RULE.message).toContain(LOGICAL_SEPARATOR);
   });
 });
 

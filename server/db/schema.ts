@@ -443,7 +443,7 @@ export const action = mysqlTable(
     // restore it exactly rather than reconstruct it from later, possibly-incomplete sync data.
     from_state_json: text("fromStateJson"),
     to_state_json: text("toStateJson"),
-    // The logical path §6 chose for a `file` action — "Clients/KidsLiving", never a server-native folder
+    // The logical path §6 chose for a `file` action — "KidsLiving", one folder name, never a server-native folder
     // name. Written by the shadow runner as the proposal and by filing-queue resolution as the operator's
     // confirmation; server/mail/filing/render.ts is the only thing that turns it into a real folder.
     // Nullable for the same reason mailboxId is: 29,375 rows predate it, and it is meaningless on the

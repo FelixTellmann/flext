@@ -3,20 +3,23 @@ import type { PolicyScope } from "@server/mail/classify/rules";
 // The logical path separator, which is NOT any server's hierarchy delimiter. A logical path is
 // delimiter-free by construction and only server/mail/filing/render.ts is allowed to turn it into
 // something a server understands — §6 says "paths are logical" and this is where that starts.
+//
+// Since 2026-09-06 (docs/decisions/2026-09-06-flat-folders.md) a logical path is exactly one segment, so
+// the separator never appears in one logicalPathFor produces. It survives as the character the segment
+// rule refuses, and as what render.ts splits on for the pre-flattening rows still stored in
+// Action.target_path and FilingBinding.logical_path.
 export const LOGICAL_SEPARATOR = "/";
 
-export const CLIENTS_ROOT = "Clients";
-
 // The write-side half of logicalPathFor's contract, exported as data rather than as a Zod schema so this
-// module stays dependency-free and both validators can share one spelling. A client is ONE segment of a
-// logical path; a separator inside it would inject folder hierarchy that logicalPathFor never sees and
-// renderFolderPath would then refuse at execution time, after the policy was already stored. Two Zod
+// module stays dependency-free and every validator can share one spelling. A client or a topic is ONE
+// folder name; a separator inside either would ask for hierarchy that the flat-folders decision refuses,
+// and renderFolderPath would then refuse at execution time, after the policy was already stored. Two Zod
 // schemas validate this input on the live path (the ORPC boundary and upsert_policy_schema), and a
 // literal "/" in each is three spellings of one rule with nothing forcing them to agree — the exact
 // shape that cost Phase 3 five fix rounds.
-export const CLIENT_SEGMENT_RULE = {
+export const FOLDER_SEGMENT_RULE = {
   test: (value: string): boolean => !value.includes(LOGICAL_SEPARATOR),
-  message: `a client name may not contain "${LOGICAL_SEPARATOR}": it is one segment of a logical path, and a separator here would let a policy inject folder hierarchy that logicalPathFor never sees.`,
+  message: `a client or topic may not contain "${LOGICAL_SEPARATOR}": every folder is one name with no nesting, so a separator here would ask for folder hierarchy that filing never creates.`,
 } as const;
 
 // The closed set of reasons a message reaches the filing queue instead of a folder. Exported as a tuple
@@ -34,46 +37,34 @@ export function filingQueueReason(reason: FilingQueueReason, detail: string): st
 
 export type PolicyFilingMapping = { client: string | null; topic: string | null };
 
-// Trims each segment and drops empties, so "Ops//Shopify " and " Ops/Shopify" render the same path and
-// neither can produce a zero-length folder name. Returns null when nothing survives.
-function normalizeSegments(raw: string): string[] | null {
+// One folder name from a column value. Trims, and keeps only the LAST separator-delimited segment, so a
+// row stored before the flat-folders decision ("Personal/Travel", "Ops//Shopify ") renders the same
+// name tmp/flatten-filing-policies.ts rewrites it to ("Travel", "Shopify") rather than a nested path.
+// Returns null when nothing survives, so a blank column can never name a zero-length folder.
+function folderNameFor(raw: string): string | null {
   const segments = raw
     .split(LOGICAL_SEPARATOR)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
-  return segments.length === 0 ? null : segments;
+  return segments.at(-1) ?? null;
 }
 
-// §6's axes, and the one place that knows how they compose.
+// §6's axes as flattened on 2026-09-06: one folder name, no roots, no nesting.
 //
-//   client + topic  ->  Clients/<client>/<topic>
-//   client          ->  Clients/<client>
-//   topic           ->  <topic>, verbatim, and it MAY carry its own hierarchy
+//   client + topic  ->  <client>
+//   client          ->  <client>
+//   topic           ->  <topic>
 //   neither         ->  null
 //
-// The third branch is the one that needs justifying. Most of the seeded `file` traffic is records —
-// tax, banking, travel, SaaS receipts — which have no client, and inventing one would make
-// `Clients/Finances` a lie. Letting `topic` carry a slash-delimited path expresses `Finances`,
-// `Ops/Shopify` and `Personal/Tennis` without a third column. The cost is that `topic` means two
-// things depending on whether `client` is set, and the containment of that cost is this function:
-// nothing else may split, join or interpret either column.
-//
-// `client` is never allowed to carry a separator — upsertPolicy rejects it at the Zod boundary, so a
-// client cannot silently inject hierarchy — which is why only `topic` is passed through whole here.
+// The client wins when both are set because it is the more specific fact about the sender — a topic on a
+// client rule ("Invoices") describes what the mail is, the client says whose it is, and the operator reads
+// folder counts per client. Nothing else may split, join or interpret either column.
 export function logicalPathFor(mapping: PolicyFilingMapping): string | null {
-  const client = mapping.client === null ? null : normalizeSegments(mapping.client);
-  const topic = mapping.topic === null ? null : normalizeSegments(mapping.topic);
-
+  const client = mapping.client === null ? null : folderNameFor(mapping.client);
   if (client !== null) {
-    const segments = topic === null ? [CLIENTS_ROOT, ...client] : [CLIENTS_ROOT, ...client, ...topic];
-    return segments.join(LOGICAL_SEPARATOR);
+    return client;
   }
-
-  if (topic !== null) {
-    return topic.join(LOGICAL_SEPARATOR);
-  }
-
-  return null;
+  return mapping.topic === null ? null : folderNameFor(mapping.topic);
 }
 
 export type FilingGateInput = {

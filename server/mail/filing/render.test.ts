@@ -29,13 +29,11 @@ describe("findNamespaceRoot", () => {
 
 describe("renderFolderPath", () => {
   test("renders with the server's delimiter under its namespace root", () => {
-    expect(renderFolderPath({ logical_path: "Clients/KidsLiving", delimiter: ".", namespace_root: "INBOX" })).toBe(
-      "INBOX.Clients.KidsLiving",
-    );
+    expect(renderFolderPath({ logical_path: "KidsLiving", delimiter: ".", namespace_root: "INBOX" })).toBe("INBOX.KidsLiving");
   });
 
   test("renders at the top level when there is no namespace root", () => {
-    expect(renderFolderPath({ logical_path: "Clients/KidsLiving", delimiter: "/", namespace_root: null })).toBe("Clients/KidsLiving");
+    expect(renderFolderPath({ logical_path: "KidsLiving", delimiter: "/", namespace_root: null })).toBe("KidsLiving");
   });
 
   test("never emits a literal slash on a dot-delimited server", () => {

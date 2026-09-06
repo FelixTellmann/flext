@@ -57,7 +57,7 @@ describe("buildShadowActionRow", () => {
     expect(row_b.mailbox_id).toBe("mailbox-b");
   });
 
-  test("a file decision from a policy with a client writes target_path as Clients/<client>", () => {
+  test("a file decision from a policy with a client writes target_path as <client>", () => {
     const now = new Date("2026-08-19T00:00:00.000Z");
     const row = buildShadowActionRow({
       message_id: "message-file",
@@ -67,7 +67,7 @@ describe("buildShadowActionRow", () => {
       run_id: "run-1",
       now,
     });
-    expect(row.target_path).toBe("Clients/Acme Corp");
+    expect(row.target_path).toBe("Acme Corp");
   });
 
   test("a file decision from a policy with neither client nor topic writes a null target_path", () => {

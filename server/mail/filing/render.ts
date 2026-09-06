@@ -13,8 +13,8 @@ const INBOX = "INBOX";
 const MAX_FOLDER_LENGTH = 191;
 
 // Where a new user folder belongs on this server. On felix@tellmann.co.za every user folder lives under
-// "INBOX." — INBOX.KidsLiving, INBOX.Finances - Ref, INBOX.Sent — so a folder rendered as
-// "Clients.KidsLiving" would be created as a SIBLING of INBOX rather than inside it, which is a
+// "INBOX." — INBOX.KidsLiving, INBOX.Finances - Ref, INBOX.Sent — so a folder rendered as a bare
+// "KidsLiving" would be created as a SIBLING of INBOX rather than inside it, which is a
 // different mailbox from the one the operator's thirteen existing folders live in. On Gmail the folder
 // list is "INBOX" and "[Gmail]/All Mail", which is not INBOX-rooted, and a new label belongs at the top
 // level.
@@ -36,8 +36,9 @@ export function findNamespaceRoot(folders: FolderInfo[], delimiter: string): str
 }
 
 // The logical path's separator is replaced by the server's delimiter, never the other way round. §6 calls
-// this out and the live data confirms it: hardcoding "/" produces a literal folder named "Clients/Acme"
-// on a dot-delimited server, and felix@tellmann.co.za is dot-delimited.
+// this out and the live data confirms it: a logical path is one folder name since the flat-folders
+// decision, but rows written before it still carry "/" and hardcoding it would produce a literal folder
+// named "Personal/Travel" on a dot-delimited server, and felix@tellmann.co.za is dot-delimited.
 //
 // A segment containing the server's own delimiter would inject hierarchy the logical path never asked
 // for, so it is refused rather than escaped — there is no portable escape, and the fix belongs in the
