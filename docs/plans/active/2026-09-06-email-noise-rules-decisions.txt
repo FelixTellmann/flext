@@ -419,3 +419,29 @@ A: the cut applies to movers only, sorted by waiting in the helper rather than t
    not: leaving Select all over every mover — with 30 rows hidden it would assert reviewed_shadow_record
    for rows the operator never saw, the exact gate the page says it does not weaken
 why: the tick is the review; a row that was not on screen was not reviewed
+
+[2026-09-06 23:40] phase 4a fix — first-contact cutoff column
+Q: which column does first_contact_autonomy_set_at cut on?
+A: Message.internalDate, joined in loadShadowActionsBySource; the query field is arrived_after
+   not: Action.decided_at — /admin/shadow's Run-pass (unclassified_only: false) re-journals every
+   message with decided_at = now, so one click would put the whole old backlog past the cutoff
+why: arrival, not decision time, because Run-pass re-journals; the operator was told "new arrivals only"
+
+[2026-09-06 23:40] phase 4a fix — Message join in the shadow-by-source read
+Q: join Message only when a cutoff is set, or always?
+A: always, the way loadPendingActions does
+   not: conditional join — two query shapes for one read, and an Action with no Message row is one the
+   executor drops anyway
+why: one shape; the sweeps lose nothing they could have executed
+
+[2026-09-06 23:40] phase 4a fix — the in-place first-contact rewrite and the cutoff
+Q: does tmp/rewrite-first-contact-backlog.ts (still unwritten) have to preserve decided_at?
+A: no; promotion no longer reads decided_at except to order, and internalDate is the message's own
+   not: freezing decided_at in the rewrite to keep the backlog behind a decided_at cutoff
+why: the cutoff is on arrival now, so a rewrite that stamps a fresh decided_at cannot move the backlog
+
+[2026-09-06 23:40] phase 4a fix — dwell suspension reason wording
+Q: with declined-sweep rescues counted, what does the suspension reason say?
+A: "the settled sweep or the declined sweep archived ... Both sweeps are suspended"
+   not: leaving "the settled sweep archived" — false the first time a declined rescue trips it
+why: the operator reads that sentence to judge whether the rule was wrong

@@ -652,7 +652,25 @@ describe("rescues against the settled sweep (1.11)", () => {
     // The operator reads this sentence to decide whether the rule was wrong, so it has to say what
     // happened and that nothing is lost.
     expect(port.dwell_suspensions[0]?.reason).toContain("settled sweep");
+    expect(port.dwell_suspensions[0]?.reason).toContain("declined sweep");
     expect(port.dwell_suspensions[0]?.reason).toContain("can be undone");
+  });
+
+  // The dwell suspension takes both sweeps out, so a rescue against either has to count toward it: a
+  // declined-sweep rescue that went uncounted would leave that sweep running past the same evidence.
+  test("a rescue against the declined sweep counts toward the same suspension", async () => {
+    const port = createFakePort({
+      rows: [candidate({ action_id: "action-d1", sender_policy_id: null, source: "sweep_declined" })],
+      live: { [rowKey("message-action-d1")]: facts({ opened_at: OPENED_AFTER }) },
+      recent_sweep_rescues: 3,
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.rescued).toBe(1);
+    expect(result.dwell_suspended).toBe(true);
+    expect(port.dwell_suspensions).toHaveLength(1);
+    expect(port.stamps.has("action-d1")).toBe(true);
   });
 
   test("a rescue against a POLICY never touches the mailbox's dwell suspension", async () => {

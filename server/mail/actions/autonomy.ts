@@ -44,8 +44,9 @@ export type EligibleSource = {
   // The one executable kind this source emits. A guard-suppressed row shares the source but is
   // keep_inbox, and planFor throws on it, so the read is scoped by kind and never by source alone.
   kind: ExecutableActionKind;
-  // The promotion cutoff: only rows decided after this moment are promoted. Null means no cutoff.
-  decided_after: Date | null;
+  // The promotion cutoff: only rows whose message arrived after this moment are promoted. Null means no
+  // cutoff. Arrival rather than decided_at because Run-pass re-journals the backlog with a fresh decided_at.
+  arrived_after: Date | null;
 };
 
 // Pure: which sources this mailbox row lets the tick promote, in the order the budget is spent. First
@@ -53,28 +54,29 @@ export type EligibleSource = {
 // and behind the sweeps' waiting proposals it would sit unpromoted for as many ticks as they take to
 // drain.
 //
-// First contact's cutoff is `first_contact_autonomy_set_at`, and a row at `auto` with no set-at time is
-// NOT eligible rather than promoted without one: docs/decisions/2026-09-06-first-contact-dkim-unknown-
-// and-cutoff-scope.md makes the cutoff the thing that keeps weeks of proposals made under the old rule
-// from moving, so a switch thrown without recording when is a switch this function refuses to read. The
-// sweeps have no cutoff: their old proposals were made by the same rule being switched on.
+// First contact's cutoff is `first_contact_autonomy_set_at`, applied to the message's arrival, and a row
+// at `auto` with no set-at time is NOT eligible rather than promoted without one: docs/decisions/
+// 2026-09-06-first-contact-dkim-unknown-and-cutoff-scope.md makes the cutoff the thing that keeps weeks
+// of proposals made under the old rule from moving, so a switch thrown without recording when is a switch
+// this function refuses to read. The sweeps have no cutoff: their old proposals were made by the same
+// rule being switched on.
 export function eligibleScheduledSources(row: SourceAutonomyRow): EligibleSource[] {
   const eligible: EligibleSource[] = [];
 
   if (row.first_contact_autonomy === "auto" && row.first_contact_suspended_at === null && row.first_contact_autonomy_set_at !== null) {
-    eligible.push({ source: FIRST_CONTACT_SOURCE, kind: QUARANTINE_KIND, decided_after: row.first_contact_autonomy_set_at });
+    eligible.push({ source: FIRST_CONTACT_SOURCE, kind: QUARANTINE_KIND, arrived_after: row.first_contact_autonomy_set_at });
   }
   if (row.settled_sweep_autonomy === "auto" && row.dwell_suspended_at === null) {
-    eligible.push({ source: SWEEP_SETTLED_SOURCE, kind: "archive", decided_after: null });
+    eligible.push({ source: SWEEP_SETTLED_SOURCE, kind: "archive", arrived_after: null });
   }
   if (row.declined_sweep_autonomy === "auto" && row.dwell_suspended_at === null) {
-    eligible.push({ source: SWEEP_DECLINED_SOURCE, kind: "archive", decided_after: null });
+    eligible.push({ source: SWEEP_DECLINED_SOURCE, kind: "archive", arrived_after: null });
   }
 
   return eligible;
 }
 
-export type PromoteAutoPoliciesInput = {
+export type PromoteAutoInput = {
   mailbox_id: string;
   batch_size: number;
   port: AutonomyPort;
@@ -106,7 +108,7 @@ export type PromoteAutoPoliciesInput = {
 // rows, so a row left `pending` and unexecuted is never re-promoted, never appears in a future id list,
 // and is by then indistinguishable from one the operator approved by hand — which the scheduled sync is
 // forbidden to touch. Spending one shared budget keeps promotion and execution the same size.
-export async function promoteAutoPolicies(input: PromoteAutoPoliciesInput): Promise<string[]> {
+export async function promoteAutoPolicies(input: PromoteAutoInput): Promise<string[]> {
   const eligible_policies = await input.port.loadAutoPolicies();
   const promoted_action_ids: string[] = [];
 
@@ -133,7 +135,7 @@ export async function promoteAutoPolicies(input: PromoteAutoPoliciesInput): Prom
 // guarded UPDATEs flipped come back, and `batch_size` is a total budget spent down across the sources
 // eligibleScheduledSources lists. The suspension check is in the row that function reads, which the port
 // loads fresh — see loadSourceAutonomy.
-export async function promoteAutoSources(input: PromoteAutoPoliciesInput): Promise<string[]> {
+export async function promoteAutoSources(input: PromoteAutoInput): Promise<string[]> {
   if (input.batch_size < 1) {
     return [];
   }
@@ -155,7 +157,7 @@ export async function promoteAutoSources(input: PromoteAutoPoliciesInput): Promi
       mailbox_id: input.mailbox_id,
       source: eligible.source,
       kind: eligible.kind,
-      decided_after: eligible.decided_after,
+      arrived_after: eligible.arrived_after,
       batch_size: remaining,
     });
     if (rows.length === 0) {
@@ -174,7 +176,7 @@ export async function promoteAutoSources(input: PromoteAutoPoliciesInput): Promi
 // scheduled sources with whatever is left. Policies first because a policy at `auto` passed a reviewed
 // shadow record and a rescue gate to get there, and because it keeps the tick's behaviour for policies
 // exactly what it was before sources could be promoted at all.
-export async function promoteAutoDecisions(input: PromoteAutoPoliciesInput): Promise<string[]> {
+export async function promoteAutoDecisions(input: PromoteAutoInput): Promise<string[]> {
   const from_policies = await promoteAutoPolicies(input);
   const remaining = input.batch_size - from_policies.length;
   if (remaining <= 0) {

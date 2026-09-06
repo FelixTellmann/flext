@@ -103,7 +103,10 @@ export type ShadowActionsBySourceQuery = {
   mailbox_id: string;
   source: string;
   kind: ExecutableActionKind;
-  decided_after: Date | null;
+  // Message.internalDate must be strictly after this. Arrival, not decided_at: /admin/shadow's Run-pass
+  // re-journals every message with a fresh decided_at, and a cutoff on that column would let one click
+  // move the whole backlog the cutoff exists to hold back.
+  arrived_after: Date | null;
   batch_size: number;
 };
 
@@ -166,8 +169,8 @@ export type ActionJournal = {
   }) => Promise<ActionPromotionLookup[]>;
   // The scheduled-source counterpart: shadow rows a policy-scoped read can never reach, because a
   // first-contact or sweep row carries no policy id. Scoped by source AND kind — a guard-suppressed row
-  // shares the source but is keep_inbox, which planFor refuses — and, when `decided_after` is set, to
-  // rows decided after that moment (first contact's promotion cutoff).
+  // shares the source but is keep_inbox, which planFor refuses — and, when `arrived_after` is set, to
+  // rows whose message arrived after that moment (first contact's promotion cutoff).
   loadShadowActionsBySource: (input: ShadowActionsBySourceQuery) => Promise<ActionPromotionLookup[]>;
   // Writes status "pending" and NOTHING else — no from_state_json, to_state_json, or applied_at. Those
   // belong to the executor's own steps 1-4; promotion only approves a shadow decision for the executor to

@@ -1,7 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message, senderPolicy } from "@server/db/schema";
 import { APPLIED_STATUS } from "@server/mail/actions/executor";
-import { FIRST_CONTACT_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import { FIRST_CONTACT_SOURCE, SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import { isSentByMeSql, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type {
   DwellSuspensionEntry,
@@ -279,7 +279,8 @@ async function suspendPolicy(entry: PolicySuspensionEntry): Promise<boolean> {
 
 // 1.11. Counts STAMPED rescues rather than re-deriving them, so the window is a fact the journal already
 // holds and the count agrees with what the operator sees on the Journal surface. Scoped to the mailbox,
-// because a sweep is suspended per mailbox and evidence from one must never suspend another.
+// because a sweep is suspended per mailbox and evidence from one must never suspend another. Both sweep
+// sources, because dwellSuspendedAt suspends both.
 async function countRecentSweepRescues(input: { mailbox_id: string; since: Date }): Promise<number> {
   const [row] = await db
     .select({ total: sql<number>`COUNT(*)` })
@@ -287,7 +288,7 @@ async function countRecentSweepRescues(input: { mailbox_id: string; since: Date 
     .where(
       and(
         eq(action.mailbox_id, input.mailbox_id),
-        eq(action.source, SWEEP_SETTLED_SOURCE),
+        inArray(action.source, [SWEEP_SETTLED_SOURCE, SWEEP_DECLINED_SOURCE]),
         isNotNull(action.rescued_at),
         gte(action.rescued_at, input.since),
       ),

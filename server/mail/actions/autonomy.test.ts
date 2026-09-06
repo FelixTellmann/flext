@@ -3,7 +3,7 @@ import type {
   AutonomyPort,
   AutoPolicyRow,
   PolicyForGate,
-  PromoteAutoPoliciesInput,
+  PromoteAutoInput,
   PromotionPort,
   SourceAutonomyRow,
 } from "@server/mail/actions/autonomy";
@@ -29,6 +29,7 @@ type FakeActionRow = {
   source: string;
   kind: string;
   decided_at: Date | null;
+  internal_date: Date;
 };
 
 type FakePolicyRow = {
@@ -50,6 +51,7 @@ function shadowRow(action_id: string, sender_policy_id: string, overrides: Parti
     source: "address_policy",
     kind: "archive",
     decided_at: AFTER_SWITCH,
+    internal_date: AFTER_SWITCH,
     ...overrides,
   };
 }
@@ -65,6 +67,7 @@ function sourceRow(action_id: string, source: string, kind: string, overrides: P
     source,
     kind,
     decided_at: AFTER_SWITCH,
+    internal_date: AFTER_SWITCH,
     ...overrides,
   };
 }
@@ -104,7 +107,7 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
     },
 
     // Mirrors journal.ts's loadShadowActionsBySource: status, mailbox, source AND kind, and a strict
-    // `decided_at > decided_after` that drops a null decided_at when a cutoff is set.
+    // `Message.internalDate > arrived_after` when a cutoff is set; decided_at only orders.
     loadShadowActionsBySource: async (query) => {
       input.events.push(`load_shadow_by_source ${query.source} ${query.kind} limit ${query.batch_size}`);
       const matches: ActionPromotionLookup[] = [];
@@ -112,7 +115,7 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
         if (row.status !== "shadow" || row.mailbox_id !== query.mailbox_id || row.source !== query.source || row.kind !== query.kind) {
           continue;
         }
-        if (query.decided_after !== null && (row.decided_at === null || row.decided_at.getTime() <= query.decided_after.getTime())) {
+        if (query.arrived_after !== null && row.internal_date.getTime() <= query.arrived_after.getTime()) {
           continue;
         }
         matches.push({ action_id: row.action_id, mailbox_id: row.mailbox_id, status: row.status });
@@ -176,7 +179,7 @@ function createFakePort(input: { events: string[]; policies: FakePolicyRow[]; so
   };
 }
 
-function promoteInput(overrides: Partial<PromoteAutoPoliciesInput> = {}): Omit<PromoteAutoPoliciesInput, "port" | "journal"> {
+function promoteInput(overrides: Partial<PromoteAutoInput> = {}): Omit<PromoteAutoInput, "port" | "journal"> {
   return { mailbox_id: MAILBOX_ID, batch_size: BATCH_SIZE, ...overrides };
 }
 
@@ -341,10 +344,10 @@ describe("eligibleScheduledSources", () => {
     expect(eligibleScheduledSources(autonomyRow())).toEqual([]);
   });
 
-  test("first contact at auto: quarantine rows decided after the switch was set", () => {
+  test("first contact at auto: quarantine rows that arrived after the switch was set", () => {
     const eligible = eligibleScheduledSources(autonomyRow({ first_contact_autonomy: "auto", first_contact_autonomy_set_at: SWITCHED_ON }));
 
-    expect(eligible).toEqual([{ source: "first_contact", kind: "quarantine", decided_after: SWITCHED_ON }]);
+    expect(eligible).toEqual([{ source: "first_contact", kind: "quarantine", arrived_after: SWITCHED_ON }]);
   });
 
   test("first contact at auto with no set-at time is refused rather than promoted without a cutoff", () => {
@@ -365,8 +368,8 @@ describe("eligibleScheduledSources", () => {
     const eligible = eligibleScheduledSources(autonomyRow({ settled_sweep_autonomy: "auto", declined_sweep_autonomy: "auto" }));
 
     expect(eligible).toEqual([
-      { source: "sweep_settled", kind: "archive", decided_after: null },
-      { source: "sweep_declined", kind: "archive", decided_after: null },
+      { source: "sweep_settled", kind: "archive", arrived_after: null },
+      { source: "sweep_declined", kind: "archive", arrived_after: null },
     ]);
   });
 
@@ -397,13 +400,13 @@ describe("eligibleScheduledSources", () => {
 describe("promoteAutoSources", () => {
   const first_contact_on = autonomyRow({ first_contact_autonomy: "auto", first_contact_autonomy_set_at: SWITCHED_ON });
 
-  test("first-contact quarantine rows decided after the switch are promoted; the backlog before it stays", async () => {
+  test("first-contact quarantine rows that arrived after the switch are promoted; the backlog before it stays", async () => {
     const events: string[] = [];
     const journal = createFakeJournal({
       events,
       seed: [
-        sourceRow("fc-old", "first_contact", "quarantine", { decided_at: BEFORE_SWITCH }),
-        sourceRow("fc-at", "first_contact", "quarantine", { decided_at: SWITCHED_ON }),
+        sourceRow("fc-old", "first_contact", "quarantine", { decided_at: BEFORE_SWITCH, internal_date: BEFORE_SWITCH }),
+        sourceRow("fc-at", "first_contact", "quarantine", { decided_at: SWITCHED_ON, internal_date: SWITCHED_ON }),
         sourceRow("fc-new", "first_contact", "quarantine"),
       ],
     });
@@ -414,6 +417,22 @@ describe("promoteAutoSources", () => {
     expect(promoted).toEqual(["fc-new"]);
     expect(journal.rows.get("fc-old")?.status).toBe("shadow");
     expect(journal.rows.get("fc-at")?.status).toBe("shadow");
+  });
+
+  // /admin/shadow's Run-pass re-journals the whole mailbox with decided_at = now. A cutoff on decided_at
+  // would let one click move every old first contact; the cutoff reads the message's arrival instead.
+  test("a backlog row re-decided after the switch stays a proposal: the cutoff is arrival, not decision time", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [sourceRow("fc-rejudged", "first_contact", "quarantine", { decided_at: AFTER_SWITCH, internal_date: BEFORE_SWITCH })],
+    });
+    const port = createFakePort({ events, policies: [], source_autonomy: first_contact_on });
+
+    const promoted = await promoteAutoSources({ ...promoteInput(), port, journal });
+
+    expect(promoted).toEqual([]);
+    expect(journal.rows.get("fc-rejudged")?.status).toBe("shadow");
   });
 
   // A guard-suppressed first contact is journaled as keep_inbox under the same source, and planFor throws

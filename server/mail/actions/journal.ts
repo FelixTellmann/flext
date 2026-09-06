@@ -368,8 +368,7 @@ async function loadShadowActionsByPolicy(input: {
 // The same scoping discipline as loadShadowActionsByPolicy, for rows that carry no policy id. `kind` is
 // in the WHERE clause rather than filtered by the caller because a source-only read would hand back the
 // guard-suppressed keep_inbox rows that share the source, and the executor's planFor throws on those.
-// `gt` on decided_at also drops a null decided_at, which is what a cutoff should do with a row whose
-// moment is unknown.
+// The cutoff is on Message.internalDate, joined unconditionally so the two branches read the same rows.
 async function loadShadowActionsBySource(input: ShadowActionsBySourceQuery): Promise<ActionPromotionLookup[]> {
   if (input.mailbox_id.length === 0 || input.source.length === 0) {
     throw new Error(
@@ -388,13 +387,14 @@ async function loadShadowActionsBySource(input: ShadowActionsBySourceQuery): Pro
     eq(action.source, input.source) as SQL,
     eq(action.kind, input.kind) as SQL,
   ];
-  if (input.decided_after !== null) {
-    clauses.push(gt(action.decided_at, input.decided_after) as SQL);
+  if (input.arrived_after !== null) {
+    clauses.push(gt(message.internal_date, input.arrived_after) as SQL);
   }
 
   return db
     .select({ action_id: action.id, mailbox_id: action.mailbox_id, status: action.status })
     .from(action)
+    .innerJoin(message, eq(message.id, action.message_id))
     .where(and(...clauses))
     .orderBy(asc(action.decided_at), asc(action.id))
     .limit(input.batch_size);

@@ -1,4 +1,4 @@
-import { FIRST_CONTACT_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import { FIRST_CONTACT_SOURCE, SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import type { MessageAddress } from "@server/mail/rescue/locate";
 import { messageAddressForAction } from "@server/mail/rescue/locate";
 import type { RescueSignal } from "@server/mail/rescue/signals";
@@ -98,7 +98,7 @@ export type RescuePort = {
   suspendPolicy: (entry: PolicySuspensionEntry) => Promise<boolean>;
   // 1.11's two. A sweep action carries no senderPolicyId, so without these the detector would discard
   // every rescue against it for want of an id to blame — leaving the newest and least-proven rule in the
-  // system as the only one with no safety net.
+  // system as the only one with no safety net. The count spans both sweeps, because the suspension does.
   countRecentSweepRescues: (input: { mailbox_id: string; since: Date }) => Promise<number>;
   // Guarded `WHERE dwellSuspendedAt IS NULL`, exactly as suspendPolicy is, and returns whether it
   // actually suspended anything — so a mailbox the operator deliberately un-suspended is not re-suspended
@@ -227,8 +227,8 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
       mailbox_id: input.mailbox_id,
       suspended_at: new Date(),
       reason:
-        `${recent} messages the settled sweep archived were opened or replied to within the last ` +
-        `${SWEEP_RESCUE_WINDOW_DAYS} days. The sweep is suspended on this mailbox until you clear it; ` +
+        `${recent} messages the settled sweep or the declined sweep archived were opened or replied to within the last ` +
+        `${SWEEP_RESCUE_WINDOW_DAYS} days. Both sweeps are suspended on this mailbox until you clear it; ` +
         "every action it took is in the journal and can be undone.",
     });
   }
@@ -303,7 +303,7 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
         // 1.11: a sweep row has no policy to blame, and discarding its rescues is how the newest rule in
         // the system would end up the only one running unattended with no safety net. Counted here and
         // resolved once in finish(); everything else with no policy id genuinely has nothing to do.
-        if (candidate.source === SWEEP_SETTLED_SOURCE) {
+        if (candidate.source === SWEEP_SETTLED_SOURCE || candidate.source === SWEEP_DECLINED_SOURCE) {
           sweep_rescues_this_run += 1;
         }
         if (candidate.source === FIRST_CONTACT_SOURCE) {
