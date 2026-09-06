@@ -1,13 +1,9 @@
 import { db } from "@server/db/drizzle";
 import { activityBucket, personalTask } from "@server/db/schema";
-import { serverEnv } from "@server/env";
 import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
-import { matchesScriptSecret } from "@server/script-auth";
+import { requireScriptSecret } from "@server/script-auth";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, count, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
-
-// serverEnv(), never the root env.ts — that one validates ~40 variables at import time and calls
-// process.exit(1) on a miss, which from a route would read environment during the Docker build.
 
 const hours = (seconds: number): string => `${Math.floor(seconds / 3600)}h${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}`;
 
@@ -64,14 +60,9 @@ async function renderDigest(now: Date): Promise<string> {
 }
 
 async function handle({ request }: { request: Request }) {
-  const secret = serverEnv().SCRIPT_SECRET;
-
-  if (secret === undefined) {
-    return Response.json({ error: "SCRIPT_SECRET is not configured on this deployment" }, { status: 503 });
-  }
-
-  if (!matchesScriptSecret(request.headers.get("authorization"), secret)) {
-    return new Response("Unauthorized", { status: 401 });
+  const refusal = requireScriptSecret(request);
+  if (refusal !== null) {
+    return refusal;
   }
 
   // text/plain so a Shortcut can show the body directly without parsing anything.

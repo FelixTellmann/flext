@@ -1,21 +1,11 @@
-import { serverEnv } from "@server/env";
 import { capture_input_schema, insertCapturedTask } from "@server/orpc/personal-tasks";
-import { matchesScriptSecret } from "@server/script-auth";
+import { requireScriptSecret } from "@server/script-auth";
 import { createFileRoute } from "@tanstack/react-router";
 
-// Same shape as src/routes/api/mail-sync.ts, and for the same reason: serverEnv() rather than the root
-// env.ts, whose ~40-variable validation runs at import time and would take the container down over
-// variables this endpoint never reads.
-
 async function handle({ request }: { request: Request }) {
-  const secret = serverEnv().SCRIPT_SECRET;
-
-  if (secret === undefined) {
-    return Response.json({ error: "SCRIPT_SECRET is not configured on this deployment" }, { status: 503 });
-  }
-
-  if (!matchesScriptSecret(request.headers.get("authorization"), secret)) {
-    return new Response("Unauthorized", { status: 401 });
+  const refusal = requireScriptSecret(request);
+  if (refusal !== null) {
+    return refusal;
   }
 
   const body = capture_input_schema.safeParse(await request.json().catch(() => null));

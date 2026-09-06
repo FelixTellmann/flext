@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { serverEnv } from "@server/env";
 
 // The bearer check every script-facing endpoint uses. Length is compared first because
 // timingSafeEqual throws on a length mismatch rather than returning false.
@@ -20,4 +21,23 @@ export function matchesScriptSecret(provided: string | null, expected_secret: st
   }
 
   return timingSafeEqual(expected, candidate);
+}
+
+// The whole gate in one call: the response to send when the request may not proceed, null when it may.
+// 503 rather than 401 for a missing secret because the deployment, not the caller, is what is wrong,
+// and a red scheduled task is the only alerting this deployment has.
+export function requireScriptSecret(
+  request: Request,
+  options: { secret: string | undefined } = { secret: serverEnv().SCRIPT_SECRET },
+): Response | null {
+  const { secret } = options;
+  if (secret === undefined) {
+    return Response.json({ error: "SCRIPT_SECRET is not configured on this deployment" }, { status: 503 });
+  }
+
+  if (!matchesScriptSecret(request.headers.get("authorization"), secret)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  return null;
 }

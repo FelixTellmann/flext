@@ -1,5 +1,4 @@
-import { serverEnv } from "@server/env";
-import { matchesScriptSecret } from "@server/script-auth";
+import { requireScriptSecret } from "@server/script-auth";
 import { WakaConfigError } from "@server/wakatime/client";
 import { runHeartbeatIngest } from "@server/wakatime/ingest";
 import { createFileRoute } from "@tanstack/react-router";
@@ -9,19 +8,10 @@ import { z } from "zod";
 // enough to run hourly because the unique index on source_id turns a re-read into an update.
 const ingest_days_schema = z.coerce.number().int().min(1).max(14).default(3);
 
-// serverEnv(), never the root env.ts — that one validates ~40 variables at import time and calls
-// process.exit(1) on a miss, which from a route would read environment during the Docker build and kill
-// the container over variables this endpoint never touches.
-
 async function handle({ request }: { request: Request }) {
-  const secret = serverEnv().SCRIPT_SECRET;
-
-  if (secret === undefined) {
-    return Response.json({ error: "SCRIPT_SECRET is not configured on this deployment" }, { status: 503 });
-  }
-
-  if (!matchesScriptSecret(request.headers.get("authorization"), secret)) {
-    return new Response("Unauthorized", { status: 401 });
+  const refusal = requireScriptSecret(request);
+  if (refusal !== null) {
+    return refusal;
   }
 
   const days = ingest_days_schema.safeParse(new URL(request.url).searchParams.get("days") ?? undefined);
