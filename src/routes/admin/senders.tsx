@@ -574,6 +574,7 @@ function AdminSendersPage() {
   const [assign_drafts, setAssignDrafts] = useState<Record<string, PolicyActionValue>>({});
   const [mark_read_drafts, setMarkReadDrafts] = useState<Record<string, boolean>>({});
   const [bulk_action_draft, setBulkActionDraft] = useState<PolicyActionValue>("archive");
+  const [bulk_mark_read_draft, setBulkMarkReadDraft] = useState(false);
   const [busy_key, setBusyKey] = useState<string | null>(null);
   const [policy_status, setPolicyStatus] = useState<string | null>(null);
 
@@ -673,7 +674,7 @@ function AdminSendersPage() {
     }
   };
 
-  const applyBulkAssignment = async (action: PolicyActionValue) => {
+  const applyBulkAssignment = async (action: PolicyActionValue, mark_read: boolean) => {
     const addresses = [...selected_addresses];
     if (addresses.length === 0) {
       return;
@@ -682,7 +683,15 @@ function AdminSendersPage() {
     setPolicyStatus(`Assigning ${policy_action_label[action]} to ${addresses.length} sender${addresses.length === 1 ? "" : "s"}…`);
     try {
       const results = await Promise.allSettled(
-        addresses.map((address) => orpc.mail.upsertPolicy({ scope: "address", value: address, action, source: "operator" })),
+        addresses.map((address) =>
+          orpc.mail.upsertPolicy({
+            scope: "address",
+            value: address,
+            action,
+            mark_read: canMarkRead(action) && mark_read,
+            source: "operator",
+          }),
+        ),
       );
       const failed = results.filter((result) => result.status === "rejected").length;
       setPolicyStatus(
@@ -863,11 +872,27 @@ function AdminSendersPage() {
                   ))}
                 </select>
               </label>
+              <label
+                className={clsx(
+                  "flex items-center gap-1 text-xs",
+                  canMarkRead(bulk_action_draft) ? "text-gray-700 dark:text-dark-text" : "text-gray-400 dark:text-dark-border",
+                )}
+                title="Only file and archive rules can mark read: the unread badge is the point of keeping mail in the inbox."
+              >
+                <input
+                  checked={canMarkRead(bulk_action_draft) && bulk_mark_read_draft}
+                  className={checkbox_input}
+                  disabled={busy_key !== null || !canMarkRead(bulk_action_draft)}
+                  onChange={(event) => setBulkMarkReadDraft(event.target.checked)}
+                  type="checkbox"
+                />
+                mark read
+              </label>
               <ActionButton
                 busy={busy_key === "bulk"}
                 disabled={busy_key !== null}
                 label={`Apply to ${selected_addresses.size}`}
-                onClick={() => void applyBulkAssignment(bulk_action_draft)}
+                onClick={() => void applyBulkAssignment(bulk_action_draft, bulk_mark_read_draft)}
                 variant={accent_button_focus}
               />
               <button
