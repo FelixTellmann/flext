@@ -77,8 +77,8 @@ Decision: `2026-09-06-unsubscribe-button-and-digest-links.md`.
 ### Phase 7 — SMTP and the Monday digest
 Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-button-and-digest-links.md`.
 - [x] `server/mail/send/` (1934cbd): SMTP over 465 to mail.tellmann.co.za with the mailbox's stored credentials and the same SPKI pin. One function: `sendMail`.
-- [ ] Mail-to unsubscribes send through it, always from felix@tellmann.co.za, recorded like the http ones.
-- [ ] `/api/mail-digest`: bearer-secret endpoint (shared helper, register entry); renders senders unopened for 30 days by volume (register entry for the exact set); each row carries a signed `unsubscribe` link (does what the button does) and a signed `file` link (creates a watch-only archive rule); sends to felix@tellmann.co.za. Links valid 14 days. Coolify scheduled task, `0 5 * * 1` UTC = 07:00 Africa/Johannesburg.
+- [x] Mail-to unsubscribes send through it (208a6e5, `server/mail/unsubscribe/mailto.ts`), always from felix@tellmann.co.za, recorded like the http ones. Wiring into `bulk.ts` for mailto-only senders follows the phase 6 fix.
+- [x] `/api/mail-digest` (208a6e5, f1ab949; shared bearer helper b13d8db): bearer-secret endpoint; renders senders unopened for 30 days by volume (register entry for the exact set); each row carries a signed `unsubscribe` link (does what the button does) and a signed `file` link (creates a watch-only archive rule); sends to felix@tellmann.co.za. Links valid 14 days. Coolify scheduled task, `0 5 * * 1` UTC = 07:00 Africa/Johannesburg.
 
 ### Phase 8 — admin surfaces (operator's extra scope, widget 5)
 - [x] Sessions strip on `/admin` (6194577): when the system last believed the operator was reading mail, on what evidence, in which mailboxes.
