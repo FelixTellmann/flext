@@ -125,8 +125,14 @@ function PersonalOsTaskPage() {
     }
   };
 
-  const saveDay = (field: "when_date" | "deadline", value: string) => {
-    void save(field === "when_date" ? "when" : "deadline", { [field]: value === "" ? null : value }, { [field]: value });
+  // Typed fields save on blur, selects on change. A date input fires change on every keystroke of a typed
+  // year, and "0002-09-06" is a valid day the schema would accept.
+  const saveDay = (field: "when_date" | "deadline") => {
+    const value = draft[field];
+
+    if (value !== toDay(task[field])) {
+      void save(field === "when_date" ? "when" : "deadline", { [field]: value === "" ? null : value }, { [field]: value });
+    }
   };
 
   const chosen_area = areas.find((area) => area.id === draft.area_id);
@@ -213,7 +219,8 @@ function PersonalOsTaskPage() {
             <input
               className={field_class}
               disabled={busy}
-              onChange={(event) => saveDay("when_date", event.target.value)}
+              onBlur={() => saveDay("when_date")}
+              onChange={(event) => setDraft((current) => ({ ...current, when_date: event.target.value }))}
               type="date"
               value={draft.when_date}
             />
@@ -224,7 +231,8 @@ function PersonalOsTaskPage() {
             <input
               className={field_class}
               disabled={busy}
-              onChange={(event) => saveDay("deadline", event.target.value)}
+              onBlur={() => saveDay("deadline")}
+              onChange={(event) => setDraft((current) => ({ ...current, deadline: event.target.value }))}
               type="date"
               value={draft.deadline}
             />

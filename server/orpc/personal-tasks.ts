@@ -268,26 +268,30 @@ export const personalTaskProcedures = {
         throw new ORPCError("NOT_FOUND");
       }
 
-      const { id, state, when_date, deadline, ...fields } = input;
-      const area_id = fields.area_id === undefined ? row.area_id : fields.area_id;
-      let project_id = fields.project_id === undefined ? row.project_id : fields.project_id;
+      const { id, state, when_date, deadline, area_id, project_id, ...fields } = input;
+      const filing =
+        area_id !== undefined || project_id !== undefined
+          ? { area_id: area_id === undefined ? row.area_id : area_id, project_id: project_id === undefined ? row.project_id : project_id }
+          : null;
 
-      // A project belongs to exactly one area, so the pair is checked as a pair: a project named
-      // explicitly must sit under the effective area, and a project the task already had is dropped
+      // A project belongs to exactly one area, so the pair is checked as a pair, and only when the pair
+      // is what changed — a title edit on a task filed to an archived project must not unfile it. A
+      // project named explicitly must sit under the effective area; one the task already had is dropped
       // rather than kept when the area moves out from under it.
-      if (project_id !== null) {
+      if (filing !== null && filing.project_id !== null) {
         const [project] = await db
           .select({ area_id: personalProject.area_id })
           .from(personalProject)
-          .where(and(eq(personalProject.id, project_id), isNull(personalProject.archived_at)))
+          .where(eq(personalProject.id, filing.project_id))
           .limit(1);
+        const belongs = project !== undefined && project.area_id === filing.area_id;
 
-        if (fields.project_id !== undefined && (project === undefined || project.area_id !== area_id)) {
+        if (!belongs && project_id !== undefined) {
           throw new ORPCError("BAD_REQUEST", { message: "project does not belong to the area" });
         }
 
-        if (fields.project_id === undefined && (project === undefined || project.area_id !== area_id)) {
-          project_id = null;
+        if (!belongs) {
+          filing.project_id = null;
         }
       }
 
@@ -297,8 +301,7 @@ export const personalTaskProcedures = {
         .update(personalTask)
         .set({
           ...fields,
-          area_id,
-          project_id,
+          ...(filing ?? {}),
           when_date: dayToInstant(when_date),
           deadline: dayToInstant(deadline),
           ...(state === undefined ? {} : stateColumns(state, now)),
