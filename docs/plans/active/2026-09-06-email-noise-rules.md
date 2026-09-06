@@ -70,14 +70,14 @@ Decision: `2026-09-06-unsubscribe-button-and-digest-links.md`.
 
 ### Phase 7 — SMTP and the Monday digest
 Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-button-and-digest-links.md`.
-- [ ] `server/mail/send/`: SMTP over 465 to mail.tellmann.co.za with the mailbox's stored credentials and the same SPKI pin. One function: `sendMail`.
+- [x] `server/mail/send/` (1934cbd): SMTP over 465 to mail.tellmann.co.za with the mailbox's stored credentials and the same SPKI pin. One function: `sendMail`.
 - [ ] Mail-to unsubscribes send through it, always from felix@tellmann.co.za, recorded like the http ones.
 - [ ] `/api/mail-digest`: bearer-secret endpoint (shared helper, register entry); renders senders unopened for 30 days by volume (register entry for the exact set); each row carries a signed `unsubscribe` link (does what the button does) and a signed `file` link (creates a watch-only archive rule); sends to felix@tellmann.co.za. Links valid 14 days. Coolify scheduled task, `0 5 * * 1` UTC = 07:00 Africa/Johannesburg.
 
 ### Phase 8 — admin surfaces (operator's extra scope, widget 5)
-- [ ] Sessions strip on `/admin`: when the system last believed the operator was reading mail, on what evidence, in which mailboxes.
+- [x] Sessions strip on `/admin` (6194577): when the system last believed the operator was reading mail, on what evidence, in which mailboxes.
 - [ ] `/admin/review`: one page folding together rules waiting to be switched on (top 10 by waiting count, one Switch-on button each), proposals waiting for approval grouped by rule with Approve-all / Dismiss per group, the sessions strip, and unsubscribe candidates with checkboxes and one button. Sketch: `docs/mockups/2026-09-06-first-contact-proposals/index.html`, section 5. Old pages stay.
-- [ ] `/admin/promote` defaults to the top 10 with samples collapsed.
+- [x] `/admin/promote` defaults to the top 10 with samples collapsed (a03c63b).
 
 ### Review
 - [ ] One review agent over the whole diff: cross-phase assumptions, duplicated helpers, convention drift, and the question for each phase: would a fix commit follow this?

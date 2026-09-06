@@ -40,7 +40,9 @@ const AdminHome: FC = () => {
   return (
     <div className="flex flex-col gap-3">
       <SessionsStrip loaded_at={loaded_at} sessions={sessions} />
-      <p className="text-zinc-600 dark:text-dark-text">Read-only mail dashboards. Snoozing, filing and suppression arrive with phase 3.</p>
+      <p className="text-zinc-600 dark:text-dark-text">
+        Mail dashboards: what the engine proposes, what it did, and when it last saw you reading.
+      </p>
       <ul className="flex flex-col gap-2">
         {admin_links.map((link) => (
           <li key={link.to}>
