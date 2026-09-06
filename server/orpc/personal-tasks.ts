@@ -14,6 +14,7 @@ import { resolveStreams } from "@server/personal-streams";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
 import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { slugify } from "utils/slugify";
 import { z } from "zod";
 import { authed } from "./base";
 
@@ -49,6 +50,14 @@ const mapTask = (row: TaskRow) => ({
 const mode_schema = z.enum(["dormant", "maintenance", "sprint", "always_on"]);
 
 const soft_floor_hours_schema = z.number().int().min(0).max(168).nullable();
+
+// The stable pointer brain files use to name an area. Derived from the name once on create and only ever
+// changed on purpose after that: renaming an area must not move every pointer to it.
+const slug_schema = z
+  .string()
+  .min(1)
+  .max(191)
+  .regex(/^[a-z0-9-]+$/);
 
 // Unmapped names older than this are noise from a machine long since wiped, not a stream to assign.
 const UNMAPPED_LOOKBACK_DAYS = 90;
@@ -297,7 +306,9 @@ export const personalTaskProcedures = {
     .handler(async ({ input }) => {
       const id = crypto.randomUUID();
 
-      await db.insert(personalArea).values({ id, name: input.name, mode: input.mode, sort_order: input.sort_order, updatedAt: new Date() });
+      await db
+        .insert(personalArea)
+        .values({ id, name: input.name, slug: slugify(input.name), mode: input.mode, sort_order: input.sort_order, updatedAt: new Date() });
 
       return { id };
     }),
@@ -306,6 +317,7 @@ export const personalTaskProcedures = {
     .input(
       id_schema.extend({
         name: z.string().min(1).max(191).optional(),
+        slug: slug_schema.optional(),
         mode: mode_schema.optional(),
         soft_floor_hours: soft_floor_hours_schema.optional(),
       }),
