@@ -1,10 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import type { Decision } from "@server/mail/classify/rules";
-import { buildShadowActionRow, messageBatchQuery } from "@server/mail/shadow/run";
+import { SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import { buildShadowActionRow, journalableSourceFor, messageBatchQuery } from "@server/mail/shadow/run";
 
 function decisionFor(overrides: Partial<Decision> = {}): Decision {
   return { action: "archive", source: "derived", policy_id: null, suppressed_by: null, reasons: [], ...overrides };
 }
+
+describe("what a pass may journal", () => {
+  test("a classify pass journals every source", () => {
+    expect(journalableSourceFor({ settled_sweep: null, declined_sweep: null })).toBeNull();
+  });
+
+  test("the settled sweep journals only what it authored", () => {
+    expect(journalableSourceFor({ settled_sweep: {}, declined_sweep: null })).toBe(SWEEP_SETTLED_SOURCE);
+  });
+
+  test("the declined sweep journals only what it authored — its first scheduled run re-proposed 1,090 old decisions", () => {
+    expect(journalableSourceFor({ settled_sweep: null, declined_sweep: {} })).toBe(SWEEP_DECLINED_SOURCE);
+  });
+});
 
 describe("buildShadowActionRow", () => {
   test("carries the mailbox_id of the pass that produced it, not a shared module-level value", () => {

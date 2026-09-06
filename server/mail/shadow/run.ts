@@ -425,6 +425,18 @@ async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
     });
 }
 
+// The one decision source a sweep pass may journal; null means the pass is a classify pass and journals
+// every decision it makes.
+export function journalableSourceFor(input: { settled_sweep: unknown | null; declined_sweep: unknown | null }): string | null {
+  if (input.settled_sweep !== null) {
+    return SWEEP_SETTLED_SOURCE;
+  }
+  if (input.declined_sweep !== null) {
+    return SWEEP_DECLINED_SOURCE;
+  }
+  return null;
+}
+
 async function runPass(
   input: RunShadowPassInput & {
     unclassified_only: boolean;
@@ -498,7 +510,7 @@ async function runPass(
         replied_in_thread: decision_input.replied_in_thread,
         decision,
       });
-      // The sweep journals ONLY what it authored. Every other source — a policy, a derived rule, the
+      // A sweep journals ONLY what it authored. Every other source — a policy, a derived rule, the
       // fallback — already produced a row when this message was first classified, and the sweep reaching
       // the same conclusion is not new information. Writing it anyway would put a second proposal on the
       // Shadow screen for every settled message: measured against real mail on 2026-08-26, 1,561 of 3,529
@@ -506,9 +518,13 @@ async function runPass(
       // reviewed. A sweep that re-proposes the classify pass's conclusions buries the evidence under
       // exactly the rows the operator is trying to read.
       //
+      // Both sweeps, not just the settled one: the first version guarded only settled, and the declined
+      // sweep's first scheduled run on 2026-09-06 wrote 1,090 duplicate rows in one tick.
+      //
       // by_decision above still counts them, because what the candidates resolve to is the useful report
       // even when only a subset is worth journaling.
-      if (input.settled_sweep !== null && decision.source !== SWEEP_SETTLED_SOURCE) {
+      const journalable_source = journalableSourceFor({ settled_sweep: input.settled_sweep, declined_sweep: input.declined_sweep });
+      if (journalable_source !== null && decision.source !== journalable_source) {
         continue;
       }
 
