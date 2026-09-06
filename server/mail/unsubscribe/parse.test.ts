@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { decodeEncodedWords, parseListUnsubscribe } from "@server/mail/unsubscribe/parse";
+import { decodeEncodedWords, isOneClick, parseListUnsubscribe } from "@server/mail/unsubscribe/parse";
 
 describe("parseListUnsubscribe", () => {
   test("takes the https link when the sender offers one", () => {
@@ -67,5 +67,23 @@ describe("parseListUnsubscribe", () => {
     const raw = "=?utf-8?B?!!!not-base64!!!?=";
 
     expect(() => decodeEncodedWords(raw)).not.toThrow();
+  });
+});
+
+describe("isOneClick", () => {
+  test("accepts the RFC 8058 value exactly", () => {
+    expect(isOneClick("List-Unsubscribe=One-Click")).toBe(true);
+  });
+
+  test("is case-insensitive and ignores whitespace around the value", () => {
+    expect(isOneClick("  list-unsubscribe=one-click ")).toBe(true);
+    expect(isOneClick("List-Unsubscribe = One-Click")).toBe(true);
+  });
+
+  test("rejects a missing header and any other value", () => {
+    expect(isOneClick(null)).toBe(false);
+    expect(isOneClick("")).toBe(false);
+    expect(isOneClick("List-Unsubscribe=One-Click; extra")).toBe(false);
+    expect(isOneClick("One-Click")).toBe(false);
   });
 });

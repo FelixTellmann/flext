@@ -6,10 +6,9 @@
 // can click.
 
 export type UnsubscribeTarget = {
-  // An https URL, when the sender offered one. Preferred over mailto every time: opening a link is
-  // something the operator does in a browser they already trust, while the mailto route would require
-  // this system to SEND mail — a capability it has never had and §1.6's blast-radius argument is much
-  // harder to make about.
+  // An https URL, when the sender offered one. Preferred over mailto every time: the http route is one
+  // request from the server (one-click.ts) or one link in a browser, while the mailto route means sending
+  // mail through server/mail/send, which phase 7 wires up.
   http: string | null;
   mailto: string | null;
 };
@@ -59,4 +58,18 @@ export function parseListUnsubscribe(raw: string | null): UnsubscribeTarget {
   const mailto = candidates.find((value) => /^mailto:/i.test(value)) ?? null;
 
   return { http, mailto };
+}
+
+// RFC 8058 §3.1: the header value a sender publishes when its List-Unsubscribe URL accepts a POST with
+// this exact body. Also the body one-click.ts sends, so the two cannot drift apart.
+export const ONE_CLICK_POST_VALUE = "List-Unsubscribe=One-Click";
+
+// Case-insensitive and whitespace-tolerant: the RFC fixes the spelling, senders do not, and a value that
+// differs only in case is still a sender that accepts the POST. Anything else is not, and a POST to a
+// URL that never promised one-click behaviour is a GET-shaped unsubscribe page ignoring a body at best.
+export function isOneClick(list_unsubscribe_post: string | null): boolean {
+  if (list_unsubscribe_post === null) {
+    return false;
+  }
+  return list_unsubscribe_post.replace(/\s+/g, "").toLowerCase() === ONE_CLICK_POST_VALUE.toLowerCase();
 }

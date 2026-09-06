@@ -230,6 +230,9 @@ export const message = mysqlTable(
     is_calendar: boolean("isCalendar"),
     list_id: varchar("listId", { length: 320 }),
     list_unsubscribe: text("listUnsubscribe"),
+    // RFC 8058: the raw header, "List-Unsubscribe=One-Click" when the sender accepts the POST. Stored raw
+    // rather than as a boolean so a sender's non-standard spelling is still visible on the row.
+    list_unsubscribe_post: varchar("listUnsubscribePost", { length: 191 }),
     precedence: varchar("precedence", { length: 191 }),
     auto_submitted: varchar("autoSubmitted", { length: 191 }),
     dkim_aligned: boolean("dkimAligned"),
@@ -424,6 +427,30 @@ export const senderSuppression = mysqlTable("SenderSuppression", {
   sender_address: varchar("senderAddress", { length: 320 }).notNull(),
   reason: text("reason").notNull(),
 });
+
+// ─── UnsubscribeAttempt ──────────────────────────────────────────────────────
+// One unsubscribe request this system sent (or declined to send) on the operator's behalf. Its own table
+// rather than columns on SenderPolicy: an attempt is an event, a policy is a rule, and half the
+// candidates have no policy row (register, phase 6 — outcome storage).
+export const unsubscribeAttempt = mysqlTable(
+  "UnsubscribeAttempt",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    sender_address: varchar("senderAddress", { length: 320 }).notNull(),
+    // The mailbox whose message supplied the unsubscribe target; null when no message did.
+    mailbox_id: varchar("mailboxId", { length: 191 }),
+    method: varchar("method", { length: 191, enum: ["http", "mailto"] }).notNull(),
+    status: varchar("status", { length: 191, enum: ["sent", "failed", "skipped"] }).notNull(),
+    response_code: int("responseCode"),
+    error: text("error"),
+    attempted_at: datetime("attemptedAt", { fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    senderAttemptedAtIndex: index("UnsubscribeAttempt_senderAddress_attemptedAt_idx").on(table.sender_address, table.attempted_at),
+  }),
+);
 
 // ─── ThreadState ─────────────────────────────────────────────────────────────
 export const threadState = mysqlTable(

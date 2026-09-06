@@ -33,7 +33,7 @@ function addressDomain(address: string): string {
 // Header values have no practical upper bound — a 191-char messageId column killed a whole 100-message
 // batch with ER_DATA_TOO_LONG. The columns are wider now; this keeps one absurd header from failing the
 // batch again rather than just losing its own tail.
-function clamp(value: string | null, max: number): string | null {
+export function clamp(value: string | null, max: number): string | null {
   if (value === null || value.length <= max) {
     return value;
   }
@@ -220,6 +220,7 @@ export async function writeMessages(input: {
       is_calendar: isCalendarMessage(entry.structure),
       list_id: clamp(headerValue(entry.headers, "List-Id"), 320),
       list_unsubscribe: headerValue(entry.headers, "List-Unsubscribe"),
+      list_unsubscribe_post: clamp(headerValue(entry.headers, "List-Unsubscribe-Post"), 191),
       precedence: clamp(headerValue(entry.headers, "Precedence"), 191),
       auto_submitted: clamp(headerValue(entry.headers, "Auto-Submitted"), 191),
       dkim_aligned: dkimAligned(headerValue(entry.headers, "Authentication-Results"), from_domain),

@@ -11,6 +11,7 @@ import type { FetchedMessage, HeaderMap, MailboxProvider } from "@server/mail/pr
 import { loadCursor, saveCursor } from "@server/mail/sync/cursor";
 import { selectSyncFolders } from "@server/mail/sync/folders";
 import { batchUidRanges } from "@server/mail/sync/uid-range";
+import { clamp } from "@server/mail/sync/writer";
 import { parseMailboxFlavor } from "@server/mail/types";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -28,6 +29,7 @@ type StoredClassification = {
   dkim_aligned: boolean | null;
   has_attachment: boolean;
   is_calendar: boolean | null;
+  list_unsubscribe_post: string | null;
 };
 
 type DerivedClassification = {
@@ -41,6 +43,10 @@ type DerivedClassification = {
   // prompted it: the ~263 meeting invitations already sitting in the inbox.
   has_attachment: boolean;
   is_calendar: boolean | null;
+  // The one-click backfill (phase 6): the header joined HEADER_FIELDS after every existing row was
+  // written, and the incremental sync's upsert never rewrites header columns, so this pass is the only
+  // way it reaches mail already stored.
+  list_unsubscribe_post: string | null;
 };
 
 function headerAddresses(headers: HeaderMap, name: string): string[] {
@@ -75,6 +81,9 @@ function deriveClassification(input: {
     // than "observed to be absent".
     has_attachment: input.fetched.structure === null ? input.stored.has_attachment : hasHumanAttachment(input.fetched.structure),
     is_calendar: input.fetched.structure === null ? input.stored.is_calendar : isCalendarMessage(input.fetched.structure),
+    // No stored fallback, unlike the two above: the header block always comes back, so a missing key
+    // means the sender did not send it, not that the server withheld it.
+    list_unsubscribe_post: clamp(headerValue(input.fetched.headers, "List-Unsubscribe-Post"), 191),
   };
 }
 
@@ -97,6 +106,7 @@ async function loadStoredClassifications(input: {
       dkim_aligned: message.dkim_aligned,
       has_attachment: message.has_attachment,
       is_calendar: message.is_calendar,
+      list_unsubscribe_post: message.list_unsubscribe_post,
     })
     .from(message)
     .where(
@@ -159,7 +169,8 @@ async function reclassifyFolder(input: {
         derived.cc_me === row.cc_me &&
         derived.dkim_aligned === row.dkim_aligned &&
         derived.has_attachment === row.has_attachment &&
-        derived.is_calendar === row.is_calendar
+        derived.is_calendar === row.is_calendar &&
+        derived.list_unsubscribe_post === row.list_unsubscribe_post
       ) {
         continue;
       }

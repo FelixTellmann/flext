@@ -11,6 +11,7 @@ export const HEADER_FIELDS = [
   "In-Reply-To",
   "List-Id",
   "List-Unsubscribe",
+  "List-Unsubscribe-Post",
   "Precedence",
   "Auto-Submitted",
   "Return-Path",
