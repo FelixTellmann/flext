@@ -9,8 +9,9 @@ import type {
   RescueCursor,
   RescuePort,
   RescueStampEntry,
+  SuspensionClears,
 } from "@server/mail/rescue/detect";
-import { detectRescues, messageAddressKey } from "@server/mail/rescue/detect";
+import { detectRescues, messageAddressKey, rescueWindowStart, SWEEP_RESCUE_WINDOW_DAYS } from "@server/mail/rescue/detect";
 import type { MessageAddress } from "@server/mail/rescue/locate";
 
 const MAILBOX_ID = "mailbox-generic";
@@ -85,6 +86,8 @@ type FakePort = RescuePort & {
   batchCount: () => number;
   dwell_suspensions: DwellSuspensionEntry[];
   first_contact_suspensions: DwellSuspensionEntry[];
+  // The `since` each count was asked for, so a test can pin the window the detector computed.
+  count_windows: { source: "sweep" | "first_contact"; since: Date }[];
 };
 
 // The fake holds the two properties the drizzle implementation holds in SQL, because a fake that did not
@@ -99,6 +102,11 @@ function createFakePort(input: {
   // real port counts stamped rows, so a test that wants the threshold reached seeds the earlier ones here.
   recent_sweep_rescues?: number;
   recent_first_contact_rescues?: number;
+  // The same journal facts as timestamps, counted against the `since` the detector asks for — the only
+  // way a fixture can show the window floor moving. Added to the numeric shorthand above.
+  sweep_rescues_at?: Date[];
+  first_contact_rescues_at?: Date[];
+  suspension_clears?: SuspensionClears;
 }): FakePort {
   const stamps = new Map<string, Date>();
   const lookups: MessageAddress[] = [];
@@ -106,6 +114,11 @@ function createFakePort(input: {
   const policies = new Map<string, PolicyState>(Object.entries(input.policies === undefined ? {} : input.policies));
   const dwell_suspensions: DwellSuspensionEntry[] = [];
   const first_contact_suspensions: DwellSuspensionEntry[] = [];
+  const count_windows: { source: "sweep" | "first_contact"; since: Date }[] = [];
+
+  function countSince(seed: number, stamped_at: Date[], since: Date): number {
+    return seed + stamped_at.filter((rescued_at) => rescued_at.getTime() >= since.getTime()).length;
+  }
 
   return {
     lookups,
@@ -113,6 +126,7 @@ function createFakePort(input: {
     policies,
     dwell_suspensions,
     first_contact_suspensions,
+    count_windows,
     batchCount: (): number => batches,
     loadRescueCandidates: async (query: { mailbox_id: string; batch_size: number }): Promise<RescueCandidateRow[]> => {
       return input.rows.filter((row) => !stamps.has(row.action_id)).slice(0, query.batch_size);
@@ -145,16 +159,24 @@ function createFakePort(input: {
       policies.set(entry.sender_policy_id, { suspended_at: entry.suspended_at, suspension_reason: entry.reason });
       return true;
     },
-    countRecentSweepRescues: async (): Promise<number> => input.recent_sweep_rescues ?? 0,
+    countRecentSweepRescues: async (query: { mailbox_id: string; since: Date }): Promise<number> => {
+      count_windows.push({ source: "sweep", since: query.since });
+      return countSince(input.recent_sweep_rescues ?? 0, input.sweep_rescues_at ?? [], query.since);
+    },
     suspendMailboxDwell: async (entry: DwellSuspensionEntry): Promise<boolean> => {
       dwell_suspensions.push(entry);
       return true;
     },
-    countRecentFirstContactRescues: async (): Promise<number> => input.recent_first_contact_rescues ?? 0,
+    countRecentFirstContactRescues: async (query: { mailbox_id: string; since: Date }): Promise<number> => {
+      count_windows.push({ source: "first_contact", since: query.since });
+      return countSince(input.recent_first_contact_rescues ?? 0, input.first_contact_rescues_at ?? [], query.since);
+    },
     suspendMailboxFirstContact: async (entry: DwellSuspensionEntry): Promise<boolean> => {
       first_contact_suspensions.push(entry);
       return true;
     },
+    loadSuspensionClears: async (): Promise<SuspensionClears> =>
+      input.suspension_clears ?? { first_contact_cleared_at: null, dwell_cleared_at: null },
   };
 }
 
@@ -203,6 +225,7 @@ function createPaginatedFakePort(rows: RescueCandidateRow[]): RescuePort & { cal
     suspendMailboxDwell: async (): Promise<boolean> => false,
     countRecentFirstContactRescues: async (): Promise<number> => 0,
     suspendMailboxFirstContact: async (): Promise<boolean> => false,
+    loadSuspensionClears: async (): Promise<SuspensionClears> => ({ first_contact_cleared_at: null, dwell_cleared_at: null }),
   };
 }
 
@@ -223,6 +246,7 @@ function createStuckFakePort(chunk_size: number): RescuePort {
     suspendMailboxDwell: async (): Promise<boolean> => false,
     countRecentFirstContactRescues: async (): Promise<number> => 0,
     suspendMailboxFirstContact: async (): Promise<boolean> => false,
+    loadSuspensionClears: async (): Promise<SuspensionClears> => ({ first_contact_cleared_at: null, dwell_cleared_at: null }),
   };
 }
 
@@ -428,8 +452,9 @@ describe("detectRescues", () => {
   // over `keyof RescuePort`, so the day someone widens the port with a provider, an IMAP client or any
   // other mailbox reach, tsc fails on the missing key and this test names the four operations the pass is
   // allowed to perform. The earlier version of this test ran a recorder that was never passed anywhere
-  // and asserted it stayed empty, which could not fail and hid the real invariant.
-  test("the port exposes exactly eight database operations and no way to reach a mailbox", async () => {
+  // and asserted it stayed empty, which could not fail and hid the real invariant. loadSuspensionClears
+  // reads two Mailbox columns; it is a database read, not a mailbox reach.
+  test("the port exposes exactly nine database operations and no way to reach a mailbox", async () => {
     const PORT_OPERATIONS: Record<keyof RescuePort, true> = {
       loadRescueCandidates: true,
       loadLiveMessages: true,
@@ -439,6 +464,7 @@ describe("detectRescues", () => {
       suspendMailboxDwell: true,
       countRecentFirstContactRescues: true,
       suspendMailboxFirstContact: true,
+      loadSuspensionClears: true,
     };
 
     const port = createFakePort({
@@ -452,6 +478,7 @@ describe("detectRescues", () => {
       "countRecentSweepRescues",
       "loadLiveMessages",
       "loadRescueCandidates",
+      "loadSuspensionClears",
       "markRescued",
       "suspendMailboxDwell",
       "suspendMailboxFirstContact",
@@ -772,5 +799,146 @@ describe("rescues against first-contact quarantine", () => {
 
     expect(result.first_contact_suspended).toBe(false);
     expect(port.first_contact_suspensions).toEqual([]);
+  });
+});
+
+// docs/decisions/2026-09-06-clear-suspension-resets-the-window.md: the operator presses Clear after judging
+// the three rescues that caused the suspension. Without the floor those three are still inside the 30-day
+// window, so the next single rescue re-suspends quoting them, and Clear buys one mistake rather than a
+// second chance.
+describe("the rescue window is floored at the operator's last clear", () => {
+  function daysAgo(days: number): Date {
+    return new Date(Date.now() - days * 86_400_000);
+  }
+
+  function sweepRow(action_id: string): RescueCandidateRow {
+    return candidate({ action_id, sender_policy_id: null, source: "sweep_settled" });
+  }
+
+  function firstContactRow(action_id: string): RescueCandidateRow {
+    return candidate({ action_id, sender_policy_id: null, source: "first_contact", kind: "quarantine" });
+  }
+
+  test("rescueWindowStart is 30 days back with no clear, the clear when it is more recent, and 30 days back for an older one", () => {
+    const now = new Date("2026-09-06T12:00:00.000Z");
+    const window_start = new Date(now.getTime() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
+
+    expect(rescueWindowStart({ now, cleared_at: null })).toEqual(window_start);
+    expect(rescueWindowStart({ now, cleared_at: new Date("2026-09-01T00:00:00.000Z") })).toEqual(new Date("2026-09-01T00:00:00.000Z"));
+    expect(rescueWindowStart({ now, cleared_at: new Date("2026-06-01T00:00:00.000Z") })).toEqual(window_start);
+  });
+
+  test("three sweep rescues before the clear plus one after do NOT suspend", async () => {
+    const port = createFakePort({
+      rows: [sweepRow("action-w1")],
+      live: { [rowKey("message-action-w1")]: facts({ opened_at: OPENED_AFTER }) },
+      sweep_rescues_at: [daysAgo(10), daysAgo(9), daysAgo(8), daysAgo(2)],
+      suspension_clears: { first_contact_cleared_at: null, dwell_cleared_at: daysAgo(5) },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.rescued).toBe(1);
+    expect(result.dwell_suspended).toBe(false);
+    expect(port.dwell_suspensions).toEqual([]);
+    expect(port.count_windows).toHaveLength(1);
+    expect(port.count_windows[0]?.since.getTime()).toBe(daysAgo(5).getTime());
+  });
+
+  test("three sweep rescues after the clear suspend, and the reason names the clear rather than the 30 days", async () => {
+    const cleared_at = daysAgo(5);
+    const port = createFakePort({
+      rows: [sweepRow("action-w2")],
+      live: { [rowKey("message-action-w2")]: facts({ opened_at: OPENED_AFTER }) },
+      sweep_rescues_at: [daysAgo(10), daysAgo(4), daysAgo(3), daysAgo(1)],
+      suspension_clears: { first_contact_cleared_at: null, dwell_cleared_at: cleared_at },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.dwell_suspended).toBe(true);
+    expect(port.dwell_suspensions).toHaveLength(1);
+    expect(port.dwell_suspensions[0]?.reason).toContain(`since you cleared the suspension on ${cleared_at.toISOString().slice(0, 10)}`);
+    expect(port.dwell_suspensions[0]?.reason).not.toContain("within the last");
+  });
+
+  test("with no clear the window is the last 30 days, exactly as before", async () => {
+    const port = createFakePort({
+      rows: [sweepRow("action-w3")],
+      live: { [rowKey("message-action-w3")]: facts({ opened_at: OPENED_AFTER }) },
+      sweep_rescues_at: [daysAgo(29), daysAgo(20), daysAgo(10), daysAgo(45)],
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.dwell_suspended).toBe(true);
+    expect(port.dwell_suspensions[0]?.reason).toContain(`within the last ${SWEEP_RESCUE_WINDOW_DAYS} days`);
+    const since = port.count_windows[0]?.since.getTime() ?? 0;
+    expect(Math.abs(since - daysAgo(SWEEP_RESCUE_WINDOW_DAYS).getTime())).toBeLessThan(5_000);
+  });
+
+  test("a clear older than the window changes nothing", async () => {
+    const port = createFakePort({
+      rows: [sweepRow("action-w4")],
+      live: { [rowKey("message-action-w4")]: facts({ opened_at: OPENED_AFTER }) },
+      sweep_rescues_at: [daysAgo(29), daysAgo(20), daysAgo(10)],
+      suspension_clears: { first_contact_cleared_at: null, dwell_cleared_at: daysAgo(60) },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.dwell_suspended).toBe(true);
+    expect(port.dwell_suspensions[0]?.reason).toContain("within the last");
+  });
+
+  test("each pair reads its own clear: a first-contact clear does not floor the sweep count, and vice versa", async () => {
+    const port = createFakePort({
+      rows: [sweepRow("action-w5"), firstContactRow("action-w6")],
+      live: {
+        [rowKey("message-action-w5")]: facts({ opened_at: OPENED_AFTER }),
+        [rowKey("message-action-w6")]: facts({ opened_at: OPENED_AFTER }),
+      },
+      sweep_rescues_at: [daysAgo(10), daysAgo(9), daysAgo(8)],
+      first_contact_rescues_at: [daysAgo(10), daysAgo(9), daysAgo(8)],
+      suspension_clears: { first_contact_cleared_at: daysAgo(5), dwell_cleared_at: null },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.dwell_suspended).toBe(true);
+    expect(result.first_contact_suspended).toBe(false);
+    expect(port.first_contact_suspensions).toEqual([]);
+  });
+
+  test("three first-contact rescues after the clear suspend the quarantine", async () => {
+    const port = createFakePort({
+      rows: [firstContactRow("action-w7")],
+      live: { [rowKey("message-action-w7")]: facts({ opened_at: OPENED_AFTER }) },
+      first_contact_rescues_at: [daysAgo(4), daysAgo(3), daysAgo(1)],
+      suspension_clears: { first_contact_cleared_at: daysAgo(5), dwell_cleared_at: null },
+    });
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.first_contact_suspended).toBe(true);
+    expect(port.first_contact_suspensions).toHaveLength(1);
+  });
+
+  test("a pass that rescued nothing never reads the clears", async () => {
+    let reads = 0;
+    const port = createFakePort({
+      rows: [sweepRow("action-w8")],
+      live: { [rowKey("message-action-w8")]: facts({ opened_at: OPENED_BEFORE }) },
+    });
+    port.loadSuspensionClears = async (): Promise<SuspensionClears> => {
+      reads += 1;
+      return { first_contact_cleared_at: null, dwell_cleared_at: null };
+    };
+
+    const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
+
+    expect(result.rescued).toBe(0);
+    expect(reads).toBe(0);
+    expect(port.count_windows).toEqual([]);
   });
 });

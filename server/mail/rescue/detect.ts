@@ -108,7 +108,27 @@ export type RescuePort = {
   // and the operator clears each suspension on its own evidence. Same window, same SQL guard.
   countRecentFirstContactRescues: (input: { mailbox_id: string; since: Date }) => Promise<number>;
   suspendMailboxFirstContact: (entry: DwellSuspensionEntry) => Promise<boolean>;
+  // docs/decisions/2026-09-06-clear-suspension-resets-the-window.md: when the operator last cleared each
+  // suspension, read at resolve time rather than taken from the row the sync started with, so a Clear
+  // pressed while a pass runs floors this pass's count and not only the next one's.
+  loadSuspensionClears: (input: { mailbox_id: string }) => Promise<SuspensionClears>;
 };
+
+export type SuspensionClears = {
+  first_contact_cleared_at: Date | null;
+  dwell_cleared_at: Date | null;
+};
+
+// The window a suspension count reads: the last 30 days, floored at the operator's last clear. Without
+// the floor the three rescues that caused a suspension are still inside the window after the clear, so
+// the next single rescue re-suspends quoting the same three.
+export function rescueWindowStart(input: { now: Date; cleared_at: Date | null }): Date {
+  const window_start = new Date(input.now.getTime() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
+  if (input.cleared_at !== null && input.cleared_at.getTime() > window_start.getTime()) {
+    return input.cleared_at;
+  }
+  return window_start;
+}
 
 export type DetectRescuesResult = {
   examined: number;
@@ -212,12 +232,19 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
   let sweep_rescues_this_run = 0;
   let first_contact_rescues_this_run = 0;
 
-  async function resolveSweepSuspension(): Promise<boolean> {
+  function windowPhrase(cleared_at: Date | null, since: Date): string {
+    if (cleared_at !== null && cleared_at.getTime() === since.getTime()) {
+      return `since you cleared the suspension on ${cleared_at.toISOString().slice(0, 10)}`;
+    }
+    return `within the last ${SWEEP_RESCUE_WINDOW_DAYS} days`;
+  }
+
+  async function resolveSweepSuspension(cleared_at: Date | null): Promise<boolean> {
     if (sweep_rescues_this_run === 0) {
       return false;
     }
 
-    const since = new Date(Date.now() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
+    const since = rescueWindowStart({ now: new Date(), cleared_at });
     const recent = await input.port.countRecentSweepRescues({ mailbox_id: input.mailbox_id, since });
     if (recent < SWEEP_RESCUE_SUSPENSION_THRESHOLD) {
       return false;
@@ -227,18 +254,18 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
       mailbox_id: input.mailbox_id,
       suspended_at: new Date(),
       reason:
-        `${recent} messages the settled sweep or the declined sweep archived were opened or replied to within the last ` +
-        `${SWEEP_RESCUE_WINDOW_DAYS} days. Both sweeps are suspended on this mailbox until you clear it; ` +
+        `${recent} messages the settled sweep or the declined sweep archived were opened or replied to ` +
+        `${windowPhrase(cleared_at, since)}. Both sweeps are suspended on this mailbox until you clear it; ` +
         "every action it took is in the journal and can be undone.",
     });
   }
 
-  async function resolveFirstContactSuspension(): Promise<boolean> {
+  async function resolveFirstContactSuspension(cleared_at: Date | null): Promise<boolean> {
     if (first_contact_rescues_this_run === 0) {
       return false;
     }
 
-    const since = new Date(Date.now() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
+    const since = rescueWindowStart({ now: new Date(), cleared_at });
     const recent = await input.port.countRecentFirstContactRescues({ mailbox_id: input.mailbox_id, since });
     if (recent < SWEEP_RESCUE_SUSPENSION_THRESHOLD) {
       return false;
@@ -248,15 +275,19 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
       mailbox_id: input.mailbox_id,
       suspended_at: new Date(),
       reason:
-        `${recent} first contacts moved to Quarantine were opened or replied to within the last ` +
-        `${SWEEP_RESCUE_WINDOW_DAYS} days. First-contact quarantine is suspended on this mailbox until you ` +
+        `${recent} first contacts moved to Quarantine were opened or replied to ` +
+        `${windowPhrase(cleared_at, since)}. First-contact quarantine is suspended on this mailbox until you ` +
         "clear it; every action it took is in the journal and can be undone.",
     });
   }
 
   async function finish(): Promise<DetectRescuesResult> {
-    const dwell_suspended = await resolveSweepSuspension();
-    const first_contact_suspended = await resolveFirstContactSuspension();
+    if (sweep_rescues_this_run === 0 && first_contact_rescues_this_run === 0) {
+      return { examined, rescued, suspended, unresolved, dwell_suspended: false, first_contact_suspended: false };
+    }
+    const clears = await input.port.loadSuspensionClears({ mailbox_id: input.mailbox_id });
+    const dwell_suspended = await resolveSweepSuspension(clears.dwell_cleared_at);
+    const first_contact_suspended = await resolveFirstContactSuspension(clears.first_contact_cleared_at);
     return { examined, rescued, suspended, unresolved, dwell_suspended, first_contact_suspended };
   }
 

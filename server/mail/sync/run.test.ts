@@ -33,6 +33,7 @@ function okPort(): RescuePort {
     markRescued: async () => {},
     suspendPolicy: async () => false,
     countRecentSweepRescues: async () => 0,
+    loadSuspensionClears: async () => ({ first_contact_cleared_at: null, dwell_cleared_at: null }),
     suspendMailboxDwell: async () => false,
     countRecentFirstContactRescues: async () => 0,
     suspendMailboxFirstContact: async () => false,

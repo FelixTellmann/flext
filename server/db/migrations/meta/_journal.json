@@ -155,6 +155,13 @@
       "when": 1788724745626,
       "tag": "0021_careless_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1788725994254,
+      "tag": "0022_lucky_blue_shield",
+      "breakpoints": true
     }
   ]
 }

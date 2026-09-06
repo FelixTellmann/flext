@@ -57,11 +57,15 @@ function switchState(entry: MailboxEntry, source: SourceSwitch): { autonomy: "sh
   return { autonomy: entry.declined_sweep_autonomy, set_at: entry.declined_sweep_autonomy_set_at };
 }
 
-function suspensionState(entry: MailboxEntry, which: Suspension): { at: string | null; reason: string | null } {
+function suspensionState(entry: MailboxEntry, which: Suspension): { at: string | null; reason: string | null; cleared_at: string | null } {
   if (which === "first_contact") {
-    return { at: entry.first_contact_suspended_at, reason: entry.first_contact_suspension_reason };
+    return {
+      at: entry.first_contact_suspended_at,
+      reason: entry.first_contact_suspension_reason,
+      cleared_at: entry.first_contact_suspension_cleared_at,
+    };
   }
-  return { at: entry.dwell_suspended_at, reason: entry.dwell_suspension_reason };
+  return { at: entry.dwell_suspended_at, reason: entry.dwell_suspension_reason, cleared_at: entry.dwell_suspension_cleared_at };
 }
 
 export const Route = createFileRoute("/admin/mail")({
@@ -284,6 +288,14 @@ function AdminMailPage() {
                           {suspension.reason ?? "(no reason recorded)"}
                         </span>
                       </div>
+                    )}
+                    {suspension.cleared_at !== null && (
+                      <span
+                        className="text-gray-500 text-xs dark:text-dark-text"
+                        title="Only rescues after this moment count toward the next suspension."
+                      >
+                        cleared {suspension.cleared_at.slice(0, 16).replace("T", " ")}
+                      </span>
                     )}
                   </li>
                 );

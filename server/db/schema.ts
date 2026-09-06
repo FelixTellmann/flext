@@ -140,6 +140,9 @@ export const mailbox = mysqlTable(
     // rule in the system for want of an id to blame. Suspension is per mailbox because the sweep is.
     dwell_suspended_at: datetime("dwellSuspendedAt", { fsp: 3 }),
     dwell_suspension_reason: text("dwellSuspensionReason"),
+    // docs/decisions/2026-09-06-clear-suspension-resets-the-window.md: the rescue window is floored at the
+    // last clear, so the three rescues the operator judged cannot re-suspend with the next one.
+    dwell_suspension_cleared_at: datetime("dwellSuspensionClearedAt", { fsp: 3 }),
     // docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md: the three scheduled sources
     // that carry no policy id (first-contact quarantine, the settled sweep, the declined sweep) each get
     // SenderPolicy.autonomy's switch here, per mailbox, because their rows have no policy row to hold it.
@@ -162,6 +165,7 @@ export const mailbox = mysqlTable(
     // on its own evidence.
     first_contact_suspended_at: datetime("firstContactSuspendedAt", { fsp: 3 }),
     first_contact_suspension_reason: text("firstContactSuspensionReason"),
+    first_contact_suspension_cleared_at: datetime("firstContactSuspensionClearedAt", { fsp: 3 }),
     enabled: boolean("enabled").default(true).notNull(),
     backfilled_at: datetime("backfilledAt", { fsp: 3 }),
     last_error: text("lastError"),

@@ -39,16 +39,29 @@ describe("sourceAutonomyColumns", () => {
 });
 
 describe("suspensionClearColumns", () => {
-  test("first contact clears its own pair and nothing else", () => {
+  test("first contact clears its own pair, stamps its cleared-at, and touches nothing else", () => {
     expect(suspensionClearColumns("first_contact", now)).toEqual({
       first_contact_suspended_at: null,
       first_contact_suspension_reason: null,
+      first_contact_suspension_cleared_at: now,
       updatedAt: now,
     });
   });
 
-  test("dwell clears the pair that suspends both sweeps", () => {
-    expect(suspensionClearColumns("dwell", now)).toEqual({ dwell_suspended_at: null, dwell_suspension_reason: null, updatedAt: now });
+  test("dwell clears the pair that suspends both sweeps and stamps its own cleared-at", () => {
+    expect(suspensionClearColumns("dwell", now)).toEqual({
+      dwell_suspended_at: null,
+      dwell_suspension_reason: null,
+      dwell_suspension_cleared_at: now,
+      updatedAt: now,
+    });
+  });
+
+  // The floor is the JS Date the caller passed, not a database NOW(): detect.ts compares it against
+  // Date.now() in JS, and drizzle.ts sets no session timezone.
+  test("the cleared-at is the same instant as updatedAt", () => {
+    const columns = suspensionClearColumns("dwell", now);
+    expect(columns.dwell_suspension_cleared_at).toBe(columns.updatedAt);
   });
 });
 

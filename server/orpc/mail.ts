@@ -161,8 +161,10 @@ export const mailProcedures = {
       declined_sweep_autonomy_set_at: row.declined_sweep_autonomy_set_at?.toISOString() ?? null,
       first_contact_suspended_at: row.first_contact_suspended_at?.toISOString() ?? null,
       first_contact_suspension_reason: row.first_contact_suspension_reason,
+      first_contact_suspension_cleared_at: row.first_contact_suspension_cleared_at?.toISOString() ?? null,
       dwell_suspended_at: row.dwell_suspended_at?.toISOString() ?? null,
       dwell_suspension_reason: row.dwell_suspension_reason,
+      dwell_suspension_cleared_at: row.dwell_suspension_cleared_at?.toISOString() ?? null,
     }));
   }),
 

@@ -46,18 +46,31 @@ export function sourceAutonomyColumns(source: SourceSwitch, autonomy: PolicyAuto
 type SuspensionClearColumns = Partial<
   Pick<
     typeof mailbox.$inferInsert,
-    "first_contact_suspended_at" | "first_contact_suspension_reason" | "dwell_suspended_at" | "dwell_suspension_reason" | "updatedAt"
+    | "first_contact_suspended_at"
+    | "first_contact_suspension_reason"
+    | "first_contact_suspension_cleared_at"
+    | "dwell_suspended_at"
+    | "dwell_suspension_reason"
+    | "dwell_suspension_cleared_at"
+    | "updatedAt"
   >
 >;
 
 // The operator-only inverse of rescue detection's two mailbox suspensions (server/mail/rescue/journal.ts).
 // Unconditional, like clearPolicySuspension: no precondition can make it unsafe. Autonomy is untouched —
-// clearing a suspension is neither a promotion nor a demotion.
+// clearing a suspension is neither a promotion nor a demotion. The cleared-at is the floor of the next
+// rescue window (docs/decisions/2026-09-06-clear-suspension-resets-the-window.md): a JS Date rather than
+// sql`NOW()` because detect.ts compares it against Date.now() in JS.
 export function suspensionClearColumns(which: MailboxSuspension, now: Date): SuspensionClearColumns {
   if (which === "first_contact") {
-    return { first_contact_suspended_at: null, first_contact_suspension_reason: null, updatedAt: now };
+    return {
+      first_contact_suspended_at: null,
+      first_contact_suspension_reason: null,
+      first_contact_suspension_cleared_at: now,
+      updatedAt: now,
+    };
   }
-  return { dwell_suspended_at: null, dwell_suspension_reason: null, updatedAt: now };
+  return { dwell_suspended_at: null, dwell_suspension_reason: null, dwell_suspension_cleared_at: now, updatedAt: now };
 }
 
 // The autonomy column a switch writes, so a same-value call can be refused in SQL.

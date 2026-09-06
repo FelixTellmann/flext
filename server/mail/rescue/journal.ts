@@ -11,6 +11,7 @@ import type {
   RescueCursor,
   RescuePort,
   RescueStampEntry,
+  SuspensionClears,
 } from "@server/mail/rescue/detect";
 import { messageAddressKey } from "@server/mail/rescue/detect";
 import type { MessageAddress } from "@server/mail/rescue/locate";
@@ -336,8 +337,21 @@ async function suspendMailboxFirstContact(entry: DwellSuspensionEntry): Promise<
   return header.affectedRows > 0;
 }
 
+async function loadSuspensionClears(input: { mailbox_id: string }): Promise<SuspensionClears> {
+  const [row] = await db
+    .select({
+      first_contact_cleared_at: mailbox.first_contact_suspension_cleared_at,
+      dwell_cleared_at: mailbox.dwell_suspension_cleared_at,
+    })
+    .from(mailbox)
+    .where(eq(mailbox.id, input.mailbox_id));
+
+  return { first_contact_cleared_at: row?.first_contact_cleared_at ?? null, dwell_cleared_at: row?.dwell_cleared_at ?? null };
+}
+
 export function createDatabaseRescuePort(): RescuePort {
   return {
+    loadSuspensionClears,
     loadRescueCandidates,
     loadLiveMessages: createLiveMessageLoader(new Map()),
     markRescued,
