@@ -705,3 +705,18 @@ A: not by the tick: the new-mail pass decides only messages with no Action row a
    behaviour; the outcome line says "kept by a guard" rather than "waiting"
    not: a second journal pass from the button after 24 h — a timer the operator did not press
 why: the brief said a refused message stays; how long it stays is the existing re-sweep rule
+
+[2026-09-06 23:50] phase 6 — SSRF
+Q: the one-click URL is written by the sender and the server shares a box with Coolify, MySQL and its
+   own /api; what may performOneClick request?
+A: https only; the hostname resolved with dns.lookup({ all: true }) and refused if ANY address is
+   loopback, link-local, private, unspecified, unique-local IPv6, or an IPv4-mapped/-compatible IPv6 of
+   those (isPublicAddress, pure, hand-parsed ranges over node:net isIP); a literal IP host is checked
+   without a lookup; redirects followed by hand, at most 3, each Location re-validated the same way and
+   re-POSTed with the same body; a refusal before any request records status skipped, after one failed.
+   The lookup is injected like fetch so the tests never touch DNS
+   not: a dependency for the range check — node has isIP and the ranges are eight comparisons
+   not: fetch's redirect: "follow" — it would follow a Location into 127.0.0.1 unchecked
+   known gap: the address checked is the one resolved before the request; a record that changes between
+   the two (rebinding) is not pinned, which would need a custom agent. Accepted for a 10 s POST
+why: a header any sender can write must not become a request to 127.0.0.1:8000
