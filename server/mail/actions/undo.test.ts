@@ -584,6 +584,41 @@ describe("undoAction — single action (§7.3)", () => {
     expect(mailbox.labels.get(MESSAGE_ID)).toEqual(["Receipts", GMAIL_INBOX_LABEL]);
   });
 
+  // docs/decisions/2026-09-06-superseded-proposals.md: undo restores the message, not the proposals the
+  // move superseded. The next pass re-decides the message and writes a fresh row if a rule still wants it.
+  test("undoing an applied action leaves the proposals it superseded as they are", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "archive",
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
+        { action_id: "sweep-1", kind: "archive", status: "superseded", applied_at: null, from_state: GENERIC_ARCHIVE_FROM, to_state: null },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    expect(journal.rows.get("action-1")?.status).toBe("undone");
+    expect(journal.rows.get("sweep-1")?.status).toBe("superseded");
+    expect(events.filter((event) => event.startsWith("mark_undone"))).toEqual(["mark_undone action-1"]);
+  });
+
   test("an empty inverse is a successful undo with nothing to issue", async () => {
     const events: string[] = [];
     const mailbox = gmailMailbox({ folder: GMAIL_CANONICAL_FOLDER, uid: 40, labels: ["Newsletters"] });

@@ -748,3 +748,29 @@ Q: what does the bulk checkbox start at, with a mixed selection and no single po
 A: unchecked, reset only by the operator (state persists across selections in the session)
 why: the single assign inherits the row's policy; a mixed selection has none, and false is what the
    bulk path wrote until now
+
+[2026-09-06 22:42] phase 6 fix — where the superseded stamp lives
+Q: the executor as a fifth step, or inside journal.ts's markApplied?
+A: inside markApplied, one guarded UPDATE straight after the applied write: same messageId, status =
+   'shadow', id <> the applied row; AppliedEntry gained message_id because MySQL refuses an UPDATE whose
+   WHERE subqueries the table it updates. The junk stage executes through executeActions and so through
+   the same markApplied; undo's markUndone touches only its own row, so nothing resurrects a superseded
+   sibling and the next pass re-decides the message instead
+   not: a port member the executor calls — every fake journal in six test files would gain a member, and
+   the digest agent's fakes are files I cannot edit
+   not: pinning only the executable kinds — a keep_inbox or needs_action record on a message that has
+   left the inbox is as stale as an archive proposal
+why: the decision says "in the same step", and the applied write is the step
+verified: executor fixture (A applied supersedes B on the same message, C elsewhere untouched; a failed A
+   supersedes nothing), promoteAction refuses a superseded row as not_shadow, undo of A leaves B superseded,
+   the statement's shape via toSQL, both shadow loaders' status predicate pinned on the source
+
+[2026-09-06 22:42] phase 6 fix — the backfill's definition of stale
+Q: only an applied mover, or pending too?
+A: applied or pending executable-kind rows, as the review asked; a pending mover that later fails leaves
+   its siblings superseded although the message never moved. The dry run found 561 rows, all in
+   felix@tellmann.co.za, 293 of them derived/needs_action records nothing reads by status. The
+   first-contact rewrite (tmp/rewrite-first-contact-backlog.ts) filters status = shadow in both its read and
+   its guarded write, so it cannot touch a superseded row
+why: the tick promotes shadow rows against the pending row's message in the same window; either way the
+   loser fails

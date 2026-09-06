@@ -16,14 +16,14 @@ import type {
   UndoFailureEntry,
   UndoneEntry,
 } from "@server/mail/actions/executor";
-import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
+import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS, SUPERSEDED_STATUS } from "@server/mail/actions/executor";
 import { FILE_KIND, isExecutableActionKind } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 import type { PolicyScope } from "@server/mail/classify/rules";
 import { loadFilingBindings } from "@server/mail/filing/bindings";
 import type { SQL } from "drizzle-orm";
-import { and, asc, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the executor's journal port, kept out of executor.ts so a test
 // importing the executor cannot reach a real connection: every DATABASE_URL variant points at the same
@@ -150,6 +150,17 @@ async function recordSelfMarkedRead(message_ids: string[]): Promise<void> {
   await db.update(message).set({ is_seen: true, updatedAt: now }).where(inArray(message.id, message_ids));
 }
 
+// docs/decisions/2026-09-06-superseded-proposals.md. Guarded on `shadow` so a sibling another run has
+// already promoted, applied or undone is left exactly as it was; every kind, because a keep_inbox record
+// on a message that has moved is as stale as an archive proposal. Exported un-awaited so journal.test.ts
+// can pin the statement's shape without a connection.
+export function supersedeSiblingsUpdate(entry: { action_id: string; message_id: string }, now: Date) {
+  return db
+    .update(action)
+    .set({ status: SUPERSEDED_STATUS, updatedAt: now })
+    .where(and(eq(action.message_id, entry.message_id), eq(action.status, SHADOW_STATUS), ne(action.id, entry.action_id)));
+}
+
 async function markApplied(entries: AppliedEntry[]): Promise<void> {
   for (const entry of entries) {
     const now = new Date();
@@ -159,6 +170,7 @@ async function markApplied(entries: AppliedEntry[]): Promise<void> {
       .update(action)
       .set({ status: APPLIED_STATUS, to_state_json: entry.to_state_json, applied_at: now, error: null, updatedAt: now })
       .where(eq(action.id, entry.action_id));
+    await supersedeSiblingsUpdate(entry, now);
   }
 }
 

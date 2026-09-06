@@ -151,6 +151,7 @@ function createFakeProvider(options: FakeProviderOptions): MailboxProvider {
 }
 
 type JournalRow = {
+  message_id: string;
   status: string;
   from_state_json: string | null;
   to_state_json: string | null;
@@ -168,13 +169,24 @@ function createFakeJournal(input: {
   // A pre-state already on the row, as a run that crashed after mutating would have left it.
   seeded_from_state?: Record<string, string>;
   bindings?: FilingBindingRow[];
+  // Shadow rows the executor never loads — other rules' proposals on the same or another message.
+  shadow_rows?: { action_id: string; message_id: string }[];
 }): FakeJournal {
   const rows = new Map<string, JournalRow>(
     input.pending.map((row) => [
       row.action_id,
-      { status: "pending", from_state_json: input.seeded_from_state?.[row.action_id] ?? null, to_state_json: null, error: null },
+      {
+        message_id: row.message_id,
+        status: "pending",
+        from_state_json: input.seeded_from_state?.[row.action_id] ?? null,
+        to_state_json: null,
+        error: null,
+      },
     ]),
   );
+  for (const row of input.shadow_rows ?? []) {
+    rows.set(row.action_id, { message_id: row.message_id, status: "shadow", from_state_json: null, to_state_json: null, error: null });
+  }
 
   function requireRow(action_id: string): JournalRow {
     const row = rows.get(action_id);
@@ -230,6 +242,12 @@ function createFakeJournal(input: {
         row.status = "applied";
         row.to_state_json = entry.to_state_json;
         row.error = null;
+        // Mirrors journal.ts's supersede statement: same message, still shadow, not the applied row.
+        for (const [action_id, sibling] of rows) {
+          if (action_id !== entry.action_id && sibling.message_id === entry.message_id && sibling.status === "shadow") {
+            sibling.status = "superseded";
+          }
+        }
       }
     },
 
@@ -347,6 +365,56 @@ describe("executeActions ordering (§7.1)", () => {
     expect(read_at).toBeLessThan(journalled_at);
     expect(journalled_at).toBeLessThan(mutated_at);
     expect(mutated_at).toBeLessThan(applied_at);
+  });
+
+  // docs/decisions/2026-09-06-superseded-proposals.md: the applied write carries the message, and the
+  // journal stamps the message's other proposals in the same step. Anything else on other messages, and
+  // anything on this message that has already left shadow, is not touched.
+  test("applying a row supersedes the other shadow proposals on its message and nothing else", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 11, kind: "archive" })];
+    const journal = createFakeJournal({
+      events,
+      pending,
+      shadow_rows: [
+        { action_id: "sweep-11", message_id: "message-11" },
+        { action_id: "sweep-12", message_id: "message-12" },
+      ],
+    });
+    const provider = createFakeProvider({ events, messages: [{ uid: 11, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result).toEqual({ examined: 1, applied: 1, failed: 0, deferred: 0 } satisfies ExecuteActionsResult);
+    expect(journal.rows.get("action-11")?.status).toBe("applied");
+    expect(journal.rows.get("sweep-11")?.status).toBe("superseded");
+    expect(journal.rows.get("sweep-12")?.status).toBe("shadow");
+  });
+
+  test("a failed row supersedes nothing — the message has not moved", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 81, kind: "archive" })];
+    const journal = createFakeJournal({ events, pending, shadow_rows: [{ action_id: "sweep-81", message_id: "message-81" }] });
+    const provider = createFakeProvider({ events, fail: "fetch", messages: [{ uid: 81, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.failed).toBe(1);
+    expect(journal.rows.get("sweep-81")?.status).toBe("shadow");
   });
 
   test("a crash between the mutation and the status update leaves a pending row holding the pre-state", async () => {

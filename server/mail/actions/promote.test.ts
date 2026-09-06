@@ -197,7 +197,9 @@ describe("promoteAction — one decision (Task 8)", () => {
     expect(events).not.toContain("promote action-1");
   });
 
-  test.each(["undone", "deferred", "pending"] as const)("guard: refuses to promote a row already %s", async (status) => {
+  // `superseded` is in the list on purpose: docs/decisions/2026-09-06-superseded-proposals.md says the
+  // tick never promotes one, and this guard is where that holds for a click as well as for the tick.
+  test.each(["undone", "deferred", "pending", "superseded"] as const)("guard: refuses to promote a row already %s", async (status) => {
     const events: string[] = [];
     const journal = createFakeJournal({ events, seed: [shadowRow("action-1", { status })] });
 

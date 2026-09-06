@@ -12,7 +12,7 @@ export type KnownStatus = NonNullable<JournalRow["known_status"]>;
 export type ErrorMeaning = NonNullable<JournalRow["error"]>["meaning"];
 
 // Mirrors ACTION_STATUS_MEANINGS in server/mail/actions/status.ts. It cannot be imported: status.ts takes
-// its six constants from executor.ts, promote.ts and undo.ts, and importing it here would pull the whole
+// its seven constants from executor.ts, promote.ts and undo.ts, and importing it here would pull the whole
 // execution stack (kinds, state, providers, errors) into the client bundle. The keys are pinned by
 // KnownStatus, which comes from the server row type — only the prose can drift, and the test asserts it
 // against the real record, so an edit to one side fails the suite instead of quietly disagreeing.
@@ -23,6 +23,7 @@ export const status_meaning: Record<KnownStatus, string> = {
   failed: "The mutation did not land. The recorded pre-state is what the message should still look like.",
   deferred: "Deliberately not executed in this phase — there is no plan for it yet, and nothing was sent to the mailbox.",
   undone: "Applied and then reversed. The message is back at its recorded pre-state.",
+  superseded: "Proposed, then another action moved the message first. Nothing was sent to the mailbox for this row, and nothing will be.",
 };
 
 export const status_label: Record<KnownStatus, string> = {
@@ -32,6 +33,7 @@ export const status_label: Record<KnownStatus, string> = {
   failed: "Failed",
   deferred: "Deferred",
   undone: "Undone",
+  superseded: "Superseded",
 };
 
 export const status_style: Record<KnownStatus, string> = {
@@ -41,6 +43,7 @@ export const status_style: Record<KnownStatus, string> = {
   failed: "bg-danger/10 text-danger",
   deferred: "bg-info/10 text-info",
   undone: "bg-info/10 text-info",
+  superseded: "bg-gray-100 text-gray-500 dark:bg-dark-bg dark:text-dark-text",
 };
 
 // `error` is non-null in three different states and only one of them is a failure, so the presentation is

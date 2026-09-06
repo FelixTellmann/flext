@@ -35,6 +35,9 @@ export const PENDING_STATUS = "pending" as const;
 export const APPLIED_STATUS = "applied" as const;
 export const FAILED_STATUS = "failed" as const;
 export const DEFERRED_STATUS = "deferred" as const;
+// docs/decisions/2026-09-06-superseded-proposals.md: a shadow row whose message another row moved. Written
+// by markApplied for every OTHER shadow row on the applied row's message, never by a pass.
+export const SUPERSEDED_STATUS = "superseded" as const;
 
 export type PendingActionRow = {
   action_id: string;
@@ -88,7 +91,9 @@ export type ActionUndoLookup = {
 };
 
 export type FromStateEntry = { action_id: string; from_state_json: string };
-export type AppliedEntry = { action_id: string; to_state_json: string };
+// `message_id` is what lets markApplied supersede the message's other proposals in the same step: MySQL
+// refuses an UPDATE whose WHERE subqueries the table being updated, so the journal cannot look it up.
+export type AppliedEntry = { action_id: string; message_id: string; to_state_json: string };
 export type FailedEntry = { action_id: string; error: string };
 export type DeferredEntry = { action_id: string; reason: string };
 export type UndoneEntry = { action_id: string };
@@ -147,6 +152,8 @@ export type ActionJournal = {
   // Behind the port for the same reason every other read is: a test that reached a real implementation
   // would open a connection to the production database.
   loadFilingBindings: (input: { mailbox_id: string }) => Promise<FilingBindingRow[]>;
+  // Also marks every other `shadow` row on the same message `superseded`, straight after the applied write:
+  // a proposal against a message that has moved would be promoted, fail, and eat the tick's budget.
   markApplied: (entries: AppliedEntry[]) => Promise<void>;
   markFailed: (entries: FailedEntry[]) => Promise<void>;
   markDeferred: (entries: DeferredEntry[]) => Promise<void>;
@@ -429,6 +436,7 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
 
     applied_entries.push({
       action_id: row.action_id,
+      message_id: row.message_id,
       to_state_json: serializeActionState({
         ...projected,
         uid: address.uid,

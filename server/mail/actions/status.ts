@@ -1,11 +1,19 @@
-import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
+import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS, SUPERSEDED_STATUS } from "@server/mail/actions/executor";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 
 // Every status an Action row can hold, imported from the module that owns each write rather than
-// restated. A seventh spelling here would let §9's journal filter miss a whole class of rows while every
+// restated. An eighth spelling here would let §9's journal filter miss a whole class of rows while every
 // test stayed green — the drift shape Phase 3 paid for five times.
-export const ACTION_STATUSES = [SHADOW_STATUS, PENDING_STATUS, APPLIED_STATUS, FAILED_STATUS, DEFERRED_STATUS, UNDONE_STATUS] as const;
+export const ACTION_STATUSES = [
+  SHADOW_STATUS,
+  PENDING_STATUS,
+  APPLIED_STATUS,
+  FAILED_STATUS,
+  DEFERRED_STATUS,
+  UNDONE_STATUS,
+  SUPERSEDED_STATUS,
+] as const;
 
 export type ActionStatus = (typeof ACTION_STATUSES)[number];
 
@@ -21,6 +29,7 @@ export const ACTION_STATUS_MEANINGS: Record<ActionStatus, string> = {
   failed: "The mutation did not land. The recorded pre-state is what the message should still look like.",
   deferred: "Deliberately not executed in this phase — there is no plan for it yet, and nothing was sent to the mailbox.",
   undone: "Applied and then reversed. The message is back at its recorded pre-state.",
+  superseded: "Proposed, then another action moved the message first. Nothing was sent to the mailbox for this row, and nothing will be.",
 };
 
 // `status` is a varchar, so a row can carry a value outside the set. It is reported raw rather than

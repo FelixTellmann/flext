@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
+import { APPLIED_STATUS, DEFERRED_STATUS, FAILED_STATUS, PENDING_STATUS, SUPERSEDED_STATUS } from "@server/mail/actions/executor";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { ACTION_STATUS_MEANINGS, ACTION_STATUSES, classifyActionError, toActionStatus } from "@server/mail/actions/status";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 
 describe("ACTION_STATUSES", () => {
-  test("covers exactly the six statuses in play, spelled by their owning modules", () => {
+  test("covers exactly the seven statuses in play, spelled by their owning modules", () => {
     expect([...ACTION_STATUSES].sort()).toEqual(
-      [SHADOW_STATUS, PENDING_STATUS, APPLIED_STATUS, FAILED_STATUS, DEFERRED_STATUS, UNDONE_STATUS].sort(),
+      [SHADOW_STATUS, PENDING_STATUS, APPLIED_STATUS, FAILED_STATUS, DEFERRED_STATUS, UNDONE_STATUS, SUPERSEDED_STATUS].sort(),
     );
-    expect(new Set(ACTION_STATUSES).size).toBe(6);
+    expect(new Set(ACTION_STATUSES).size).toBe(7);
   });
 
   test.each([...ACTION_STATUSES])("toActionStatus round-trips %s", (status) => {
@@ -52,7 +52,7 @@ describe("classifyActionError", () => {
     expect(note?.meaning).not.toBe("failed");
   });
 
-  test.each([SHADOW_STATUS, PENDING_STATUS, UNDONE_STATUS, "something-else"])(
+  test.each([SHADOW_STATUS, PENDING_STATUS, UNDONE_STATUS, SUPERSEDED_STATUS, "something-else"])(
     "%s carrying error text is surfaced as unclassified rather than dropped",
     (status) => {
       expect(classifyActionError({ status, error: "leftover" })).toEqual({ text: "leftover", meaning: "unknown" });
