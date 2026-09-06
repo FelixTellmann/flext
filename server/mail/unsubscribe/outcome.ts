@@ -23,13 +23,15 @@ export function pickOneClickTarget(rows: OneClickSource[]): OneClickTarget | nul
   return null;
 }
 
-export type SenderArchiveSummary = { archived: number; failed: number; waiting: number; refused: number };
+export type SenderArchiveSummary = { archived: number; failed: number; waiting: number; retried: number; refused: number };
 
 // `failed` is every row this press executed that is not `applied` afterwards: the executor's own
 // `failed`, and a row still `pending` because its mailbox connection died before the batch reached it.
-// Both mean "the operator pressed archive and this message is still in the inbox".
+// Both mean "the operator pressed archive and this message is still in the inbox". `retried` is how many
+// of this press's rows had failed on an earlier press and were reopened for this one; they are counted
+// again under archived or failed by what happened this time.
 export function summarizeSenderArchive(input: {
-  counts: { pending: number; waiting: number; refused: number };
+  counts: { pending: number; waiting: number; retried: number; refused: number };
   pending_action_ids: string[];
   statuses: Map<string, string>;
 }): SenderArchiveSummary {
@@ -43,6 +45,7 @@ export function summarizeSenderArchive(input: {
     archived,
     failed: input.pending_action_ids.length - archived,
     waiting: input.counts.waiting,
+    retried: input.counts.retried,
     refused: input.counts.refused,
   };
 }

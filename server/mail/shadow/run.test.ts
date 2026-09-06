@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { Decision } from "@server/mail/classify/rules";
 import { SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
-import { buildShadowActionRow, journalableSourceFor, messageBatchQuery } from "@server/mail/shadow/run";
+import type { SenderArchiveCandidate, SenderArchivePort } from "@server/mail/shadow/run";
+import {
+  buildShadowActionRow,
+  claimSenderArchives,
+  journalableSourceFor,
+  messageBatchQuery,
+  UNSUBSCRIBE_BULK_RUN_ID,
+} from "@server/mail/shadow/run";
 
 function decisionFor(overrides: Partial<Decision> = {}): Decision {
   return { action: "archive", source: "derived", policy_id: null, suppressed_by: null, reasons: [], ...overrides };
@@ -231,5 +238,117 @@ describe("the settled sweep's message batch", () => {
       declined_sweep: null,
     }).toSQL().sql;
     expect(scheduled).not.toContain("`Message`.`isSeen`");
+  });
+});
+
+// The unsubscribe button's claim. The port is faked with the same two guards journal.ts and run.ts carry
+// — only a `shadow` row moves to pending, only a `failed` row reopens — and only the ids that moved come
+// back, which is what lets two presses over one fake prove they cannot both own a row.
+describe("claimSenderArchives", () => {
+  type FakeRow = { message_id: string; status: string; error: string | null };
+
+  function createFakePort(seed: SenderArchiveCandidate[]): SenderArchivePort & { rows: Map<string, FakeRow>; events: string[] } {
+    const rows = new Map(seed.map((row) => [row.action_id, { message_id: row.message_id, status: row.status, error: null }]));
+    const events: string[] = [];
+    return {
+      rows,
+      events,
+      promoteShadowActions: async (entries) => {
+        events.push(`promote ${entries.map((entry) => entry.action_id).join(",")}`);
+        const promoted: string[] = [];
+        for (const entry of entries) {
+          const row = rows.get(entry.action_id);
+          if (row === undefined) {
+            throw new Error(`fixture asked to promote unknown action ${entry.action_id}`);
+          }
+          if (row.status === "shadow") {
+            row.status = "pending";
+            promoted.push(entry.action_id);
+          }
+        }
+        return promoted;
+      },
+      reopenFailedActions: async (input) => {
+        events.push(`reopen ${input.run_id} ${input.message_ids.join(",")}`);
+        const reopened: string[] = [];
+        for (const [action_id, row] of rows) {
+          if (row.status === "failed" && input.message_ids.includes(row.message_id)) {
+            row.status = "shadow";
+            row.error = null;
+            reopened.push(action_id);
+          }
+        }
+        return reopened;
+      },
+    };
+  }
+
+  function candidate(action_id: string, status: string, sender_key = "news@example.com"): SenderArchiveCandidate {
+    return { action_id, message_id: `message-${action_id}`, status, sender_key };
+  }
+
+  test("claims the first rows up to the cap and reports exactly what the guarded write moved", async () => {
+    const rows = [candidate("a-1", "shadow"), candidate("a-2", "shadow"), candidate("a-3", "shadow")];
+    const port = createFakePort(rows);
+
+    const claim = await claimSenderArchives({ rows, pending_cap: 2, port });
+
+    expect(claim.pending.map((row) => row.action_id)).toEqual(["a-1", "a-2"]);
+    expect(claim.by_sender.get("news@example.com")).toEqual({ pending: 2, waiting: 1, retried: 0, refused: 0 });
+    expect(port.rows.get("a-3")?.status).toBe("shadow");
+    expect(port.events).toEqual(["promote a-1,a-2"]);
+  });
+
+  test("two concurrent presses return disjoint id sets and between them claim every row exactly once", async () => {
+    const rows = [candidate("a-1", "shadow"), candidate("a-2", "shadow")];
+    const port = createFakePort(rows);
+
+    const [first, second] = await Promise.all([
+      claimSenderArchives({ rows, pending_cap: 50, port }),
+      claimSenderArchives({ rows, pending_cap: 50, port }),
+    ]);
+
+    const first_ids = first.pending.map((row) => row.action_id);
+    const second_ids = second.pending.map((row) => row.action_id);
+    expect(first_ids.filter((id) => second_ids.includes(id))).toEqual([]);
+    expect([...first_ids, ...second_ids].sort()).toEqual(["a-1", "a-2"]);
+    expect(port.rows.get("a-1")?.status).toBe("pending");
+    expect(port.rows.get("a-2")?.status).toBe("pending");
+  });
+
+  test("a re-press reopens this run's failed rows, claims them, and counts them as retried", async () => {
+    const rows = [candidate("a-1", "failed"), candidate("a-2", "shadow")];
+    const port = createFakePort(rows);
+
+    const claim = await claimSenderArchives({ rows, pending_cap: 50, port });
+
+    expect(port.events).toEqual([`reopen ${UNSUBSCRIBE_BULK_RUN_ID} message-a-1`, "promote a-1,a-2"]);
+    expect(claim.pending.map((row) => row.action_id)).toEqual(["a-1", "a-2"]);
+    expect(claim.by_sender.get("news@example.com")).toEqual({ pending: 2, waiting: 0, retried: 1, refused: 0 });
+    expect(port.rows.get("a-1")?.error).toBeNull();
+  });
+
+  test("an archive that already landed, or a row another press still holds, is neither claimed nor waiting", async () => {
+    const rows = [candidate("a-1", "applied"), candidate("a-2", "pending"), candidate("a-3", "shadow")];
+    const port = createFakePort(rows);
+
+    const claim = await claimSenderArchives({ rows, pending_cap: 50, port });
+
+    expect(claim.pending.map((row) => row.action_id)).toEqual(["a-3"]);
+    expect(claim.by_sender.get("news@example.com")).toEqual({ pending: 1, waiting: 0, retried: 0, refused: 0 });
+    expect(port.rows.get("a-1")?.status).toBe("applied");
+    expect(port.rows.get("a-2")?.status).toBe("pending");
+  });
+
+  test("a disabled mailbox's cap of zero claims nothing and leaves every row waiting for re-enablement", async () => {
+    const rows = [candidate("a-1", "shadow"), candidate("a-2", "shadow", "other@example.com")];
+    const port = createFakePort(rows);
+
+    const claim = await claimSenderArchives({ rows, pending_cap: 0, port });
+
+    expect(claim.pending).toEqual([]);
+    expect(claim.by_sender.get("news@example.com")).toEqual({ pending: 0, waiting: 1, retried: 0, refused: 0 });
+    expect(claim.by_sender.get("other@example.com")).toEqual({ pending: 0, waiting: 1, retried: 0, refused: 0 });
+    expect(port.events).toEqual([]);
   });
 });

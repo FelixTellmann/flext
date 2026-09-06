@@ -26,7 +26,7 @@ describe("pickOneClickTarget", () => {
 describe("summarizeSenderArchive", () => {
   test("archived is what applied; failed is every executed row that did not", () => {
     const summary = summarizeSenderArchive({
-      counts: { pending: 3, waiting: 4, refused: 1 },
+      counts: { pending: 3, waiting: 4, retried: 2, refused: 1 },
       pending_action_ids: ["a", "b", "c"],
       statuses: new Map([
         ["a", "applied"],
@@ -35,13 +35,17 @@ describe("summarizeSenderArchive", () => {
       ]),
     });
 
-    expect(summary).toEqual({ archived: 1, failed: 2, waiting: 4, refused: 1 });
+    expect(summary).toEqual({ archived: 1, failed: 2, waiting: 4, retried: 2, refused: 1 });
   });
 
   test("a sender with nothing to execute reports zeros and its waiting/refused counts", () => {
-    const summary = summarizeSenderArchive({ counts: { pending: 0, waiting: 0, refused: 2 }, pending_action_ids: [], statuses: new Map() });
+    const summary = summarizeSenderArchive({
+      counts: { pending: 0, waiting: 0, retried: 0, refused: 2 },
+      pending_action_ids: [],
+      statuses: new Map(),
+    });
 
-    expect(summary).toEqual({ archived: 0, failed: 0, waiting: 0, refused: 2 });
+    expect(summary).toEqual({ archived: 0, failed: 0, waiting: 0, retried: 0, refused: 2 });
   });
 });
 

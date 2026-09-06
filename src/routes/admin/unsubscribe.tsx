@@ -61,6 +61,9 @@ function senderLine(outcome: SenderOutcome): string {
   if (outcome.failed > 0) {
     counts.push(`${outcome.failed} failed`);
   }
+  if (outcome.retried > 0) {
+    counts.push(`${outcome.retried} retried from an earlier press`);
+  }
   if (outcome.refused > 0) {
     counts.push(`${outcome.refused} kept by a guard`);
   }

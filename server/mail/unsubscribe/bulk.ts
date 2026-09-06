@@ -8,8 +8,8 @@ import { mailboxConnection } from "@server/mail/mailbox";
 import { createImapProvider } from "@server/mail/providers/imap";
 import type { PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex, upsertPolicy } from "@server/mail/query/policies";
-import type { PendingSenderAction } from "@server/mail/shadow/run";
-import { journalSenderArchives } from "@server/mail/shadow/run";
+import type { SenderArchiveJournalResult } from "@server/mail/shadow/run";
+import { createDatabaseSenderArchivePort, journalSenderArchives } from "@server/mail/shadow/run";
 import { parseMailboxFlavor } from "@server/mail/types";
 import type { UnsubscribeAttemptRecord } from "@server/mail/unsubscribe/attempts";
 import { recordUnsubscribeAttempt } from "@server/mail/unsubscribe/attempts";
@@ -38,9 +38,12 @@ export type UnsubscribeSenderOutcome = SenderArchiveSummary & {
 
 export type UnsubscribeBulkResult = {
   senders: UnsubscribeSenderOutcome[];
+  // One dead connection, or a mailbox switched off: named here per mailbox, because the sender rows only
+  // say how many messages did not land, not why.
   mailbox_errors: { label: string; error: string }[];
-  // Rows past the per-mailbox cap, or in a disabled mailbox, wait as shadow rows under the policy at
-  // auto; the next tick promotes and executes them.
+  // Rows past the per-mailbox cap wait as shadow rows under the policy at auto; the next tick promotes and
+  // executes them. Rows in a disabled mailbox wait the same way, but no tick reaches them until it is
+  // re-enabled — mailbox_errors says so.
   more_waiting: boolean;
 };
 
@@ -142,23 +145,28 @@ async function ensureArchivePolicy(input: {
   return { outcome, sender_policy_id: policy.id, error: null };
 }
 
-// Step (c)'s second half: the pending rows, per mailbox, through the same executor the Apply button
-// uses — narrowed to exactly this press's ids, so an approved-but-unapplied backlog is not swept along.
+// Step (c)'s second half: the rows this press claimed, per mailbox, through the same executor the Apply
+// button uses — narrowed to exactly those ids, so an approved-but-unapplied backlog is not swept along.
+// The journal claims nothing in a disabled mailbox, so its rows never reach here; they are reported.
 async function executePending(input: {
-  by_mailbox: { mailbox_id: string; pending: PendingSenderAction[] }[];
+  by_mailbox: SenderArchiveJournalResult["by_mailbox"];
   pending_cap: number;
 }): Promise<{ statuses: Map<string, string>; mailbox_errors: UnsubscribeBulkResult["mailbox_errors"] }> {
   const mailbox_errors: UnsubscribeBulkResult["mailbox_errors"] = [];
   const all_ids: string[] = [];
 
   for (const entry of input.by_mailbox) {
+    if (!entry.enabled) {
+      mailbox_errors.push({ label: entry.label, error: "mailbox disabled, nothing will run until it is re-enabled" });
+      continue;
+    }
     if (entry.pending.length === 0) {
       continue;
     }
     all_ids.push(...entry.pending.map((row) => row.action_id));
     const [row] = await db.select().from(mailbox).where(eq(mailbox.id, entry.mailbox_id)).limit(1);
-    if (row === undefined || !row.enabled) {
-      mailbox_errors.push({ label: row?.label ?? entry.mailbox_id, error: "mailbox is disabled; its rows stay pending for Apply" });
+    if (row === undefined) {
+      mailbox_errors.push({ label: entry.label, error: "mailbox no longer exists; its rows stay pending for Apply" });
       continue;
     }
 
@@ -230,12 +238,17 @@ export async function unsubscribeBulk(input: UnsubscribeBulkInput): Promise<Unsu
     }
   }
 
-  const journal = await journalSenderArchives({ senders: to_archive, pending_cap: input.pending_cap, now });
+  const journal = await journalSenderArchives({
+    senders: to_archive,
+    pending_cap: input.pending_cap,
+    now,
+    port: createDatabaseSenderArchivePort(),
+  });
   const execution = await executePending({ by_mailbox: journal.by_mailbox, pending_cap: input.pending_cap });
 
   const senders = addresses.map((from_address) => {
     const key = from_address.toLowerCase();
-    const counts = journal.by_sender.get(key) ?? { pending: 0, waiting: 0, refused: 0 };
+    const counts = journal.by_sender.get(key) ?? { pending: 0, waiting: 0, retried: 0, refused: 0 };
     const pending_action_ids = journal.by_mailbox.flatMap((entry) =>
       entry.pending.filter((row) => row.from_address === key).map((row) => row.action_id),
     );

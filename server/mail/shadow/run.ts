@@ -1,6 +1,8 @@
 import { db } from "@server/db/drizzle";
 import { action, attentionSession, mailbox, message, sender, threadState } from "@server/db/schema";
-import { PENDING_STATUS } from "@server/mail/actions/executor";
+import type { ActionJournal } from "@server/mail/actions/executor";
+import { FAILED_STATUS } from "@server/mail/actions/executor";
+import { createDatabaseJournal } from "@server/mail/actions/journal";
 import { FILE_KIND } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
@@ -83,9 +85,6 @@ export type ShadowActionRow = {
   updatedAt: Date;
   target_path: string | null;
 };
-
-// The unsubscribe button's rows: the same shape, but the ones it executes at once are born `pending`.
-type JournaledActionRow = Omit<ShadowActionRow, "status"> & { status: typeof SHADOW_STATUS | typeof PENDING_STATUS };
 
 async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_folders: string[]): Promise<Map<string, ThreadFacts>> {
   const group_key = threadGroupKeySql();
@@ -374,9 +373,9 @@ function filingMappingFor(
   return null;
 }
 
-// status takes no parameter: every row the PASSES build is "shadow". The one caller that writes
-// "pending" (journalSenderArchives, the unsubscribe button) overrides it afterwards and is the
-// operator's explicit approval; nothing here can produce "applied".
+// status takes no parameter: every row written here is born "shadow". The unsubscribe button's rows
+// leave shadow only through the journal's guarded promoteShadowActions, and nothing here can produce
+// "applied".
 export function buildShadowActionRow(input: {
   message_id: string;
   mailbox_id: string;
@@ -410,7 +409,7 @@ export function buildShadowActionRow(input: {
 // requires `applied`: the mutation would stand on the server with no way left to reverse it. A row that
 // is genuinely new is unaffected — buildShadowActionRow supplies `status` in the inserted values, so the
 // INSERT sets it and the column default is never what this depends on.
-async function writeShadowBatch(rows: JournaledActionRow[]): Promise<void> {
+async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
   if (rows.length === 0) {
     return;
   }
@@ -630,34 +629,47 @@ export async function runDeclinedSweepPass(
 // ─── The unsubscribe button's archive-now ────────────────────────────────────
 //
 // docs/decisions/2026-09-06-unsubscribe-button-and-digest-links.md: pressing the button on a checked list
-// is the operator's approval, so the sender's inbox mail is journaled `pending` and executed at once
-// rather than proposed for a shadow cycle. The decision still goes through decide(): the guards, thread
-// state, suppression and a suspended rule all refuse exactly as they would on the scheduled pass, and a
-// refusal here is reported rather than overridden.
+// is the operator's approval, so the sender's inbox mail is journaled and executed at once rather than
+// proposed for a shadow cycle. The decision still goes through decide(): the guards, thread state,
+// suppression and a suspended rule all refuse exactly as they would on the scheduled pass, and a refusal
+// here is reported rather than overridden.
+//
+// Every row is written `shadow` and then CLAIMED through the journal's guarded promoteShadowActions, whose
+// return value is the only list of rows this press owns. Two presses on the same sender read the same
+// rows; only one of them moves each, and the executor is handed exactly what the claim moved.
 
 // One constant rather than an id per click, so a second press on the same sender meets its own earlier
 // rows on Action_messageId_kind_runId_key and writeShadowBatch's SET leaves their status alone — an
 // archive already applied is never re-issued, and a row still waiting is not duplicated.
 export const UNSUBSCRIBE_BULK_RUN_ID = "unsubscribe-bulk";
 
+// The two writes the claim needs, and nothing else of the journal: a press that could reach markApplied
+// through this port would be a press that could bypass the executor.
+export type SenderArchivePort = Pick<ActionJournal, "promoteShadowActions"> & {
+  // Flips this run's `failed` rows on these messages back to `shadow` with the error cleared, and returns
+  // the ids it actually flipped — a re-press is the operator's retry of an archive that did not land.
+  reopenFailedActions: (input: { run_id: string; message_ids: string[] }) => Promise<string[]>;
+};
+
 export type SenderArchiveJournalInput = {
   // The policy must already exist at `auto` when this runs: the index is loaded fresh here, and a sender
   // whose policy is missing or says anything but archive refuses every message.
   senders: { from_address: string; sender_policy_id: string }[];
-  // Rows per ENABLED mailbox born `pending` for the caller to execute now. Every row past the cap, and
-  // every row in a disabled mailbox, is `shadow` with the policy id set — which is exactly what the tick's
-  // promoteAutoPolicies reads for a policy at auto, so the surplus is neither stranded nor executed by
-  // a timer the operator did not press.
+  // Rows per ENABLED mailbox this press claims for the caller to execute now. Every row past the cap, and
+  // every row in a disabled mailbox, stays `shadow` with the policy id set — which is exactly what the
+  // tick's promoteAutoPolicies reads for a policy at auto, so the surplus is neither stranded nor executed
+  // by a timer the operator did not press.
   pending_cap: number;
   now: Date;
+  port: SenderArchivePort;
 };
 
 export type PendingSenderAction = { action_id: string; from_address: string };
 
-export type SenderArchiveCounts = { pending: number; waiting: number; refused: number };
+export type SenderArchiveCounts = { pending: number; waiting: number; retried: number; refused: number };
 
 export type SenderArchiveJournalResult = {
-  by_mailbox: { mailbox_id: string; pending: PendingSenderAction[] }[];
+  by_mailbox: { mailbox_id: string; label: string; enabled: boolean; pending: PendingSenderAction[] }[];
   // Keyed by the lower-cased address.
   by_sender: Map<string, SenderArchiveCounts>;
 };
@@ -667,9 +679,86 @@ function countsFor(by_sender: Map<string, SenderArchiveCounts>, key: string): Se
   if (existing !== undefined) {
     return existing;
   }
-  const created = { pending: 0, waiting: 0, refused: 0 };
+  const created = { pending: 0, waiting: 0, retried: 0, refused: 0 };
   by_sender.set(key, created);
   return created;
+}
+
+// One mailbox's rows under UNSUBSCRIBE_BULK_RUN_ID as the database holds them after the write, oldest
+// message first, each tagged with the lower-cased sender it belongs to.
+export type SenderArchiveCandidate = { action_id: string; message_id: string; status: string; sender_key: string };
+
+export type SenderArchiveClaim = { pending: PendingSenderAction[]; by_sender: Map<string, SenderArchiveCounts> };
+
+// The claim, pure over the port so two concurrent presses can be run against one fake. Reopens this
+// run's failed rows first, then asks the journal for the first `pending_cap` rows still at shadow and
+// reports EXACTLY the ids the guarded UPDATE matched: a row another press claimed a moment earlier fails
+// the guard and is absent from `pending`. An `applied` row from an earlier press is neither pending nor
+// waiting — that archive already landed. A `pending` row from a press still running, or one that died
+// before the executor reached it, is left to whoever holds it: the operator's Apply sweeps the dead ones.
+export async function claimSenderArchives(input: {
+  rows: SenderArchiveCandidate[];
+  pending_cap: number;
+  port: SenderArchivePort;
+}): Promise<SenderArchiveClaim> {
+  const by_sender = new Map<string, SenderArchiveCounts>();
+  const sender_by_action = new Map(input.rows.map((row) => [row.action_id, row.sender_key]));
+
+  const failed = input.rows.filter((row) => row.status === FAILED_STATUS);
+  const reopened = new Set(
+    failed.length === 0
+      ? []
+      : await input.port.reopenFailedActions({ run_id: UNSUBSCRIBE_BULK_RUN_ID, message_ids: failed.map((row) => row.message_id) }),
+  );
+  for (const action_id of reopened) {
+    countsFor(by_sender, sender_by_action.get(action_id) ?? "").retried += 1;
+  }
+
+  const claimable = input.rows.filter((row) => row.status === SHADOW_STATUS || reopened.has(row.action_id));
+  const attempted = claimable.slice(0, Math.max(0, input.pending_cap));
+  const claimed = new Set(
+    attempted.length === 0 ? [] : await input.port.promoteShadowActions(attempted.map((row) => ({ action_id: row.action_id }))),
+  );
+
+  const pending: PendingSenderAction[] = [];
+  for (const row of claimable) {
+    const counts = countsFor(by_sender, row.sender_key);
+    if (claimed.has(row.action_id)) {
+      counts.pending += 1;
+      pending.push({ action_id: row.action_id, from_address: row.sender_key });
+      continue;
+    }
+    counts.waiting += 1;
+  }
+  return { pending, by_sender };
+}
+
+async function reopenFailedActions(input: { run_id: string; message_ids: string[] }): Promise<string[]> {
+  if (input.message_ids.length === 0) {
+    return [];
+  }
+  const failed = await db
+    .select({ action_id: action.id })
+    .from(action)
+    .where(and(eq(action.run_id, input.run_id), eq(action.status, FAILED_STATUS), inArray(action.message_id, input.message_ids)));
+
+  // Per row and guarded, like promoteShadowActions: only affectedRows says which rows THIS press reopened
+  // when two presses meet the same failure.
+  const reopened: string[] = [];
+  for (const row of failed) {
+    const [header] = await db
+      .update(action)
+      .set({ status: SHADOW_STATUS, error: null, updatedAt: new Date() })
+      .where(and(eq(action.id, row.action_id), eq(action.status, FAILED_STATUS)));
+    if (header.affectedRows === 1) {
+      reopened.push(row.action_id);
+    }
+  }
+  return reopened;
+}
+
+export function createDatabaseSenderArchivePort(): SenderArchivePort {
+  return { promoteShadowActions: createDatabaseJournal().promoteShadowActions, reopenFailedActions };
 }
 
 export async function journalSenderArchives(input: SenderArchiveJournalInput): Promise<SenderArchiveJournalResult> {
@@ -705,9 +794,8 @@ export async function journalSenderArchives(input: SenderArchiveJournalInput): P
     // Once per mailbox for the whole batch, never per sender: it is a window scan over every message
     // the mailbox holds.
     const thread_facts = await loadThreadFacts(mailbox_row.id, flavor, parseStringList(mailbox_row.sent_folders));
-    const rows: JournaledActionRow[] = [];
+    const rows: ShadowActionRow[] = [];
     const sender_by_message = new Map<string, string>();
-    let pending_left = mailbox_row.enabled ? input.pending_cap : 0;
 
     for (const row of messages) {
       const key = (row.from_address ?? "").toLowerCase();
@@ -722,12 +810,8 @@ export async function journalSenderArchives(input: SenderArchiveJournalInput): P
         countsFor(by_sender, key).refused += 1;
         continue;
       }
-      const status = pending_left > 0 ? PENDING_STATUS : SHADOW_STATUS;
-      if (status === PENDING_STATUS) {
-        pending_left -= 1;
-      }
-      rows.push({
-        ...buildShadowActionRow({
+      rows.push(
+        buildShadowActionRow({
           message_id: row.id,
           mailbox_id: mailbox_row.id,
           decision,
@@ -735,8 +819,7 @@ export async function journalSenderArchives(input: SenderArchiveJournalInput): P
           run_id: UNSUBSCRIBE_BULK_RUN_ID,
           now: input.now,
         }),
-        status,
-      });
+      );
       sender_by_message.set(row.id, key);
     }
     if (rows.length === 0) {
@@ -745,12 +828,12 @@ export async function journalSenderArchives(input: SenderArchiveJournalInput): P
 
     await writeShadowBatch(rows);
 
-    // Read back rather than trusting what was written: the constant run id means a second press meets
-    // its own earlier rows, whose status the write left alone, so what is pending now is what the
-    // database says is pending — an applied row from last time is neither.
+    // Read back rather than trusting what was written: Action.id defaults server-side, and the constant
+    // run id means a second press meets its own earlier rows, whose status the write left alone.
     const written = await db
       .select({ action_id: action.id, message_id: action.message_id, status: action.status })
       .from(action)
+      .innerJoin(message, eq(message.id, action.message_id))
       .where(
         and(
           eq(action.run_id, UNSUBSCRIBE_BULK_RUN_ID),
@@ -760,23 +843,26 @@ export async function journalSenderArchives(input: SenderArchiveJournalInput): P
             rows.map((row) => row.message_id),
           ),
         ),
-      );
-    const pending: PendingSenderAction[] = [];
-    for (const entry of written) {
-      const key = sender_by_message.get(entry.message_id);
-      if (key === undefined) {
-        continue;
-      }
-      if (entry.status === PENDING_STATUS) {
-        countsFor(by_sender, key).pending += 1;
-        pending.push({ action_id: entry.action_id, from_address: key });
-        continue;
-      }
-      if (entry.status === SHADOW_STATUS) {
-        countsFor(by_sender, key).waiting += 1;
-      }
+      )
+      .orderBy(asc(message.internal_date), asc(action.id));
+
+    const claim = await claimSenderArchives({
+      rows: written.flatMap((entry) => {
+        const sender_key = sender_by_message.get(entry.message_id);
+        return sender_key === undefined
+          ? []
+          : [{ action_id: entry.action_id, message_id: entry.message_id, status: entry.status, sender_key }];
+      }),
+      pending_cap: mailbox_row.enabled ? input.pending_cap : 0,
+      port: input.port,
+    });
+    for (const [key, counts] of claim.by_sender) {
+      const totals = countsFor(by_sender, key);
+      totals.pending += counts.pending;
+      totals.waiting += counts.waiting;
+      totals.retried += counts.retried;
     }
-    by_mailbox.push({ mailbox_id: mailbox_row.id, pending });
+    by_mailbox.push({ mailbox_id: mailbox_row.id, label: mailbox_row.label, enabled: mailbox_row.enabled, pending: claim.pending });
   }
 
   return { by_mailbox, by_sender };

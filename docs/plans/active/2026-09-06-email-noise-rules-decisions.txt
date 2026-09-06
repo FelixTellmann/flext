@@ -851,3 +851,22 @@ A: hand-rolled "7 Sep 2026" in UTC: Bun's ICU prints "Sep", newer Node prints "S
   (and phase 6's listUnsubscribeCandidates) fail with ER_BAD_FIELD_ERROR until the plan's db:migrate step
 - bulk.ts does not yet call unsubscribeMailtoSender for mailto-only senders; the supervisor wires it
   after the other agent's fix lands
+
+[2026-09-06 22:55] phase 6 fix — how the unsubscribe button claims its rows
+Q: a new member on ActionJournal for the retry, or a port of its own?
+A: SenderArchivePort in shadow/run.ts: Pick<ActionJournal, "promoteShadowActions"> plus
+   reopenFailedActions (guarded failed -> shadow, error cleared, ids by affectedRows). Every row is
+   written shadow; claimSenderArchives, exported and pure over the port, reopens the run's failed rows,
+   asks promoteShadowActions for the first pending_cap still-shadow rows and reports exactly the ids the
+   guarded UPDATE matched. Two presses over one fake claim disjoint sets
+   not: a member on ActionJournal — six fake journals in tests would gain it, some in files the digest
+   agent owns this session
+why: promoteShadowActions' affectedRows is already the contract the tick relies on for the same race
+
+[2026-09-06 22:55] phase 6 fix — rows a press finds that are not shadow
+Q: what does a press do with its run's rows that are already pending, applied, undone or superseded?
+A: nothing, and it counts none of them. A pending row belongs to the press that claimed it (or died
+   holding it; the operator's Apply sweeps the whole pending set). An applied row is an archive that
+   landed. Undone and superseded rows are not reopened — only failed ones are, as the review asked — so
+   a re-press on a message an undo put back in the inbox archives nothing until a later pass re-decides it
+why: reopening more than the failed set widens the retry past what was asked for; noted as a known gap
