@@ -335,10 +335,11 @@ function derivedOutcome(input: DecisionInput): DerivedOutcome | null {
   return null;
 }
 
-// dkim_aligned is read in exactly one place here: isHumanShapedFirstContact, and only for `false`. It is
-// a tri-state whose `null` means "the server does not stamp Authentication-Results", not "DKIM failed",
-// and reading null as failure would mis-handle the largest mailbox in the system — so null passes the
-// human-shaped test and nothing else in the ladder consults the column at all. The other rule that
+// The only decision here that reads dkim_aligned is isHumanShapedFirstContact, and it consults only
+// `false`; the first-contact reason strings name what it saw but decide nothing on it. It is a tri-state
+// whose `null` means "the server does not stamp Authentication-Results", not "DKIM failed", and reading
+// null as failure would mis-handle the largest mailbox in the system — so null passes the human-shaped
+// test and nothing else in the ladder consults the column at all. The other rule that
 // genuinely wants DKIM evidence — §6's requirement that filing be alignment-verified — declines to act by
 // routing to `filing_queue`, which is filing/resolver.ts's job because a Decision has no way to name that
 // queue.
