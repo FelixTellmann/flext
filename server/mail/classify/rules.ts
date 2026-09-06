@@ -76,6 +76,12 @@ export const SWEEP_SETTLED_SOURCE = "sweep_settled" as const satisfies DecisionS
 // idempotent per message, and 1.11's rescue handler keys on it to know a rescue has no policy to blame.
 export const SWEEP_DECLINED_SOURCE = "sweep_declined" as const satisfies DecisionSource;
 
+// The junk-folder stage's source (server/mail/sync/junk.ts). Deliberately NOT a DecisionSource: decide()
+// never emits it, because the stage does not decide — the host's spam filter already did, and the stage
+// only carries that verdict into a folder we own. Listing it in DECISION_SOURCES would let a shadow report
+// present a row no ladder produced as one of its own.
+export const JUNK_FOLDER_SOURCE = "junk_folder" as const;
+
 // `Action.source` is a varchar with no database enum behind it, so a row written by an older build or by
 // hand can hold a value decide() never emits. Null says exactly that — "not one of ours" — rather than an
 // assertion that hands a caller a union member the string was never checked against.

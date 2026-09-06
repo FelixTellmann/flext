@@ -20,6 +20,7 @@ import { runDeclinedSweepPass, runNewMailShadowPass, runSettledSweepPass } from 
 import { backfillMailbox, scanSentFolder } from "@server/mail/sync/backfill";
 import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders";
 import { syncFolderIncrementally } from "@server/mail/sync/incremental";
+import { createDatabaseJunkQuarantinePort, runJunkQuarantinePassForMailbox, selectJunkFolders } from "@server/mail/sync/junk";
 import { reclassifyMailbox } from "@server/mail/sync/reclassify";
 import { reconcileFolder } from "@server/mail/sync/reconcile";
 import { repairSenderLinks } from "@server/mail/sync/repair";
@@ -399,6 +400,25 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
       mailbox_row: input.mailbox_row,
       run_id: SCHEDULED_RUN_ID,
       sweepPass: runDeclinedSweepPass,
+    }),
+  );
+
+  // Stage 8, generic flavor only: whatever the host's spam filter diverted into Junk is moved to Quarantine
+  // and marked read. Deliberately NOT through decide() and NOT shadow-first — the one exception to the
+  // shadow rule (docs/decisions/2026-09-06-spam-junk-to-quarantine.md): the host already judged the
+  // message, Quarantine is ours and never purged, and xneelo's Junk purge window is undocumented, so a
+  // shadow row waiting for promotion could outlive the mail it describes.
+  notes.push(
+    await runJunkQuarantinePassForMailbox({
+      mailbox_id: input.mailbox_row.id,
+      flavor: parseMailboxFlavor(input.mailbox_row.flavor),
+      hierarchy_delimiter: input.mailbox_row.hierarchy_delimiter ?? "",
+      junk_folders: selectJunkFolders(folders),
+      batch_size: EXECUTOR_BATCH_SIZE,
+      provider: input.provider,
+      journal: createDatabaseJournal(),
+      port: createDatabaseJunkQuarantinePort(),
+      executePendingActions: executeActions,
     }),
   );
 

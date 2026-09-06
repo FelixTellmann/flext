@@ -59,3 +59,51 @@ A: no. orpc testConnection sets enabled: true after a successful login; it now r
    not: leave the counter — a mailbox reconnected at strike 3 would be disabled again as "strike 4 of 3"
         by one transient auth error
 why: a successful login is the reset, and testConnection is one
+
+[2026-09-06 18:10] phase 2 — junk to quarantine
+Q: is a \Flagged message in Junk still moved?
+A: no — left where it is, counted in the note as "left N flagged in place"
+   not: move it anyway — the flag guard is absolute on every other path, and a flag the operator set
+        on a message in Junk is the same claim about it
+why: one rule for the flag everywhere; the operator can unflag or whitelist to release it
+
+[2026-09-06 18:10] phase 2 — junk to quarantine
+Q: address keep_inbox OR domain keep_inbox, or matchPolicy's address-over-domain precedence?
+A: precedence — the address policy, if any, decides; the domain policy only when no address policy names
+   the sender. A suspended keep_inbox still counts as keep_inbox.
+   not: either scope keeps — an address rule of `file` under a domain-wide keep_inbox would leave that
+        address in Junk to be purged, which no operator meant by filing it
+why: the same precedence decide() resolves, so the two never disagree about who the operator whitelisted
+
+[2026-09-06 18:10] phase 2 — junk to quarantine
+Q: which run_id do the stage's action rows carry?
+A: their own constant, JUNK_FOLDER_RUN_ID = "junk-folder"
+   not: SCHEDULED_RUN_ID — Action's unique key is (messageId, kind, runId), and the scheduled classify
+        pass walks Junk too, so a first contact there already holds a `quarantine` shadow row under that
+        id; the stage's insert would collide with, or an upsert would overwrite, the operator's shadow row
+   not: a fresh UUID per run — a failed row could then never be retried onto the same row
+why: the two rows describe different things (a proposal vs. the host's verdict) and must coexist
+
+[2026-09-06 18:10] phase 2 — junk to quarantine
+Q: is JUNK_FOLDER_SOURCE a DecisionSource (in DECISION_SOURCES)?
+A: no — a standalone constant in rules.ts; the journal page gets a label for it
+   not: add it to DECISION_SOURCES — decide() never emits it, and toDecisionSource would then let a shadow
+        report present a row no ladder produced as one of its own
+why: the stage does not decide, it carries the host's verdict
+
+[2026-09-06 18:10] phase 2 — junk to quarantine
+Q: an undone junk quarantine — is the message re-quarantined on the next run?
+A: yes. Undo moves it back to Junk under a new UID, the next fetch writes a new Message row, and that row
+   is a candidate like any other. The operator's tool for "leave this sender alone" is a keep_inbox policy,
+   which the plan names as the rule that wins.
+   not: remember undone rows and skip the message — the row is keyed to the old UID and cannot find the
+        new one; and leaving it in Junk hands it to the purge
+why: never lose mail outranks respecting an undo whose target is about to be deleted anyway
+
+[2026-09-06 18:10] phase 2 — junk to quarantine
+Q: a failed or deferred row from an earlier run — retried?
+A: yes: the candidate query excludes only applied and pending quarantines, and the insert's ON DUPLICATE
+   KEY UPDATE re-opens the stage's own earlier row as pending with error cleared. from_state_json keeps
+   the first capture (recordFromState is first-write-wins).
+   not: exclude any quarantine row — a transient IMAP error would then leave the message in Junk forever
+why: the purge window is unknown; a retry every fifteen minutes is the point of the stage

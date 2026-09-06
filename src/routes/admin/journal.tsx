@@ -111,6 +111,7 @@ const source_label: Record<string, string> = {
   thread_state: "Thread snoozed/done",
   derived: "Derived default",
   fallback: "No rule matched",
+  junk_folder: "Host spam folder",
 };
 
 const NULL_MAILBOX_EXPLANATION =
