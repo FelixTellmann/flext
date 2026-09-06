@@ -4,22 +4,27 @@ import { orpc } from "~/integrations/orpc";
 import { Banner, toFailureBanner } from "../-outcome-banner";
 import { useCaptureStore } from "./-capture";
 import { formatDay, formatToday } from "./-format";
-import { BlockedNotice, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
+import { BlockedNotice, DeadlineLine, OsPanel, type PersonalTask, TaskRow, TaskTitleLink } from "./-task-row";
 import { useTaskAction } from "./-use-task-action";
 
 const shell_route = getRouteApi("/admin/os");
 
 export const Route = createFileRoute("/admin/os/")({
   loader: async () => {
-    const [today, inbox] = await Promise.all([orpc.personalTasks.listToday(), orpc.personalTasks.listInbox()]);
+    const [today, inbox, deadlines, areas] = await Promise.all([
+      orpc.personalTasks.listToday(),
+      orpc.personalTasks.listInbox(),
+      orpc.personalTasks.listDeadlinesThisWeek(),
+      orpc.personalTasks.listAreas(),
+    ]);
 
-    return { ...today, inbox };
+    return { ...today, inbox, deadlines, areas };
   },
   component: PersonalOsTodayPage,
 });
 
 function PersonalOsTodayPage() {
-  const { committed, hidden_count, inbox, overdue } = Route.useLoaderData();
+  const { areas, committed, deadlines, hidden_count, inbox, overdue } = Route.useLoaderData();
   const { plan_week } = shell_route.useLoaderData();
   const [, setCaptureOpen] = useCaptureStore();
   const { banner, busy_key, run, setBanner } = useTaskAction();
@@ -54,6 +59,13 @@ function PersonalOsTodayPage() {
     run(id, "Could not settle the task", async () => {
       setBlockedId(null);
       await orpc.personalTasks.setState({ id, state });
+    });
+
+  // Filing is not triage: the task stays in the inbox until one of the four exits takes it. Blank is the
+  // normal case, which is why nothing here is required.
+  const file = (id: string, patch: { area_id: string | null; project_id: string | null }) =>
+    run(id, "Could not file the task", async () => {
+      await orpc.personalTasks.updateTask({ id, ...patch });
     });
 
   // Peek reveals and changes nothing, so it loads its own list on demand rather than riding the loader —
@@ -139,7 +151,41 @@ function PersonalOsTodayPage() {
                   className="flex flex-wrap items-center gap-2 rounded border border-gray-200 bg-bg p-3 dark:border-dark-border dark:bg-dark-bg"
                   key={task.id}
                 >
-                  <span className="min-w-0 flex-grow text-gray-900 text-sm dark:text-dark-headings">{task.title}</span>
+                  <TaskTitleLink task={task} />
+                  <select
+                    aria-label="Area"
+                    className="rounded-sm border border-gray-300 bg-bg px-1.5 py-1 text-gray-500 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
+                    disabled={busy_key !== null}
+                    onChange={(event) =>
+                      file(task.id, { area_id: event.target.value === "" ? null : event.target.value, project_id: null })
+                    }
+                    value={task.area_id ?? ""}
+                  >
+                    <option value="">area&hellip;</option>
+                    {areas.map((area) => (
+                      <option key={area.id} value={area.id}>
+                        {area.name}
+                      </option>
+                    ))}
+                  </select>
+                  {task.area_id !== null && (
+                    <select
+                      aria-label="Project"
+                      className="rounded-sm border border-gray-300 bg-bg px-1.5 py-1 text-gray-500 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
+                      disabled={busy_key !== null}
+                      onChange={(event) =>
+                        file(task.id, { area_id: task.area_id, project_id: event.target.value === "" ? null : event.target.value })
+                      }
+                      value={task.project_id ?? ""}
+                    >
+                      <option value="">project&hellip;</option>
+                      {(areas.find((area) => area.id === task.area_id)?.projects ?? []).map((project) => (
+                        <option key={project.id} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   {[
                     { label: "today", run: () => pullToToday(task.id) },
                     { label: "→ pool", run: () => sendToPool(task.id) },
@@ -175,6 +221,27 @@ function PersonalOsTodayPage() {
           <div className="flex flex-col gap-2">
             {overdue.map((task) => renderTask(task, task.when_date === null ? null : formatDay(task.when_date)))}
           </div>
+        </OsPanel>
+      )}
+
+      {deadlines.length > 0 && (
+        <OsPanel title="Deadlines this week">
+          <div className="flex flex-col gap-1.5">
+            {deadlines.map((task) => (
+              <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1 dark:border-dark-border" key={task.id}>
+                <TaskTitleLink task={task} />
+                {task.state !== "open" && (
+                  <span className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text">
+                    {task.state}
+                  </span>
+                )}
+                <DeadlineLine deadline={task.deadline} />
+              </div>
+            ))}
+          </div>
+          <p className="mt-2.5 text-gray-600 text-xs dark:text-dark-text">
+            Owed before Sunday, none of it dated. A deadline schedules nothing &mdash; pull one in from the pool or give it a when.
+          </p>
         </OsPanel>
       )}
 

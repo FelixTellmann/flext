@@ -1,8 +1,10 @@
+import { operatorDateOf } from "@server/operator-day";
 import { Link } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { FC, ReactNode } from "react";
 import type { orpc } from "~/integrations/orpc";
 import { Spinner } from "../-ui";
+import { formatDay } from "./-format";
 
 export type PersonalTask = Awaited<ReturnType<typeof orpc.personalTasks.listToday>>["committed"][number];
 
@@ -60,6 +62,22 @@ export const TaskTitleLink: FC<{ task: Pick<PersonalTask, "id" | "title"> }> = (
   </Link>
 );
 
+// Quiet on purpose: a deadline hides nothing and schedules nothing, so it reads as a fact under the title
+// rather than a verb beside it. Today or past turns it the same danger the overdue dates already use.
+export const DeadlineLine: FC<{ className?: string; deadline: string | null }> = ({ className, deadline }) => {
+  if (deadline === null) {
+    return null;
+  }
+
+  const due = operatorDateOf(new Date(deadline)) <= operatorDateOf();
+
+  return (
+    <span className={clsx("text-xs", due ? "text-danger" : "text-gray-500 dark:text-dark-text", className)}>
+      deadline {formatDay(deadline)}
+    </span>
+  );
+};
+
 // One row, shared by Today and the week pool, which differ only in the verb on the right: Today can push a
 // task out, the pool can pull one in. Everything else about a task looks the same wherever it is read.
 export const TaskRow: FC<{
@@ -79,7 +97,10 @@ export const TaskRow: FC<{
       onClick={() => onComplete()}
       type="button"
     />
-    <TaskTitleLink task={task} />
+    <div className="flex min-w-0 flex-grow flex-col items-start gap-0.5">
+      <TaskTitleLink task={task} />
+      <DeadlineLine deadline={task.deadline} />
+    </div>
 
     {overdue_since !== null && <span className="text-danger text-xs">was {overdue_since}</span>}
 
