@@ -34,9 +34,12 @@ function attemptLabel(attempt: LastAttempt): string {
   if (attempt.status === "skipped") {
     return "skipped";
   }
+  if (attempt.method === "mailto") {
+    return attempt.status === "sent" ? "email sent" : `email ${attempt.status} · ${attempt.error ?? "no response"}`;
+  }
   return attempt.response_code === null
-    ? `${attempt.status} · ${attempt.error ?? "no response"}`
-    : `${attempt.status} ${attempt.response_code}`;
+    ? `one-click ${attempt.status} · ${attempt.error ?? "no response"}`
+    : `one-click ${attempt.status} ${attempt.response_code}`;
 }
 
 const policy_wording: Record<SenderOutcome["policy"], string> = {
@@ -84,9 +87,9 @@ const Unsubscribe: FC = () => {
   const [banner, setBanner] = useState<OutcomeBanner | null>(null);
   const [result, setResult] = useState<BulkResult | null>(null);
 
-  const one_click = candidates.filter((candidate) => candidate.one_click);
+  // Tickable: a one-click POST, or a mailto the server emails. A plain link is neither.
+  const one_click = candidates.filter((candidate) => candidate.one_click || candidate.target.http === null);
   const link_only = candidates.filter((candidate) => !candidate.one_click && candidate.target.http !== null);
-  const mailto_only = candidates.filter((candidate) => candidate.target.http === null);
   const reachable = one_click.reduce((sum, candidate) => sum + candidate.in_inbox, 0);
 
   // The list keys rows by (mailbox, address), so one address ticked in two mailboxes is one sender: the
@@ -145,14 +148,17 @@ const Unsubscribe: FC = () => {
           stops it being sent.
         </p>
         <p className="text-sm text-zinc-600 dark:text-dark-text">
-          Ticking senders and pressing the button sends each one-click unsubscribe from the server, creates an archive rule for the address
-          switched on and marked read, and archives what is in the inbox now. A guard (flagged, under a day old, never-touch, a snoozed
-          thread) keeps a message where it is and says so.
+          Ticking senders and pressing the button sends each unsubscribe from the server (a one-click POST, or an email from
+          felix@tellmann.co.za where the sender only offers an address), creates an archive rule for the address switched on and marked
+          read, and archives what is in the inbox now. A guard (flagged, under a day old, never-touch, a snoozed thread) keeps a message
+          where it is and says so.
         </p>
       </Panel>
 
-      <Panel title={`One click (${one_click.length} senders, ${reachable} still reaching an inbox)`}>
-        {one_click.length === 0 && <p className="text-sm text-zinc-600 dark:text-dark-text">Nothing accepts a one-click unsubscribe.</p>}
+      <Panel title={`One click or by email (${one_click.length} senders, ${reachable} still reaching an inbox)`}>
+        {one_click.length === 0 && (
+          <p className="text-sm text-zinc-600 dark:text-dark-text">Nothing accepts a one-click unsubscribe or an unsubscribe email.</p>
+        )}
         {one_click.length > 0 && (
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-dark-text">
@@ -163,7 +169,7 @@ const Unsubscribe: FC = () => {
                 onChange={() => setSelected(all_one_click_selected ? new Set() : new Set(one_click.map(candidateKey)))}
                 type="checkbox"
               />
-              Select all one-click
+              Select all
             </label>
             <ActionButton
               busy={busy}
@@ -203,26 +209,6 @@ const Unsubscribe: FC = () => {
           <ul className="flex flex-col gap-1">
             {link_only.map((candidate) => (
               <Row busy={busy} candidate={candidate} key={candidateKey(candidate)} onToggle={null} selected={false} />
-            ))}
-          </ul>
-        </Panel>
-      )}
-
-      {mailto_only.length > 0 && (
-        <Panel title={`Reply-to-unsubscribe only (${mailto_only.length})`}>
-          <p className="mb-2 text-sm text-zinc-600 dark:text-dark-text">
-            These offer no link, only an address to email. Phase 7 sends those from felix@tellmann.co.za through the same button; until
-            then, copy the address into your mail client if you want off the list.
-          </p>
-          <ul className="flex flex-col gap-1">
-            {mailto_only.map((candidate) => (
-              <li className="text-sm" key={candidateKey(candidate)}>
-                <span className="text-zinc-900 dark:text-dark-headings">{candidate.from_address}</span>{" "}
-                <span className="text-zinc-500 dark:text-dark-text">
-                  {candidate.in_inbox} in inbox — <code>{candidate.target.mailto}</code>
-                </span>
-                {candidate.last_attempt !== null && <AttemptChip attempt={candidate.last_attempt} />}
-              </li>
             ))}
           </ul>
         </Panel>
@@ -279,9 +265,19 @@ const Row: FC<{ busy: boolean; candidate: Candidate; onToggle: (() => void) | nu
       </span>
     )}
     {candidate.last_attempt !== null && <AttemptChip attempt={candidate.last_attempt} />}
-    <a className={clsx(secondary_button_focus, "shrink-0")} href={candidate.target.http ?? "#"} rel="noreferrer noopener" target="_blank">
-      Open link
-    </a>
+    {candidate.target.http === null && (
+      <span
+        className="shrink-0 rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-dark-bg dark:text-dark-text"
+        title={candidate.target.mailto ?? undefined}
+      >
+        by email
+      </span>
+    )}
+    {candidate.target.http !== null && (
+      <a className={clsx(secondary_button_focus, "shrink-0")} href={candidate.target.http} rel="noreferrer noopener" target="_blank">
+        Open link
+      </a>
+    )}
   </li>
 );
 

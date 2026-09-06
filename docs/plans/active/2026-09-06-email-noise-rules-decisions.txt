@@ -910,3 +910,33 @@ A: no. Those counts already include the run's applied and undone rows — they d
    promotion gate's "reviewed shadow record" shows
 why: one meaning per surface; the operator may overturn this with a one-line ne() if the report should
    read as "still open"
+
+[2026-09-06 22:56] phase 7b wiring — the button's mailto fallback in bulk.ts
+Q: attemptOneClick recorded an http "skipped" for a mailto-only sender; who decides between the two
+   methods, and what does a sender with neither get?
+A: bulk.ts's attemptUnsubscribe: the newest one-click http target is POSTed; failing that the newest
+   mailto target goes through unsubscribeMailtoSender (which records the mailto row itself, from
+   felix@tellmann.co.za); failing both, bulk records one skipped row, method http, naming both absences
+   ("...with an http target, and none carries a mailto target"). The mailto sources are loaded once in
+   bulk and handed to unsubscribeMailtoSender as its loadSources, so nothing is read twice
+   not: call unsubscribeMailtoSender on every http miss and let its own skipped row stand — the digest
+   link calls unsubscribeBulk for any address, so a link-only sender would read "no mailto target" when
+   the real reason is "no one-click header"
+   not: a new method field on UnsubscribeSenderOutcome — attempt.method already carries it, and
+   link-action.test.ts's fixture of the result shape would break on a required field
+why: bulk.ts had no injection at all (it hit db and performOneClick directly); the seams it gains
+   (UnsubscribeRequestDependencies: loadOneClickSources, loadMailtoSources, performOneClick, send,
+   record) are what let bulk.test.ts prove the three branches without SMTP or a database. unsubscribeBulk
+   takes the same optional trailing param so orpc/mail.ts and digest/link-action.ts compile untouched
+
+[2026-09-06 22:56] phase 7b wiring — where mailto-only senders sit on /admin/unsubscribe
+Q: give the "Reply-to-unsubscribe only" panel its own checkboxes and the shared button, or fold those
+   senders into the tickable list?
+A: folded in: the tickable filter is one_click || target.http === null, the panel is "One click or by
+   email", the Row shows a "by email" chip (title = the mailto) where a link-only row shows Open link,
+   and the mailto panel is deleted. attemptLabel branches on method so a mailto attempt reads
+   "email sent" rather than "sent · no response" (its response_code is always null); http reads
+   "one-click sent 200"
+   not: a second panel with its own checkboxes — the selection state and the button would have to be
+   shared across two panels for the same press, more code for the same result
+why: the smaller change; the candidates are already one busiest-first list

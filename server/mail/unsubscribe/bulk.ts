@@ -8,13 +8,17 @@ import { mailboxConnection } from "@server/mail/mailbox";
 import { createImapProvider } from "@server/mail/providers/imap";
 import type { PolicyRow } from "@server/mail/query/policies";
 import { loadPolicyIndex, upsertPolicy } from "@server/mail/query/policies";
+import { sendMail } from "@server/mail/send/smtp";
 import type { SenderArchiveJournalResult } from "@server/mail/shadow/run";
 import { createDatabaseSenderArchivePort, journalSenderArchives } from "@server/mail/shadow/run";
 import { parseMailboxFlavor } from "@server/mail/types";
 import type { UnsubscribeAttemptRecord } from "@server/mail/unsubscribe/attempts";
 import { recordUnsubscribeAttempt } from "@server/mail/unsubscribe/attempts";
+import type { MailtoSource, SendLike } from "@server/mail/unsubscribe/mailto";
+import { loadMailtoSources, pickMailtoTarget, unsubscribeMailtoSender } from "@server/mail/unsubscribe/mailto";
+import type { OneClickOutcome } from "@server/mail/unsubscribe/one-click";
 import { performOneClick } from "@server/mail/unsubscribe/one-click";
-import type { SenderArchiveSummary } from "@server/mail/unsubscribe/outcome";
+import type { OneClickSource, SenderArchiveSummary } from "@server/mail/unsubscribe/outcome";
 import { dedupeAddresses, pickOneClickTarget, summarizeSenderArchive } from "@server/mail/unsubscribe/outcome";
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
@@ -57,12 +61,10 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Step (a): the newest message from this sender that offers the one-click route, POSTed once. Skipped,
-// and recorded as such, when no message does — a mailto-only sender waits for phase 7's sender. Every
-// message with the header is read, not the newest few: the page's one_click is MAX over all of the
+// Every message with the header is read, not the newest few: the page's one_click is MAX over all of the
 // sender's mail, and the button must find the same target the page promised.
-async function attemptOneClick(from_address: string, now: Date): Promise<UnsubscribeAttemptRecord> {
-  const rows = await db
+async function loadOneClickSources(from_address: string): Promise<OneClickSource[]> {
+  return db
     .select({
       mailbox_id: message.mailbox_id,
       list_unsubscribe: message.list_unsubscribe,
@@ -78,28 +80,62 @@ async function attemptOneClick(from_address: string, now: Date): Promise<Unsubsc
       ),
     )
     .orderBy(desc(message.internal_date));
+}
 
-  const target = pickOneClickTarget(rows);
-  if (target === null) {
-    return recordUnsubscribeAttempt({
+// The seams the tests replace so a run reaches neither the database, the network nor SMTP.
+export type UnsubscribeRequestDependencies = {
+  loadOneClickSources: (from_address: string) => Promise<OneClickSource[]>;
+  loadMailtoSources: (from_address: string) => Promise<MailtoSource[]>;
+  performOneClick: (input: { url: string }) => Promise<OneClickOutcome>;
+  send: SendLike;
+  record: typeof recordUnsubscribeAttempt;
+};
+
+const live_request_dependencies: UnsubscribeRequestDependencies = {
+  loadOneClickSources,
+  loadMailtoSources,
+  performOneClick,
+  send: sendMail,
+  record: recordUnsubscribeAttempt,
+};
+
+// Step (a): one request per sender, http before mailto. The newest message offering the one-click route
+// is POSTed; failing that, the newest mailto target is emailed from felix@tellmann.co.za; failing both,
+// the attempt is recorded as skipped so the chip says why nothing went out.
+export async function attemptUnsubscribe(
+  from_address: string,
+  now: Date,
+  dependencies: UnsubscribeRequestDependencies = live_request_dependencies,
+): Promise<UnsubscribeAttemptRecord> {
+  const one_click = pickOneClickTarget(await dependencies.loadOneClickSources(from_address));
+  if (one_click !== null) {
+    const outcome = await dependencies.performOneClick({ url: one_click.url });
+    return dependencies.record({
       sender_address: from_address,
-      mailbox_id: null,
+      mailbox_id: one_click.mailbox_id,
       method: "http",
-      status: "skipped",
-      response_code: null,
-      error: "no message from this sender carries List-Unsubscribe-Post with an http List-Unsubscribe target",
+      status: outcome.status,
+      response_code: outcome.response_code,
+      error: outcome.error,
       attempted_at: now,
     });
   }
 
-  const outcome = await performOneClick({ url: target.url });
-  return recordUnsubscribeAttempt({
+  const mailto_sources = await dependencies.loadMailtoSources(from_address);
+  if (pickMailtoTarget(mailto_sources) !== null) {
+    return unsubscribeMailtoSender(
+      { from_address, now },
+      { send: dependencies.send, loadSources: async () => mailto_sources, record: dependencies.record },
+    );
+  }
+
+  return dependencies.record({
     sender_address: from_address,
-    mailbox_id: target.mailbox_id,
+    mailbox_id: null,
     method: "http",
-    status: outcome.status,
-    response_code: outcome.response_code,
-    error: outcome.error,
+    status: "skipped",
+    response_code: null,
+    error: "no message from this sender carries List-Unsubscribe-Post with an http target, and none carries a mailto target",
     attempted_at: now,
   });
 }
@@ -204,7 +240,10 @@ async function executePending(input: {
   return { statuses, mailbox_errors };
 }
 
-export async function unsubscribeBulk(input: UnsubscribeBulkInput): Promise<UnsubscribeBulkResult> {
+export async function unsubscribeBulk(
+  input: UnsubscribeBulkInput,
+  dependencies: UnsubscribeRequestDependencies = live_request_dependencies,
+): Promise<UnsubscribeBulkResult> {
   const now = new Date();
   const addresses = dedupeAddresses(input.from_addresses);
   const policy_index = await loadPolicyIndex();
@@ -219,7 +258,7 @@ export async function unsubscribeBulk(input: UnsubscribeBulkInput): Promise<Unsu
     errors.set(from_address, sender_errors);
 
     try {
-      attempts.set(from_address, await attemptOneClick(from_address, now));
+      attempts.set(from_address, await attemptUnsubscribe(from_address, now, dependencies));
     } catch (error) {
       attempts.set(from_address, null);
       sender_errors.push(`unsubscribe request: ${describeError(error)}`);
