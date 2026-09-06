@@ -69,7 +69,7 @@ function dependencies(
 const token = (action: "file" | "unsubscribe", expiry = expires_at) => signDigestLink({ action, address, expires_at: expiry }, SECRET);
 
 describe("applyDigestLink", () => {
-  test("expired renders a plain page at 200, bad tokens 400, no secret is invalid", async () => {
+  test("expired renders a plain page at 200, bad tokens 400, no secret is 503 misconfigured", async () => {
     const expired = await applyDigestLink({ token: token("file", "2026-09-01T00:00:00.000Z"), now }, dependencies({}));
     expect(expired).toEqual({ kind: "expired" });
     expect(digestLinkStatus(expired)).toBe(200);
@@ -80,7 +80,11 @@ describe("applyDigestLink", () => {
     expect(invalid).toEqual({ kind: "invalid" });
     expect(digestLinkStatus(invalid)).toBe(400);
 
-    expect(await applyDigestLink({ token: token("file"), now }, dependencies({ secret: undefined }))).toEqual({ kind: "invalid" });
+    const misconfigured = await applyDigestLink({ token: token("file"), now }, dependencies({ secret: undefined }));
+    expect(misconfigured).toEqual({ kind: "misconfigured" });
+    expect(digestLinkStatus(misconfigured)).toBe(503);
+    expect(renderDigestLinkPage(misconfigured)).toContain("SCRIPT_SECRET is missing");
+    expect(renderDigestLinkPage(misconfigured)).not.toContain("not valid");
   });
 
   test("file creates a watch-only archive rule, marked read, with the digest source", async () => {
@@ -106,10 +110,45 @@ describe("applyDigestLink", () => {
       }),
     );
 
-    expect(result).toEqual({ kind: "rule_exists", address, rule: { scope: "address", value: address, action: "file", autonomy: "auto" } });
+    expect(result).toEqual({
+      kind: "rule_exists",
+      address,
+      rule: { scope: "address", value: address, action: "file", autonomy: "auto", suspended: false },
+    });
     expect(upserts).toHaveLength(0);
     expect(renderDigestLinkPage(result)).toContain("already has a rule");
-    expect(renderDigestLinkPage(result)).toContain("switched on");
+    expect(renderDigestLinkPage(result)).toContain("It is a file rule, switched on.");
+    expect(renderDigestLinkPage(result)).not.toContain("but suspended");
+  });
+
+  test("an existing rule's page says suspended when it is, watch-only when it is shadow, with the right article", async () => {
+    const cases: Array<{ rule: PolicyRow; phrase: string }> = [
+      {
+        rule: policy({ action: "archive", autonomy: "auto", suspended_at: now }),
+        phrase: "It is an archive rule, switched on but suspended.",
+      },
+      { rule: policy({ action: "archive", autonomy: "shadow" }), phrase: "It is an archive rule, watch-only." },
+      { rule: policy({ action: "file", autonomy: "shadow", suspended_at: now }), phrase: "It is a file rule, watch-only." },
+    ];
+    for (const { rule, phrase } of cases) {
+      const upserts: UpsertPolicyInput[] = [];
+      const result = await applyDigestLink(
+        { token: token("file"), now },
+        dependencies({
+          upserts,
+          loadPolicyIndex: async () => ({
+            by_address: new Map([[address, rule]]),
+            by_domain: new Map(),
+            never_touch: [],
+            suppressed: new Set(),
+          }),
+        }),
+      );
+
+      expect(result.kind).toBe("rule_exists");
+      expect(upserts).toHaveLength(0);
+      expect(renderDigestLinkPage(result)).toContain(phrase);
+    }
   });
 
   test("file refuses under a live domain rule, which the address rule would outrank", async () => {
@@ -126,10 +165,11 @@ describe("applyDigestLink", () => {
     expect(result).toEqual({
       kind: "rule_exists",
       address,
-      rule: { scope: "domain", value: "sender.example", action: "archive", autonomy: "auto" },
+      rule: { scope: "domain", value: "sender.example", action: "archive", autonomy: "auto", suspended: false },
     });
     expect(upserts).toHaveLength(0);
     expect(renderDigestLinkPage(result)).toContain(`sender.example already has a rule that covers ${address}`);
+    expect(renderDigestLinkPage(result)).toContain("It is an archive rule, switched on.");
   });
 
   test("file goes ahead under a watch-only or suspended domain rule", async () => {
@@ -204,6 +244,18 @@ describe("applyDigestLink", () => {
       await applyDigestLink({ token: token("file"), now }, dependencies({})),
       await applyDigestLink({ token: token("unsubscribe"), now }, dependencies({})),
       await applyDigestLink({ token: "x", now }, dependencies({})),
+      await applyDigestLink({ token: token("file"), now }, dependencies({ secret: undefined })),
+      await applyDigestLink(
+        { token: token("file"), now },
+        dependencies({
+          loadPolicyIndex: async () => ({
+            by_address: new Map([[address, policy({ suspended_at: now })]]),
+            by_domain: new Map(),
+            never_touch: [],
+            suppressed: new Set(),
+          }),
+        }),
+      ),
     ].map(renderDigestLinkPage);
 
     for (const page of pages) {

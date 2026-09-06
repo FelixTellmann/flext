@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { DigestHeaderRow, DigestSenderRow } from "@server/mail/digest/query";
-import { assembleDigestSenders } from "@server/mail/digest/query";
+import { assembleDigestSenders, toDatetimeLiteral } from "@server/mail/digest/query";
 import type { PolicyIndex, PolicyRow } from "@server/mail/query/policies";
 
 const policy = (overrides: Partial<PolicyRow>): PolicyRow => ({
@@ -85,5 +85,13 @@ describe("assembleDigestSenders", () => {
     const by_address = new Map([["news@sender.example", policy({})]]);
     const [via_address] = assembleDigestSenders({ rows, headers, policy_index: { ...empty_index, by_address, by_domain } });
     expect(via_address.rule).toEqual({ action: "archive", autonomy: "shadow", suspended: false });
+  });
+});
+
+describe("toDatetimeLiteral", () => {
+  test("formats in UTC to the millisecond, whatever offset the Date was built from", () => {
+    expect(toDatetimeLiteral(new Date("2026-09-06T01:00:00.000+02:00"))).toBe("2026-09-05 23:00:00.000");
+    expect(toDatetimeLiteral(new Date("2026-09-06T12:34:56.789Z"))).toBe("2026-09-06 12:34:56.789");
+    expect(toDatetimeLiteral(new Date("2026-12-31T23:59:59.999-05:00"))).toBe("2027-01-01 04:59:59.999");
   });
 });

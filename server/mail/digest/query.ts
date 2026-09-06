@@ -76,7 +76,7 @@ export function assembleDigestSenders(input: {
 // Drizzle formats a Date bound to a datetime COLUMN as UTC; a Date bound inside a raw sql template goes
 // through mysql2's own serializer, which uses the process time zone. Formatting here keeps the cutoff in
 // the UTC the column holds whatever the container's TZ says.
-function toDatetimeLiteral(date: Date): string {
+export function toDatetimeLiteral(date: Date): string {
   return date.toISOString().slice(0, 23).replace("T", " ");
 }
 

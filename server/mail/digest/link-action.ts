@@ -25,8 +25,13 @@ export const DIGEST_LINK_WAIT_MS = 6_000;
 export type DigestLinkResult =
   | { kind: "expired" }
   | { kind: "invalid" }
+  | { kind: "misconfigured" }
   | { kind: "filed"; address: string }
-  | { kind: "rule_exists"; address: string; rule: { scope: "address" | "domain"; value: string; action: string; autonomy: string } }
+  | {
+      kind: "rule_exists";
+      address: string;
+      rule: { scope: "address" | "domain"; value: string; action: string; autonomy: string; suspended: boolean };
+    }
   | { kind: "unsubscribed"; address: string; result: UnsubscribeBulkResult }
   | { kind: "unsubscribing"; address: string }
   | { kind: "failed"; address: string; error: string };
@@ -67,7 +72,13 @@ async function fileSender(address: string, dependencies: DigestLinkDependencies)
     return {
       kind: "rule_exists",
       address,
-      rule: { scope: "address", value: existing.value, action: existing.action, autonomy: existing.autonomy },
+      rule: {
+        scope: "address",
+        value: existing.value,
+        action: existing.action,
+        autonomy: existing.autonomy,
+        suspended: existing.suspended_at !== null,
+      },
     };
   }
 
@@ -77,7 +88,7 @@ async function fileSender(address: string, dependencies: DigestLinkDependencies)
     return {
       kind: "rule_exists",
       address,
-      rule: { scope: "domain", value: domain_rule.value, action: domain_rule.action, autonomy: "auto" },
+      rule: { scope: "domain", value: domain_rule.value, action: domain_rule.action, autonomy: "auto", suspended: false },
     };
   }
 
@@ -113,7 +124,7 @@ export async function applyDigestLink(
   dependencies: DigestLinkDependencies = liveDependencies(),
 ): Promise<DigestLinkResult> {
   if (dependencies.secret === undefined) {
-    return { kind: "invalid" };
+    return { kind: "misconfigured" };
   }
 
   const verification = verifyDigestLink(input.token, { secret: dependencies.secret, now: input.now });
@@ -141,6 +152,17 @@ function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
+function withArticle(noun: string): string {
+  return `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
+}
+
+function describeAutonomy(rule: { autonomy: string; suspended: boolean }): string {
+  if (rule.autonomy !== "auto") {
+    return "watch-only";
+  }
+  return rule.suspended ? "switched on but suspended" : "switched on";
+}
+
 const ADMIN_SENDERS_URL = `${SITE_ORIGIN}/admin/senders`;
 const ADMIN_UNSUBSCRIBE_URL = `${SITE_ORIGIN}/admin/unsubscribe`;
 
@@ -150,6 +172,11 @@ export function describeDigestLinkResult(result: DigestLinkResult): { title: str
       return { title: "This link has expired", detail: `Open ${ADMIN_UNSUBSCRIBE_URL} to unsubscribe or file from the full list.` };
     case "invalid":
       return { title: "This link is not valid", detail: `Open ${ADMIN_UNSUBSCRIBE_URL} to unsubscribe or file from the full list.` };
+    case "misconfigured":
+      return {
+        title: "Digest links are not configured on this deployment",
+        detail: `SCRIPT_SECRET is missing, so no link can be checked. Open ${ADMIN_UNSUBSCRIBE_URL} to unsubscribe or file from the full list.`,
+      };
     case "filed":
       return {
         title: `Rule created for ${result.address}, watch-only`,
@@ -161,7 +188,7 @@ export function describeDigestLinkResult(result: DigestLinkResult): { title: str
           result.rule.scope === "address"
             ? `${result.address} already has a rule`
             : `${result.rule.value} already has a rule that covers ${result.address}`,
-        detail: `It is a ${result.rule.action} rule, ${result.rule.autonomy === "auto" ? "switched on" : "watch-only"}. Nothing was changed; manage it at ${ADMIN_SENDERS_URL}.`,
+        detail: `It is ${withArticle(`${result.rule.action} rule`)}, ${describeAutonomy(result.rule)}. Nothing was changed; manage it at ${ADMIN_SENDERS_URL}.`,
       };
     case "unsubscribing":
       return {
@@ -196,6 +223,10 @@ export function digestLinkStatus(result: DigestLinkResult): number {
   // An expired link is the expected end of a link's life, not an error (register: phase 7 digest links).
   if (result.kind === "invalid") {
     return 400;
+  }
+  // The same 503 requireScriptSecret answers with: the deployment is what is wrong, not the link.
+  if (result.kind === "misconfigured") {
+    return 503;
   }
   if (result.kind === "failed") {
     return 500;

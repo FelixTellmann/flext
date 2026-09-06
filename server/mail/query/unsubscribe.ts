@@ -1,5 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, message, senderPolicy } from "@server/db/schema";
+import { isInInboxSql } from "@server/mail/query/signal-sql";
 import type { UnsubscribeAttemptRecord } from "@server/mail/unsubscribe/attempts";
 import { loadLatestUnsubscribeAttempts } from "@server/mail/unsubscribe/attempts";
 import type { UnsubscribeTarget } from "@server/mail/unsubscribe/parse";
@@ -34,8 +35,10 @@ export type UnsubscribeCandidate = {
 // Ordered by how much still reaches an inbox rather than by lifetime volume: a newsletter already caught
 // by a rule costs nothing to receive, and one arriving weekly into the inbox costs attention every week.
 export async function listUnsubscribeCandidates(input: { limit: number }): Promise<UnsubscribeCandidate[]> {
+  // The digest's spelling (digest/query.ts), so the two inbox counts cannot disagree: one grouped query
+  // spans every mailbox, and the two flavors spell "in the inbox" differently (signal-sql.ts).
   const in_inbox =
-    sql<number>`SUM(${message.folder} = 'INBOX' OR JSON_CONTAINS(COALESCE(${message.labels}, '[]'), JSON_QUOTE('\\\\Inbox')))`.as(
+    sql<number>`SUM(CASE WHEN ${mailbox.flavor} = 'gmail' THEN ${isInInboxSql("gmail")} ELSE ${isInInboxSql("generic")} END)`.as(
       "in_inbox",
     );
 

@@ -41,10 +41,10 @@ describe("parseMailto", () => {
     });
   });
 
-  test("recipients from the path and a to field are all sent", () => {
-    expect(parseMailto("mailto:one@list.example,two@list.example?to=three@list.example")?.to).toBe(
-      "one@list.example, two@list.example, three@list.example",
-    );
+  test("only the first recipient is written to, the path before any to field", () => {
+    expect(parseMailto("mailto:one@list.example,two@list.example?to=three@list.example")?.to).toBe("one@list.example");
+    expect(parseMailto("mailto:?to=one@list.example,two@list.example")?.to).toBe("one@list.example");
+    expect(parseMailto("mailto:one@list.example?to=not-an-address")?.to).toBe("one@list.example");
   });
 
   test("not a mailto, or no recipient, or a recipient that is not an address", () => {

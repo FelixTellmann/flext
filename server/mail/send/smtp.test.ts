@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import type { MailboxConnection } from "@server/mail/mailbox";
+import type Mail from "nodemailer/lib/mailer";
+import type { SendMailDependencies, TransportLike } from "./smtp";
 import { buildEnvelope, buildTransportOptions, SENDER_ADDRESS, sendMail } from "./smtp";
 
 const pinned_connection: MailboxConnection = {
@@ -23,6 +25,14 @@ test("transport options use implicit TLS on 465 regardless of the stored IMAP po
   expect(options.port).toBe(465);
   expect(options.secure).toBe(true);
   expect(options.auth).toEqual({ user: "felix@tellmann.co.za", pass: "secret" });
+});
+
+test("every SMTP timeout is under Bun's 10 s idle-socket close, because the digest awaits the send", () => {
+  const options = buildTransportOptions(pinned_connection);
+
+  expect(options.connectionTimeout).toBe(3_000);
+  expect(options.greetingTimeout).toBe(3_000);
+  expect(options.socketTimeout).toBe(5_000);
 });
 
 test("pinned policy carries the SPKI check, servername and the dual-stack workaround", () => {
@@ -54,8 +64,65 @@ test("envelope is always from the sender address and passes headers through", ()
   expect(envelope.headers).toBe(headers);
 });
 
-test("sendMail surfaces a loader failure without touching the network", async () => {
-  const loadSender = () => Promise.reject(new Error("no sender row"));
+function fakeTransport(overrides: Partial<TransportLike> = {}): TransportLike & { sent: Mail.Options[]; closed: number } {
+  const transport = {
+    sent: [] as Mail.Options[],
+    closed: 0,
+    sendMail: async (options: Mail.Options) => {
+      transport.sent.push(options);
+      return { messageId: "<id@tellmann.co.za>", accepted: ["a@example.com", { name: "B", address: "b@example.com" }], rejected: [] };
+    },
+    close: () => {
+      transport.closed += 1;
+    },
+    ...overrides,
+  };
+  return transport;
+}
 
-  await expect(sendMail({ to: "a@example.com", subject: "s", text: "t" }, { loadSender })).rejects.toThrow("no sender row");
+test("sendMail surfaces a loader failure without touching the network", async () => {
+  const transport = fakeTransport();
+  const dependencies: SendMailDependencies = {
+    loadSender: () => Promise.reject(new Error("no sender row")),
+    createTransport: () => transport,
+  };
+
+  await expect(sendMail({ to: "a@example.com", subject: "s", text: "t" }, dependencies)).rejects.toThrow("no sender row");
+  expect(transport.sent).toHaveLength(0);
+});
+
+test("sendMail builds the transport from the sender row, sends the envelope, flattens addresses and closes", async () => {
+  const transport = fakeTransport();
+  const transport_options: Parameters<SendMailDependencies["createTransport"]>[0][] = [];
+  const dependencies: SendMailDependencies = {
+    loadSender: async () => pinned_connection,
+    createTransport: (options) => {
+      transport_options.push(options);
+      return transport;
+    },
+  };
+
+  const result = await sendMail({ to: "a@example.com, b@example.com", subject: "s", text: "t" }, dependencies);
+
+  expect(result).toEqual({ message_id: "<id@tellmann.co.za>", accepted: ["a@example.com", "b@example.com"], rejected: [] });
+  expect(transport_options).toHaveLength(1);
+  expect(transport_options[0].host).toBe("mail.tellmann.co.za");
+  expect(transport.sent).toEqual([
+    { from: SENDER_ADDRESS, to: "a@example.com, b@example.com", subject: "s", text: "t", html: undefined, headers: undefined },
+  ]);
+  expect(transport.closed).toBe(1);
+});
+
+test("sendMail wraps a transport failure with the host and recipient, and still closes", async () => {
+  const transport = fakeTransport({
+    sendMail: async () => {
+      throw new Error("421 try later");
+    },
+  });
+  const dependencies: SendMailDependencies = { loadSender: async () => pinned_connection, createTransport: () => transport };
+
+  await expect(sendMail({ to: "a@example.com", subject: "s", text: "t" }, dependencies)).rejects.toThrow(
+    "smtp mail.tellmann.co.za:465 failed to send to a@example.com: 421 try later",
+  );
+  expect(transport.closed).toBe(1);
 });

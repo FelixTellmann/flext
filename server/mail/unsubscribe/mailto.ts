@@ -37,9 +37,11 @@ function decodeComponent(text: string): string {
   }
 }
 
-// RFC 6068: `mailto:` addr-spec list, then an optional `?` query of header fields. A `to` field in the
-// query appends recipients; `subject` and `body` are the only other fields sent, because an arbitrary
-// header from a sender-controlled URL is not something this server should put on its own mail.
+// RFC 6068: `mailto:` addr-spec list, then an optional `?` query of header fields. Only the FIRST
+// recipient is written to, path before any `to` field: the URL is sender-authored, and a list of N
+// addresses would have the operator's account relay N copies of the same message. `subject` and `body`
+// are the only other fields sent, because an arbitrary header from a sender-controlled URL is not
+// something this server should put on its own mail.
 export function parseMailto(raw: string): MailtoRequest | null {
   const match = /^mailto:([^?]*)(?:\?(.*))?$/is.exec(raw.trim());
   if (match === null) {
@@ -76,12 +78,13 @@ export function parseMailto(raw: string): MailtoRequest | null {
     }
   }
 
-  if (recipients.length === 0 || recipients.some((recipient) => !recipient.includes("@"))) {
+  const recipient = recipients[0];
+  if (recipient === undefined || !recipient.includes("@")) {
     return null;
   }
 
   return {
-    to: recipients.join(", "),
+    to: recipient,
     subject: subject === null || subject.trim().length === 0 ? DEFAULT_UNSUBSCRIBE_TEXT : subject,
     body: body === null || body.trim().length === 0 ? DEFAULT_UNSUBSCRIBE_TEXT : body,
   };
@@ -121,6 +124,9 @@ export function pickMailtoTarget(rows: MailtoSource[]): MailtoTarget | null {
   return null;
 }
 
+// Every message with the header, not the newest few: /admin/unsubscribe derives the mailto route from
+// MAX over all of the sender's mail, and the button must find the target the page promised (bulk.ts
+// reads the http sources the same way).
 export async function loadMailtoSources(from_address: string): Promise<MailtoSource[]> {
   return db
     .select({ mailbox_id: message.mailbox_id, list_unsubscribe: message.list_unsubscribe })
@@ -132,8 +138,7 @@ export async function loadMailtoSources(from_address: string): Promise<MailtoSou
         isNull(message.disappeared_at),
       ),
     )
-    .orderBy(desc(message.internal_date))
-    .limit(10);
+    .orderBy(desc(message.internal_date));
 }
 
 export type MailtoDependencies = {

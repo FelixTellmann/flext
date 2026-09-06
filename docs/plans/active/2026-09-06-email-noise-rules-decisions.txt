@@ -940,3 +940,32 @@ A: folded in: the tickable filter is one_click || target.http === null, the pane
    not: a second panel with its own checkboxes — the selection state and the button would have to be
    shared across two panels for the same press, more code for the same result
 why: the smaller change; the candidates are already one busiest-first list
+
+[2026-09-07 00:20] phase 7 fix — mailto recipient fan-out
+Q: parseMailto joined the path addr-spec list plus every to= field into one To; cap it?
+A: only the first recipient is written to, path before any to= field (RFC 6068 order); a later
+   recipient that is not an address no longer voids the URL
+   not: keep the list — a sender-authored header would have the operator's account relay N copies
+why: the URL is untrusted input and one message is all a list manager needs
+
+[2026-09-07 00:22] phase 7 fix — mailto sources read all of the sender's mail
+Q: loadMailtoSources read the 10 newest headers while the page's mailto route is MAX over all of the
+   sender's mail, so a sender whose only mailto sits on an older message was tickable but skipped?
+A: the limit is dropped, mirroring bulk.ts's loadOneClickSources for http; bulk.ts's loadSources seam
+   is untouched
+   not: require a mailto in SQL — the header is parsed in TypeScript and there is no SQL parse to
+   agree with
+why: the button must find the target the page promised
+
+[2026-09-07 00:24] phase 7 fix — unsubscribe.ts inbox count
+Q: query/unsubscribe.ts hand-rolled folder='INBOX' OR JSON_CONTAINS(labels, '\Inbox'); share the
+   digest's spelling?
+A: the digest's CASE WHEN mailbox.flavor = 'gmail' THEN isInInboxSql("gmail") ELSE
+   isInInboxSql("generic") END is duplicated inside the SUM
+   not: hoist the CASE into signal-sql.ts — outside this fix's files; hoist on a third caller
+why: one grouped query spans both flavors, so the per-flavor helper has to be composed per row
+
+[2026-09-07 00:25] phase 7 fix — toDatetimeLiteral test
+Q: the review asked for a test only, but the function was module-private?
+A: exported with no behaviour change, tested from digest/query.test.ts
+why: a fixture test cannot reach a private function, and a wrapper would test the wrapper
