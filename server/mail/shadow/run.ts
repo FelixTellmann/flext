@@ -1,5 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { action, attentionSession, mailbox, message, sender, threadState } from "@server/db/schema";
+import { PENDING_STATUS } from "@server/mail/actions/executor";
 import { FILE_KIND } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { Decision, DecisionInput, SenderPolicyInput } from "@server/mail/classify/rules";
@@ -12,7 +13,7 @@ import { loadPolicyIndex } from "@server/mail/query/policies";
 import { isInInboxSql, isSentByMeSql, resolveThreadState, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList } from "@server/mail/types";
-import { and, asc, eq, gt, isNull, lte, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lte, notExists, sql } from "drizzle-orm";
 
 // What a pass reports about one message, before anything is journaled. Deliberately narrower than the row
 // the pass actually holds: a verification script needs to explain a decision to a human, not to re-derive
@@ -82,6 +83,9 @@ export type ShadowActionRow = {
   updatedAt: Date;
   target_path: string | null;
 };
+
+// The unsubscribe button's rows: the same shape, but the ones it executes at once are born `pending`.
+type JournaledActionRow = Omit<ShadowActionRow, "status"> & { status: typeof SHADOW_STATUS | typeof PENDING_STATUS };
 
 async function loadThreadFacts(mailbox_id: string, flavor: MailboxFlavor, sent_folders: string[]): Promise<Map<string, ThreadFacts>> {
   const group_key = threadGroupKeySql();
@@ -213,9 +217,20 @@ export function messageBatchQuery(input: MessageBatchQueryInput) {
     );
   }
 
+  return shadowMessageSelect()
+    .where(and(...conditions))
+    .orderBy(asc(message.id))
+    .limit(input.batch_size);
+}
+
+// The one spelling of "a message as decide() needs to see it": every column buildDecisionInput reads plus
+// the sender aggregates and thread state it joins. Shared by the pass's batch walk and the unsubscribe
+// button's per-sender read so the two cannot hand decide() different shapes.
+function shadowMessageSelect() {
   return db
     .select({
       id: message.id,
+      mailbox_id: message.mailbox_id,
       thread_key: message.thread_key,
       from_address: message.from_address,
       from_domain: message.from_domain,
@@ -238,10 +253,7 @@ export function messageBatchQuery(input: MessageBatchQueryInput) {
     })
     .from(message)
     .leftJoin(sender, eq(sender.address, message.from_address))
-    .leftJoin(threadState, and(eq(threadState.mailbox_id, message.mailbox_id), eq(threadState.thread_key, threadGroupKeySql())))
-    .where(and(...conditions))
-    .orderBy(asc(message.id))
-    .limit(input.batch_size);
+    .leftJoin(threadState, and(eq(threadState.mailbox_id, message.mailbox_id), eq(threadState.thread_key, threadGroupKeySql())));
 }
 
 async function fetchMessageBatch(input: MessageBatchQueryInput): Promise<ShadowMessageRow[]> {
@@ -362,8 +374,9 @@ function filingMappingFor(
   return null;
 }
 
-// status takes no parameter: every row this module can build is hardcoded to "shadow", so there is no
-// code path here that could produce "pending" or "applied" — Phase 4 owns writing those.
+// status takes no parameter: every row the PASSES build is "shadow". The one caller that writes
+// "pending" (journalSenderArchives, the unsubscribe button) overrides it afterwards and is the
+// operator's explicit approval; nothing here can produce "applied".
 export function buildShadowActionRow(input: {
   message_id: string;
   mailbox_id: string;
@@ -397,7 +410,7 @@ export function buildShadowActionRow(input: {
 // requires `applied`: the mutation would stand on the server with no way left to reverse it. A row that
 // is genuinely new is unaffected — buildShadowActionRow supplies `status` in the inserted values, so the
 // INSERT sets it and the column default is never what this depends on.
-async function writeShadowBatch(rows: ShadowActionRow[]): Promise<void> {
+async function writeShadowBatch(rows: JournaledActionRow[]): Promise<void> {
   if (rows.length === 0) {
     return;
   }
@@ -612,4 +625,159 @@ export async function runDeclinedSweepPass(
       now: input.now,
     },
   });
+}
+
+// ─── The unsubscribe button's archive-now ────────────────────────────────────
+//
+// docs/decisions/2026-09-06-unsubscribe-button-and-digest-links.md: pressing the button on a checked list
+// is the operator's approval, so the sender's inbox mail is journaled `pending` and executed at once
+// rather than proposed for a shadow cycle. The decision still goes through decide(): the guards, thread
+// state, suppression and a suspended rule all refuse exactly as they would on the scheduled pass, and a
+// refusal here is reported rather than overridden.
+
+// One constant rather than an id per click, so a second press on the same sender meets its own earlier
+// rows on Action_messageId_kind_runId_key and writeShadowBatch's SET leaves their status alone — an
+// archive already applied is never re-issued, and a row still waiting is not duplicated.
+export const UNSUBSCRIBE_BULK_RUN_ID = "unsubscribe-bulk";
+
+export type SenderArchiveJournalInput = {
+  // The policy must already exist at `auto` when this runs: the index is loaded fresh here, and a sender
+  // whose policy is missing or says anything but archive refuses every message.
+  senders: { from_address: string; sender_policy_id: string }[];
+  // Rows per ENABLED mailbox born `pending` for the caller to execute now. Every row past the cap, and
+  // every row in a disabled mailbox, is `shadow` with the policy id set — which is exactly what the tick's
+  // promoteAutoPolicies reads for a policy at auto, so the surplus is neither stranded nor executed by
+  // a timer the operator did not press.
+  pending_cap: number;
+  now: Date;
+};
+
+export type PendingSenderAction = { action_id: string; from_address: string };
+
+export type SenderArchiveCounts = { pending: number; waiting: number; refused: number };
+
+export type SenderArchiveJournalResult = {
+  by_mailbox: { mailbox_id: string; pending: PendingSenderAction[] }[];
+  // Keyed by the lower-cased address.
+  by_sender: Map<string, SenderArchiveCounts>;
+};
+
+function countsFor(by_sender: Map<string, SenderArchiveCounts>, key: string): SenderArchiveCounts {
+  const existing = by_sender.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const created = { pending: 0, waiting: 0, refused: 0 };
+  by_sender.set(key, created);
+  return created;
+}
+
+export async function journalSenderArchives(input: SenderArchiveJournalInput): Promise<SenderArchiveJournalResult> {
+  const by_sender = new Map<string, SenderArchiveCounts>();
+  const by_mailbox: SenderArchiveJournalResult["by_mailbox"] = [];
+  const policy_by_address = new Map(input.senders.map((entry) => [entry.from_address.toLowerCase(), entry.sender_policy_id]));
+  for (const key of policy_by_address.keys()) {
+    countsFor(by_sender, key);
+  }
+  if (policy_by_address.size === 0) {
+    return { by_mailbox, by_sender };
+  }
+
+  const policy_index = await loadPolicyIndex();
+  const mailbox_rows = await db.select().from(mailbox).orderBy(asc(mailbox.label));
+
+  for (const mailbox_row of mailbox_rows) {
+    const flavor = parseMailboxFlavor(mailbox_row.flavor);
+    const messages = await shadowMessageSelect()
+      .where(
+        and(
+          eq(message.mailbox_id, mailbox_row.id),
+          isNull(message.disappeared_at),
+          isInInboxSql(flavor),
+          inArray(sql`LOWER(${message.from_address})`, [...policy_by_address.keys()]),
+        ),
+      )
+      .orderBy(asc(message.internal_date));
+    if (messages.length === 0) {
+      continue;
+    }
+
+    // Once per mailbox for the whole batch, never per sender: it is a window scan over every message
+    // the mailbox holds.
+    const thread_facts = await loadThreadFacts(mailbox_row.id, flavor, parseStringList(mailbox_row.sent_folders));
+    const rows: JournaledActionRow[] = [];
+    const sender_by_message = new Map<string, string>();
+    let pending_left = mailbox_row.enabled ? input.pending_cap : 0;
+
+    for (const row of messages) {
+      const key = (row.from_address ?? "").toLowerCase();
+      const sender_policy_id = policy_by_address.get(key);
+      if (sender_policy_id === undefined) {
+        continue;
+      }
+      const decision = decide(
+        buildDecisionInput(row, { policy_index, thread_facts, now: input.now, settled_sweep: null, declined_sweep: null, exposures: null }),
+      );
+      if (decision.action !== "archive" || decision.policy_id !== sender_policy_id) {
+        countsFor(by_sender, key).refused += 1;
+        continue;
+      }
+      const status = pending_left > 0 ? PENDING_STATUS : SHADOW_STATUS;
+      if (status === PENDING_STATUS) {
+        pending_left -= 1;
+      }
+      rows.push({
+        ...buildShadowActionRow({
+          message_id: row.id,
+          mailbox_id: mailbox_row.id,
+          decision,
+          mapping: null,
+          run_id: UNSUBSCRIBE_BULK_RUN_ID,
+          now: input.now,
+        }),
+        status,
+      });
+      sender_by_message.set(row.id, key);
+    }
+    if (rows.length === 0) {
+      continue;
+    }
+
+    await writeShadowBatch(rows);
+
+    // Read back rather than trusting what was written: the constant run id means a second press meets
+    // its own earlier rows, whose status the write left alone, so what is pending now is what the
+    // database says is pending — an applied row from last time is neither.
+    const written = await db
+      .select({ action_id: action.id, message_id: action.message_id, status: action.status })
+      .from(action)
+      .where(
+        and(
+          eq(action.run_id, UNSUBSCRIBE_BULK_RUN_ID),
+          eq(action.kind, "archive"),
+          inArray(
+            action.message_id,
+            rows.map((row) => row.message_id),
+          ),
+        ),
+      );
+    const pending: PendingSenderAction[] = [];
+    for (const entry of written) {
+      const key = sender_by_message.get(entry.message_id);
+      if (key === undefined) {
+        continue;
+      }
+      if (entry.status === PENDING_STATUS) {
+        countsFor(by_sender, key).pending += 1;
+        pending.push({ action_id: entry.action_id, from_address: key });
+        continue;
+      }
+      if (entry.status === SHADOW_STATUS) {
+        countsFor(by_sender, key).waiting += 1;
+      }
+    }
+    by_mailbox.push({ mailbox_id: mailbox_row.id, pending });
+  }
+
+  return { by_mailbox, by_sender };
 }

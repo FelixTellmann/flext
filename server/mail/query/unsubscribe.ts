@@ -1,7 +1,9 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, message, senderPolicy } from "@server/db/schema";
+import type { UnsubscribeAttemptRecord } from "@server/mail/unsubscribe/attempts";
+import { loadLatestUnsubscribeAttempts } from "@server/mail/unsubscribe/attempts";
 import type { UnsubscribeTarget } from "@server/mail/unsubscribe/parse";
-import { parseListUnsubscribe } from "@server/mail/unsubscribe/parse";
+import { isOneClick, parseListUnsubscribe } from "@server/mail/unsubscribe/parse";
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 // One sender the operator could stop hearing from entirely.
@@ -23,6 +25,10 @@ export type UnsubscribeCandidate = {
   // unsubscribing stops it, and doing both is usually right — but it is worth seeing which is which.
   has_policy: boolean;
   target: UnsubscribeTarget;
+  // RFC 8058: the sender accepts a server-side POST, so the bulk button can act on them without a
+  // browser. False for a link the operator has to open by hand.
+  one_click: boolean;
+  last_attempt: UnsubscribeAttemptRecord | null;
 };
 
 // Ordered by how much still reaches an inbox rather than by lifetime volume: a newsletter already caught
@@ -43,8 +49,10 @@ export async function listUnsubscribeCandidates(input: { limit: number }): Promi
       newest: sql<Date>`MAX(${message.internal_date})`.as("newest"),
       sample_subject: sql<string>`MAX(${message.subject})`.as("sample_subject"),
       // MAX rather than a per-message read: the header is stable per sender in practice, and one row per
-      // sender is the whole point of this screen.
+      // sender is the whole point of this screen. Same for the one-click header: its value is the RFC's
+      // fixed string on every message that carries it, so MAX is "any message carries it".
       raw_unsubscribe: sql<string>`MAX(${message.list_unsubscribe})`.as("raw_unsubscribe"),
+      raw_unsubscribe_post: sql<string | null>`MAX(${message.list_unsubscribe_post})`.as("raw_unsubscribe_post"),
       has_policy: sql<number>`MAX(${senderPolicy.id} IS NOT NULL)`.as("has_policy"),
     })
     .from(message)
@@ -59,19 +67,27 @@ export async function listUnsubscribeCandidates(input: { limit: number }): Promi
     .orderBy(desc(sql`in_inbox`), desc(sql`total`))
     .limit(input.limit);
 
+  const attempts = await loadLatestUnsubscribeAttempts([...new Set(rows.map((row) => row.from_address ?? ""))]);
+
   return (
     rows
-      .map((row) => ({
-        from_address: row.from_address ?? "",
-        from_domain: row.from_domain ?? "",
-        mailbox_label: row.mailbox_label,
-        total: Number(row.total),
-        in_inbox: Number(row.in_inbox),
-        newest: row.newest === null ? null : new Date(row.newest),
-        sample_subject: row.sample_subject,
-        has_policy: Number(row.has_policy) > 0,
-        target: parseListUnsubscribe(row.raw_unsubscribe),
-      }))
+      .map((row) => {
+        const target = parseListUnsubscribe(row.raw_unsubscribe);
+        return {
+          from_address: row.from_address ?? "",
+          from_domain: row.from_domain ?? "",
+          mailbox_label: row.mailbox_label,
+          total: Number(row.total),
+          in_inbox: Number(row.in_inbox),
+          newest: row.newest === null ? null : new Date(row.newest),
+          sample_subject: row.sample_subject,
+          has_policy: Number(row.has_policy) > 0,
+          target,
+          // Both halves: the RFC header and an http target for the POST to go to.
+          one_click: target.http !== null && isOneClick(row.raw_unsubscribe_post),
+          last_attempt: attempts.get((row.from_address ?? "").toLowerCase()) ?? null,
+        };
+      })
       // A sender whose header carries neither a link nor a mailto has nothing actionable on this screen,
       // and listing them would be a list of things the operator cannot do anything about.
       .filter((row) => row.target.http !== null || row.target.mailto !== null)

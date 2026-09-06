@@ -47,6 +47,7 @@ import { selectSentFolders, selectSyncFolders } from "@server/mail/sync/folders"
 import { runSyncForAllMailboxes } from "@server/mail/sync/run";
 import type { MailboxFlavor } from "@server/mail/types";
 import { parseMailboxFlavor, parseStringList, serializeStringList, sync_mode_schema } from "@server/mail/types";
+import { unsubscribeBulk } from "@server/mail/unsubscribe/bulk";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
@@ -490,12 +491,29 @@ export const mailProcedures = {
       }),
     ),
 
-  // Read-only, deliberately. Every rule in this system HIDES mail; unsubscribing is the only thing that
-  // stops it arriving, and it is the one action here the system does not take on the operator's behalf —
-  // a mailto: route would mean SENDING mail, which nothing under server/mail has ever done.
+  // Every rule in this system HIDES mail; unsubscribing is the only thing that stops it arriving. The
+  // read lists who offers a way off, and which of them accept RFC 8058's server-side POST.
   listUnsubscribeCandidates: authed
     .input(z.object({ limit: z.number().int().positive().max(200).default(60) }))
     .handler(async ({ input }) => listUnsubscribeCandidates({ limit: input.limit })),
+
+  // docs/decisions/2026-09-06-unsubscribe-button-and-digest-links.md. Per ticked sender: the one-click
+  // POST (recorded either way), an archive rule at auto marked read, and the sender's inbox mail archived
+  // now through the same executor Apply uses — narrowed to this press's own rows. Awaited in full: this is
+  // an operator click, not the cron, and the result table is what they pressed the button for. The cap
+  // is MAX_ACTION_BATCH_SIZE per mailbox; what is past it waits as shadow rows for the tick.
+  unsubscribeBulk: authed
+    .input(
+      z.object({
+        senders: z
+          .array(z.object({ from_address: z.string().min(1).max(320), mailbox_label: z.string().optional() }))
+          .min(1)
+          .max(50),
+      }),
+    )
+    .handler(async ({ input }) =>
+      unsubscribeBulk({ from_addresses: input.senders.map((sender) => sender.from_address), pending_cap: MAX_ACTION_BATCH_SIZE }),
+    ),
 
   demotePolicyAutonomy: authed
     .input(z.object({ sender_policy_id: z.string().min(1) }))
