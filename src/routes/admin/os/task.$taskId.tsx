@@ -54,7 +54,13 @@ export const Route = createFileRoute("/admin/os/task/$taskId")({
 });
 
 const field_class =
-  "rounded border border-gray-300 bg-bg px-2 py-1 text-gray-900 text-sm outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:bg-dark-bg dark:text-dark-headings";
+  "rounded border border-gray-300 bg-bg px-2 py-1 text-gray-900 text-sm outline-none focus-visible:ring-2 focus-visible:ring-info dark:border-dark-border dark:bg-dark-bg dark:text-dark-headings";
+
+type DraftField = keyof Draft;
+
+const copyField = <Field extends DraftField>(target: Partial<Draft>, source: Draft, field: Field): void => {
+  target[field] = source[field];
+};
 
 const Gloss: FC<{ children: ReactNode; danger?: boolean }> = ({ children, danger }) => (
   <span className={clsx("text-[13px]", danger === true ? "text-danger" : "text-gray-500 dark:text-dark-text")}>&mdash; {children}</span>
@@ -70,59 +76,98 @@ const FieldRow: FC<{ children: ReactNode; label: string }> = ({ children, label 
 
 function PersonalOsTaskPage() {
   const { area_name, areas, deferral_limit, deferrals, project_name, task } = Route.useLoaderData();
-  const { banner, busy_key, run } = useTaskAction();
+  const { banner, run } = useTaskAction();
 
   const [draft, setDraft] = useState<Draft>(toDraft(task));
+  // A field is dirty from the first keystroke until its own save has landed (or its blur found nothing to
+  // save). Nothing is disabled while a save runs — a blur-save must not kill the focus of the field being
+  // tabbed into — so the resync below has to know which fields the operator still owns.
+  const [dirty, setDirty] = useState<ReadonlySet<DraftField>>(() => new Set<DraftField>());
 
-  // Every save invalidates the loader, so this resynchronises with what the server actually stored. A
-  // save that failed comes back here too, which is what rolls the optimistic value back.
+  const markDirty = (...fields: DraftField[]) => setDirty((current) => new Set([...current, ...fields]));
+
+  const clearDirty = (...fields: DraftField[]) =>
+    setDirty((current) => {
+      const next = new Set(current);
+
+      for (const field of fields) {
+        next.delete(field);
+      }
+
+      return next;
+    });
+
+  // Every save invalidates the loader, so this resynchronises the fields nobody is holding with what the
+  // server actually stored. `dirty` is a dependency on purpose: the reload lands while the saved field is
+  // still dirty, and it is the flag clearing afterwards that lets the stored value through — which, after
+  // a failed save, is the rollback.
   useEffect(() => {
-    setDraft(toDraft(task));
-  }, [task]);
+    const fresh = toDraft(task);
 
-  const busy = busy_key !== null;
+    setDraft((current) => {
+      const kept: Partial<Draft> = {};
 
-  const save = (field: string, patch: UpdatePatch, optimistic: Partial<Draft>) => {
+      for (const field of dirty) {
+        copyField(kept, current, field);
+      }
+
+      return { ...fresh, ...kept };
+    });
+  }, [task, dirty]);
+
+  const save = async (label: string, patch: UpdatePatch, optimistic: Partial<Draft>) => {
+    const fields = Object.keys(optimistic) as DraftField[];
+
+    markDirty(...fields);
     setDraft((current) => ({ ...current, ...optimistic }));
 
-    return run(field, `Could not save the ${field}`, async () => {
+    await run(label, `Could not save the ${label}`, async () => {
       await orpc.personalTasks.updateTask({ id: task.id, ...patch });
     });
+
+    clearDirty(...fields);
+  };
+
+  const edit = (patch: Partial<Draft>) => {
+    markDirty(...(Object.keys(patch) as DraftField[]));
+    setDraft((current) => ({ ...current, ...patch }));
   };
 
   const saveTitle = () => {
     const title = draft.title.trim();
 
-    if (title === "") {
+    if (title === "" || title === task.title) {
       setDraft((current) => ({ ...current, title: task.title }));
+      clearDirty("title");
       return;
     }
 
-    if (title !== task.title) {
-      void save("title", { title }, { title });
-    }
+    void save("title", { title }, { title });
   };
 
   const saveNotes = () => {
     const notes = draft.notes.trim();
 
-    if (notes !== (task.notes ?? "")) {
-      void save("notes", { notes: notes === "" ? null : notes }, { notes });
+    if (notes === (task.notes ?? "")) {
+      clearDirty("notes");
+      return;
     }
+
+    void save("notes", { notes: notes === "" ? null : notes }, { notes });
   };
 
   const saveEstimate = () => {
     const raw = draft.estimate_minutes.trim();
     const estimate_minutes = raw === "" ? null : Number.parseInt(raw, 10);
+    const invalid = estimate_minutes !== null && (Number.isNaN(estimate_minutes) || estimate_minutes < 0);
 
-    if (estimate_minutes !== null && (Number.isNaN(estimate_minutes) || estimate_minutes < 0)) {
+    if (invalid || estimate_minutes === task.estimate_minutes) {
       setDraft((current) => ({ ...current, estimate_minutes: task.estimate_minutes === null ? "" : String(task.estimate_minutes) }));
+      clearDirty("estimate_minutes");
       return;
     }
 
-    if (estimate_minutes !== task.estimate_minutes) {
-      void save("estimate", { estimate_minutes }, { estimate_minutes: estimate_minutes === null ? "" : String(estimate_minutes) });
-    }
+    void save("estimate", { estimate_minutes }, { estimate_minutes: estimate_minutes === null ? "" : String(estimate_minutes) });
   };
 
   // Typed fields save on blur, selects on change. A date input fires change on every keystroke of a typed
@@ -130,9 +175,12 @@ function PersonalOsTaskPage() {
   const saveDay = (field: "when_date" | "deadline") => {
     const value = draft[field];
 
-    if (value !== toDay(task[field])) {
-      void save(field === "when_date" ? "when" : "deadline", { [field]: value === "" ? null : value }, { [field]: value });
+    if (value === toDay(task[field])) {
+      clearDirty(field);
+      return;
     }
+
+    void save(field === "when_date" ? "when" : "deadline", { [field]: value === "" ? null : value }, { [field]: value });
   };
 
   const chosen_area = areas.find((area) => area.id === draft.area_id);
@@ -152,10 +200,9 @@ function PersonalOsTaskPage() {
         </Link>
         <input
           aria-label="Title"
-          className="mt-1 w-full border-0 bg-transparent p-0 font-bold text-gray-900 text-xl outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:text-dark-headings"
-          disabled={busy}
+          className="mt-1 w-full border-0 bg-transparent p-0 font-bold text-gray-900 text-xl outline-none focus-visible:ring-2 focus-visible:ring-info dark:text-dark-headings"
           onBlur={() => saveTitle()}
-          onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+          onChange={(event) => edit({ title: event.target.value })}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.currentTarget.blur();
@@ -173,7 +220,6 @@ function PersonalOsTaskPage() {
           <FieldRow label="area">
             <select
               className={field_class}
-              disabled={busy}
               onChange={(event) => {
                 const area_id = event.target.value === "" ? null : event.target.value;
                 void save("area", { area_id, project_id: null }, { area_id, project_id: null });
@@ -195,7 +241,6 @@ function PersonalOsTaskPage() {
             <FieldRow label="project">
               <select
                 className={field_class}
-                disabled={busy}
                 onChange={(event) => {
                   const project_id = event.target.value === "" ? null : event.target.value;
                   void save("project", { project_id }, { project_id });
@@ -218,9 +263,8 @@ function PersonalOsTaskPage() {
           <FieldRow label="when">
             <input
               className={field_class}
-              disabled={busy}
               onBlur={() => saveDay("when_date")}
-              onChange={(event) => setDraft((current) => ({ ...current, when_date: event.target.value }))}
+              onChange={(event) => edit({ when_date: event.target.value })}
               type="date"
               value={draft.when_date}
             />
@@ -230,9 +274,8 @@ function PersonalOsTaskPage() {
           <FieldRow label="deadline">
             <input
               className={field_class}
-              disabled={busy}
               onBlur={() => saveDay("deadline")}
-              onChange={(event) => setDraft((current) => ({ ...current, deadline: event.target.value }))}
+              onChange={(event) => edit({ deadline: event.target.value })}
               type="date"
               value={draft.deadline}
             />
@@ -242,11 +285,10 @@ function PersonalOsTaskPage() {
           <FieldRow label="estimate">
             <input
               className={clsx(field_class, "w-24")}
-              disabled={busy}
               inputMode="numeric"
               min={0}
               onBlur={() => saveEstimate()}
-              onChange={(event) => setDraft((current) => ({ ...current, estimate_minutes: event.target.value }))}
+              onChange={(event) => edit({ estimate_minutes: event.target.value })}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.currentTarget.blur();
@@ -262,9 +304,8 @@ function PersonalOsTaskPage() {
           <FieldRow label="notes">
             <textarea
               className={clsx(field_class, "min-h-[72px] w-full resize-y")}
-              disabled={busy}
               onBlur={() => saveNotes()}
-              onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+              onChange={(event) => edit({ notes: event.target.value })}
               placeholder="nothing yet"
               value={draft.notes}
             />
@@ -274,12 +315,11 @@ function PersonalOsTaskPage() {
             <button
               aria-pressed={draft.focus}
               className={clsx(
-                "rounded-sm border px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50",
+                "rounded-sm border px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info",
                 draft.focus
                   ? "border-accent text-accent dark:border-accent-dark dark:text-accent-dark"
                   : "border-gray-300 text-gray-500 dark:border-dark-border dark:text-dark-text",
               )}
-              disabled={busy}
               onClick={() => void save("focus", { focus: !draft.focus }, { focus: !draft.focus })}
               type="button"
             >
@@ -299,7 +339,6 @@ function PersonalOsTaskPage() {
             {draft.state !== "inbox" && (
               <select
                 className={field_class}
-                disabled={busy}
                 onChange={(event) => {
                   const state = event.target.value as (typeof TASK_STATES)[number];
                   void save("state", { state }, { state });

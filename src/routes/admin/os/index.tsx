@@ -9,12 +9,14 @@ import { useTaskAction } from "./-use-task-action";
 
 const shell_route = getRouteApi("/admin/os");
 
+type Filing = { area_id: string | null; project_id: string | null };
+
 export const Route = createFileRoute("/admin/os/")({
   loader: async () => {
     const [today, inbox, deadlines, areas] = await Promise.all([
       orpc.personalTasks.listToday(),
       orpc.personalTasks.listInbox(),
-      orpc.personalTasks.listDeadlinesThisWeek(),
+      orpc.personalTasks.listDeadlines(),
       orpc.personalTasks.listAreas(),
     ]);
 
@@ -32,6 +34,7 @@ function PersonalOsTodayPage() {
   const [blocked_id, setBlockedId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<PersonalTask[] | null>(null);
   const [triaging, setTriaging] = useState(false);
+  const [filing_drafts, setFilingDrafts] = useState<Record<string, Filing>>({});
 
   const complete = (id: string) =>
     run(id, "Could not complete the task", async () => {
@@ -62,11 +65,18 @@ function PersonalOsTodayPage() {
     });
 
   // Filing is not triage: the task stays in the inbox until one of the four exits takes it. Blank is the
-  // normal case, which is why nothing here is required.
-  const file = (id: string, patch: { area_id: string | null; project_id: string | null }) =>
-    run(id, "Could not file the task", async () => {
+  // normal case, which is why nothing here is required. The draft is shown at once and dropped once the
+  // save has settled either way: run() resolves after the reload, so dropping it then is a no-op on success
+  // and the rollback on failure.
+  const file = async (id: string, patch: Filing) => {
+    setFilingDrafts((current) => ({ ...current, [id]: patch }));
+
+    await run(id, "Could not file the task", async () => {
       await orpc.personalTasks.updateTask({ id, ...patch });
     });
+
+    setFilingDrafts(({ [id]: _settled, ...rest }) => rest);
+  };
 
   // Peek reveals and changes nothing, so it loads its own list on demand rather than riding the loader —
   // hiding is only bearable while you can prove the hidden things are still there.
@@ -146,64 +156,66 @@ function PersonalOsTodayPage() {
 
           {triaging && (
             <ul className="mt-3 flex flex-col gap-2">
-              {inbox.map((task) => (
-                <li
-                  className="flex flex-wrap items-center gap-2 rounded border border-gray-200 bg-bg p-3 dark:border-dark-border dark:bg-dark-bg"
-                  key={task.id}
-                >
-                  <TaskTitleLink task={task} />
-                  <select
-                    aria-label="Area"
-                    className="rounded-sm border border-gray-300 bg-bg px-1.5 py-1 text-gray-500 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
-                    disabled={busy_key !== null}
-                    onChange={(event) =>
-                      file(task.id, { area_id: event.target.value === "" ? null : event.target.value, project_id: null })
-                    }
-                    value={task.area_id ?? ""}
+              {inbox.map((task) => {
+                const filing = filing_drafts[task.id] ?? { area_id: task.area_id, project_id: task.project_id };
+
+                return (
+                  <li
+                    className="flex flex-wrap items-center gap-2 rounded border border-gray-200 bg-bg p-3 dark:border-dark-border dark:bg-dark-bg"
+                    key={task.id}
                   >
-                    <option value="">area&hellip;</option>
-                    {areas.map((area) => (
-                      <option key={area.id} value={area.id}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-                  {task.area_id !== null && (
+                    <TaskTitleLink task={task} />
                     <select
-                      aria-label="Project"
-                      className="rounded-sm border border-gray-300 bg-bg px-1.5 py-1 text-gray-500 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
-                      disabled={busy_key !== null}
+                      aria-label="Area"
+                      className="rounded-sm border border-gray-300 bg-bg px-1.5 py-1 text-gray-500 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
                       onChange={(event) =>
-                        file(task.id, { area_id: task.area_id, project_id: event.target.value === "" ? null : event.target.value })
+                        void file(task.id, { area_id: event.target.value === "" ? null : event.target.value, project_id: null })
                       }
-                      value={task.project_id ?? ""}
+                      value={filing.area_id ?? ""}
                     >
-                      <option value="">project&hellip;</option>
-                      {(areas.find((area) => area.id === task.area_id)?.projects ?? []).map((project) => (
-                        <option key={project.id} value={project.id}>
-                          {project.name}
+                      <option value="">area&hellip;</option>
+                      {areas.map((area) => (
+                        <option key={area.id} value={area.id}>
+                          {area.name}
                         </option>
                       ))}
                     </select>
-                  )}
-                  {[
-                    { label: "today", run: () => pullToToday(task.id) },
-                    { label: "→ pool", run: () => sendToPool(task.id) },
-                    { label: "someday", run: () => dispose(task.id, "someday") },
-                    { label: "drop", run: () => dispose(task.id, "cancelled") },
-                  ].map((exit) => (
-                    <button
-                      className="rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
-                      disabled={busy_key !== null}
-                      key={exit.label}
-                      onClick={() => exit.run()}
-                      type="button"
-                    >
-                      {exit.label}
-                    </button>
-                  ))}
-                </li>
-              ))}
+                    {filing.area_id !== null && (
+                      <select
+                        aria-label="Project"
+                        className="rounded-sm border border-gray-300 bg-bg px-1.5 py-1 text-gray-500 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:border-dark-border dark:bg-dark-bg dark:text-dark-text"
+                        onChange={(event) =>
+                          void file(task.id, { area_id: filing.area_id, project_id: event.target.value === "" ? null : event.target.value })
+                        }
+                        value={filing.project_id ?? ""}
+                      >
+                        <option value="">project&hellip;</option>
+                        {(areas.find((area) => area.id === filing.area_id)?.projects ?? []).map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {[
+                      { label: "today", run: () => pullToToday(task.id) },
+                      { label: "→ pool", run: () => sendToPool(task.id) },
+                      { label: "someday", run: () => dispose(task.id, "someday") },
+                      { label: "drop", run: () => dispose(task.id, "cancelled") },
+                    ].map((exit) => (
+                      <button
+                        className="rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
+                        disabled={busy_key !== null}
+                        key={exit.label}
+                        onClick={() => exit.run()}
+                        type="button"
+                      >
+                        {exit.label}
+                      </button>
+                    ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -225,11 +237,12 @@ function PersonalOsTodayPage() {
       )}
 
       {deadlines.length > 0 && (
-        <OsPanel title="Deadlines this week">
+        <OsPanel title="Deadlines">
           <div className="flex flex-col gap-1.5">
             {deadlines.map((task) => (
               <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1 dark:border-dark-border" key={task.id}>
                 <TaskTitleLink task={task} />
+                {task.is_past && <span className="text-gray-400 text-xs dark:text-dark-text">past</span>}
                 {task.state !== "open" && (
                   <span className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text">
                     {task.state}
@@ -240,7 +253,8 @@ function PersonalOsTodayPage() {
             ))}
           </div>
           <p className="mt-2.5 text-gray-600 text-xs dark:text-dark-text">
-            Owed before Sunday, none of it dated. A deadline schedules nothing &mdash; pull one in from the pool or give it a when.
+            Owed before Sunday or already missed, none of it dated. A deadline schedules nothing &mdash; pull one in from the pool or give
+            it a when.
           </p>
         </OsPanel>
       )}

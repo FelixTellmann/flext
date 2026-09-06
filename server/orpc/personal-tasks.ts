@@ -13,7 +13,7 @@ import { readSetting } from "@server/personal-settings";
 import { resolveStreams } from "@server/personal-streams";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
 import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or, sql } from "drizzle-orm";
 import { slugify } from "utils/slugify";
 import { z } from "zod";
 import { authed } from "./base";
@@ -73,6 +73,32 @@ const deleteWakaNameRows = async (normalised_name: string): Promise<void> => {
   }
 };
 
+// The unique index covers archived areas too, so the collision check does not filter on archived_at. A
+// name with nothing slug-worthy in it gets no slug rather than an empty one the index would reject twice.
+const freeSlug = async (base: string): Promise<string | null> => {
+  if (base === "") {
+    return null;
+  }
+
+  const rows = await db
+    .select({ slug: personalArea.slug })
+    .from(personalArea)
+    .where(like(personalArea.slug, `${base}%`));
+  const taken = new Set(rows.map((row) => row.slug));
+
+  if (!taken.has(base)) {
+    return base;
+  }
+
+  let suffix = 2;
+
+  while (taken.has(`${base}-${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `${base}-${suffix}`;
+};
+
 const id_schema = z.object({ id: z.string().min(1) });
 
 const settable_state_schema = z.enum(["open", "someday", "completed", "cancelled"]);
@@ -87,7 +113,12 @@ const stateColumns = (state: z.infer<typeof settable_state_schema>, now: Date) =
 
 // A calendar day from the editor, YYYY-MM-DD. Converted to the operator's midnight on this side so a
 // `when` of today lands exactly where pullToToday puts it and the screens agree about which day it is.
-const day_schema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+// The round trip through Date is the calendar check: "2026-13-45" matches the pattern and comes back as
+// something else.
+const day_schema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((day) => new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) === day, { message: "not a calendar day" });
 
 const dayToInstant = (day: string | null | undefined): Date | null | undefined => {
   if (day === undefined || day === null) {
@@ -227,7 +258,7 @@ export const personalTaskProcedures = {
 
     await db
       .update(personalTask)
-      .set({ deferral_count, when_date: null, plan_week: isoWeekOf(), updatedAt: now })
+      .set({ deferral_count, when_date: null, plan_week: isoWeekOf(), state: "open", updatedAt: now })
       .where(eq(personalTask.id, row.id));
 
     return { id: row.id, deferral_count, blocked: false };
@@ -245,8 +276,9 @@ export const personalTaskProcedures = {
   }),
 
   // The task detail editor's one write. Partial: an absent key is untouched, a null clears the column.
-  // Filing does not triage — an inbox task given an area is still in the inbox — and a `when` set here
-  // leaves plan_week alone, since the pool already excludes anything dated.
+  // Filing does not triage — an inbox task given an area is still in the inbox — but a `when` is the
+  // commitment pullToToday makes, so it opens an inbox task. It leaves plan_week alone, since the pool
+  // already excludes anything dated.
   updateTask: authed
     .input(
       id_schema.extend({
@@ -296,6 +328,7 @@ export const personalTaskProcedures = {
       }
 
       const now = new Date();
+      const dated_out_of_inbox = state === undefined && row.state === "inbox" && when_date !== undefined && when_date !== null;
 
       await db
         .update(personalTask)
@@ -305,6 +338,7 @@ export const personalTaskProcedures = {
           when_date: dayToInstant(when_date),
           deadline: dayToInstant(deadline),
           ...(state === undefined ? {} : stateColumns(state, now)),
+          ...(dated_out_of_inbox ? { state: "open" as const } : {}),
           updatedAt: now,
         })
         .where(eq(personalTask.id, id));
@@ -353,29 +387,25 @@ export const personalTaskProcedures = {
     };
   }),
 
-  // Undated tasks whose deadline falls in the operator's current week. Read-only by design: a deadline
-  // hides nothing and schedules nothing, so this list never puts a task into Today — it only says what
-  // is owed before Sunday. Someday is included because a deadline is imposed from outside and does not
-  // care what state the task is parked in.
-  listDeadlinesThisWeek: authed.handler(async () => {
-    const { from, to } = operatorWeekRange();
-    const week_start = operatorDayStartOf(from);
+  // Undated tasks whose deadline falls before the end of the operator's current week, past ones included:
+  // a deadline never hides, so one that was missed last week is still owed and still listed. Read-only by
+  // design — a deadline schedules nothing, so this never puts a task into Today. Someday is included
+  // because a deadline is imposed from outside and does not care what state the task is parked in.
+  listDeadlines: authed.handler(async () => {
+    const { to } = operatorWeekRange();
     const week_end = new Date(operatorDayStartOf(to).getTime() + DAY_MS);
+    const day_start = operatorDayStart();
 
     const rows = await db
       .select()
       .from(personalTask)
       .where(
-        and(
-          inArray(personalTask.state, ["inbox", "open", "someday"]),
-          isNull(personalTask.when_date),
-          gte(personalTask.deadline, week_start),
-          lt(personalTask.deadline, week_end),
-        ),
+        and(inArray(personalTask.state, ["inbox", "open", "someday"]), isNull(personalTask.when_date), lt(personalTask.deadline, week_end)),
       )
       .orderBy(asc(personalTask.deadline), asc(personalTask.createdAt));
 
-    return rows.map(mapTask);
+    // Today's deadline is due, not past; the row paints due itself.
+    return rows.map((row) => ({ ...mapTask(row), is_past: row.deadline !== null && row.deadline < day_start }));
   }),
 
   reorderPool: authed.input(z.object({ ids: z.array(z.string().min(1)).max(500) })).handler(async ({ input }) => {
@@ -456,10 +486,11 @@ export const personalTaskProcedures = {
     .input(z.object({ name: z.string().min(1).max(191), mode: mode_schema.default("always_on"), sort_order: z.number().int().default(0) }))
     .handler(async ({ input }) => {
       const id = crypto.randomUUID();
+      const slug = await freeSlug(slugify(input.name));
 
       await db
         .insert(personalArea)
-        .values({ id, name: input.name, slug: slugify(input.name), mode: input.mode, sort_order: input.sort_order, updatedAt: new Date() });
+        .values({ id, name: input.name, slug, mode: input.mode, sort_order: input.sort_order, updatedAt: new Date() });
 
       return { id };
     }),
