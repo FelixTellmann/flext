@@ -1,0 +1,1 @@
+ALTER TABLE `SenderPolicy` ADD `markRead` boolean DEFAULT false NOT NULL;

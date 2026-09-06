@@ -388,6 +388,10 @@ export const senderPolicy = mysqlTable(
     action: varchar("action", { length: 191 }).notNull(),
     client: varchar("client", { length: 191 }),
     topic: varchar("topic", { length: 191 }),
+    // docs/decisions/2026-09-06-mark-read-and-rule-scope.md: a `file` or `archive` rule may also mark the
+    // message \Seen on the way out, the way quarantine always does. Meaningless on keep_inbox (the unread
+    // badge is the point of keeping mail in the inbox) and on auto_trash; the write side refuses it there.
+    mark_read: boolean("markRead").default(false).notNull(),
     autonomy: varchar("autonomy", { length: 191 }).default("shadow").notNull(),
     // When the operator promoted this policy to autonomy "auto". §8's auto_trash gate measures "a full
     // shadow cycle" from here, so it must be the promotion moment and not createdAt — a policy that sat

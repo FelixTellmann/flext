@@ -378,6 +378,78 @@ const GMAIL_TRASH_TO: ActionStateSnapshot = {
   labels: [],
 };
 
+// A file or archive rule with mark_read (docs/decisions/2026-09-06-mark-read-and-rule-scope.md) executes
+// the \\Seen prefix quarantine does. The row does not record which policy setting it ran under, so undo
+// reads the mark off the two recorded states and restores it last, after the move back.
+describe("undoAction — an archive that marked the message read", () => {
+  const UNREAD_FROM: ActionStateSnapshot = { ...GENERIC_ARCHIVE_FROM, flags: [] };
+
+  test("moves back, then removes the \\Seen the rule added", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "archive",
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: UNREAD_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    expect(moveEvents(events)).toEqual([`move ${ARCHIVE_FOLDER} 9001 -> ${INBOX}`]);
+    const moved_at = events.findIndex((event) => event.startsWith("move "));
+    const restored_at = events.findIndex((event) => event.startsWith("set_flags "));
+    expect(restored_at).toBeGreaterThan(moved_at);
+    expect(events[restored_at]).toBe(`set_flags ${INBOX} 6000 +[] -[\\Seen]`);
+    expect(journal.rows.get("action-1")?.status).toBe("undone");
+  });
+
+  test("a message that was already read when the rule moved it gets no flag write on the way back", async () => {
+    const events: string[] = [];
+    const mailbox = genericMailbox({ folder: ARCHIVE_FOLDER, uid: 9001 });
+    const provider = createFakeProvider({ events, mailbox });
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        {
+          action_id: "action-1",
+          kind: "archive",
+          applied_at: "2026-08-19T10:00:00.000Z",
+          from_state: GENERIC_ARCHIVE_FROM,
+          to_state: GENERIC_ARCHIVE_TO,
+        },
+      ],
+    });
+
+    const result = await undoAction({
+      action_id: "action-1",
+      mailbox_id: MAILBOX_ID,
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+    });
+
+    expect(result).toEqual({ outcome: "undone" } satisfies UndoActionResult);
+    expect(events.some((event) => event.startsWith("set_flags "))).toBe(false);
+  });
+});
+
 describe("undoAction — single action (§7.3)", () => {
   test("moves a generic archive back to the folder from_state_json recorded", async () => {
     const events: string[] = [];

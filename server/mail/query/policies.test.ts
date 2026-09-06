@@ -67,6 +67,7 @@ describe("editing a policy never clears a rescue suspension (§3.4)", () => {
       "action",
       "autonomy",
       "client",
+      "mark_read",
       "source",
       "topic",
       "updatedAt",
@@ -76,5 +77,32 @@ describe("editing a policy never clears a rescue suspension (§3.4)", () => {
   test("the schema still defaults both suspension fields to null — the reason the SET clause was destructive", () => {
     expect(parsed.suspended_at).toBeNull();
     expect(parsed.suspension_reason).toBeNull();
+  });
+});
+
+// docs/decisions/2026-09-06-mark-read-and-rule-scope.md: mark_read is offered on file and archive only.
+// keep_inbox keeps the unread badge on purpose, and trash is never read. Refused at the schema, so a row
+// can never carry the flag on an action the executor would ignore it for.
+describe("mark_read is offered on file and archive only", () => {
+  const base = { scope: "address" as const, value: "someone@example.com", source: "test" };
+
+  test("defaults to false when omitted, so an edit that does not re-assert it clears it", () => {
+    expect(upsert_policy_schema.parse({ ...base, action: "archive" }).mark_read).toBe(false);
+  });
+
+  test("accepted on file and archive", () => {
+    expect(upsert_policy_schema.parse({ ...base, action: "file", topic: "Notifications", mark_read: true }).mark_read).toBe(true);
+    expect(upsert_policy_schema.parse({ ...base, action: "archive", mark_read: true }).mark_read).toBe(true);
+  });
+
+  test("refused on keep_inbox and auto_trash", () => {
+    expect(() => upsert_policy_schema.parse({ ...base, action: "keep_inbox", mark_read: true })).toThrow(/mark_read is only offered/);
+    expect(() => upsert_policy_schema.parse({ ...base, action: "auto_trash", mark_read: true })).toThrow(/mark_read is only offered/);
+  });
+
+  test("false is fine on every action", () => {
+    for (const action of ["keep_inbox", "archive", "file", "auto_trash"] as const) {
+      expect(upsert_policy_schema.parse({ ...base, action, mark_read: false }).mark_read).toBe(false);
+    }
   });
 });

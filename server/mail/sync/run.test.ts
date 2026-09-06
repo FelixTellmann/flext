@@ -194,6 +194,7 @@ function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: str
           policy_scope: "address" as const,
           dkim_aligned: true,
           filing_confirmed_at: null,
+          mark_read: false,
         }));
     },
     recordFromState: async () => {

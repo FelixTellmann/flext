@@ -67,6 +67,7 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
       uid: message.uid,
       target_path: action.target_path,
       policy_scope: senderPolicy.scope,
+      mark_read: senderPolicy.mark_read,
       dkim_aligned: message.dkim_aligned,
       filing_confirmed_at: action.filing_confirmed_at,
     })
@@ -101,6 +102,7 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
             uid: row.uid,
             target_path: row.target_path,
             policy_scope: toPolicyScope(row.policy_scope),
+            mark_read: row.mark_read ?? false,
             dkim_aligned: row.dkim_aligned,
             filing_confirmed_at: row.filing_confirmed_at,
           },

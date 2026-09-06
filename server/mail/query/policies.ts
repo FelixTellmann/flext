@@ -17,6 +17,7 @@ export type PolicyRow = {
   action: PolicyAction;
   client: string | null;
   topic: string | null;
+  mark_read: boolean;
   autonomy: PolicyAutonomy;
   // When the operator promoted this policy to `auto` (Task 8's `promotePolicyAutonomy`, the only writer of
   // this field besides a demotion, which leaves it untouched). Null on every policy that has never been
@@ -43,6 +44,7 @@ export type UpsertPolicyInput = {
   action: PolicyAction;
   client?: string | null;
   topic?: string | null;
+  mark_read?: boolean;
   autonomy?: PolicyAutonomy;
   source: string;
   suspended_at?: Date | null;
@@ -83,45 +85,60 @@ export type PolicyIndex = {
   suppressed: Set<string>;
 };
 
+// docs/decisions/2026-09-06-mark-read-and-rule-scope.md: the two actions that may also mark the message
+// read on the way out. Shared with the ORPC input schema so the refusal is spelled once.
+export const MARK_READ_ACTIONS = ["file", "archive"] as const satisfies readonly PolicyAction[];
+
+export const mark_read_rule = {
+  test: (input: { action: PolicyAction; mark_read: boolean }): boolean =>
+    !input.mark_read || MARK_READ_ACTIONS.some((value) => value === input.action),
+  message: `mark_read is only offered on ${MARK_READ_ACTIONS.join(" and ")} rules: the unread badge is the point of keeping mail in the inbox, and trash is never read`,
+};
+
 // Exported so its own tests can pin behaviour without going through upsertPolicy's insert/select — every
 // DATABASE_URL variant points at the same production senderPolicy table, and this schema's own parsing
 // (see the "auto" refine and the demotion-on-edit default below) is what those tests need to exercise.
-export const upsert_policy_schema = z.object({
-  scope: z.enum(["address", "domain"]),
-  value: z.string().min(1).max(320),
-  // §5.4/§8: a policy must never carry `purge`, the irreversible sweep action reserved for the separate
-  // Phase 8 job (§1.7). POLICY_ACTIONS is the same allowlist rules.ts enforces on read; this is the write
-  // side of that defence, and it must reject a bad value here rather than let it reach a stored row.
-  action: z.enum(POLICY_ACTIONS),
-  client: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
-  topic: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
-  autonomy: z
-    .enum(["shadow", "auto"])
-    // This default is also §8's demotion-on-edit, not a side effect of one: upsertPolicy carries no field
-    // that preserves an existing row's autonomy, so any edit that does not explicitly re-assert "auto"
-    // lands here and writes "shadow" over it, even if the row being edited was already promoted.
-    // That is deliberate, for the same reason a rescue suspends a policy rather than merely logging it: a
-    // promotion is trust in the rule AS THE SHADOW RECORD SHOWED IT. Editing the rule — its action,
-    // client, scope — makes that record describe a rule that no longer runs, while the promotion it
-    // justified would otherwise carry on unreviewed. Demoting says the changed rule has not yet earned
-    // trust for its new shape. Do not "fix" this by threading the current autonomy through as a default —
-    // that would let an edit silently keep unattended write access to a mailbox instead of asking the
-    // operator to promote it again through the dedicated procedure (autonomy.ts's promotePolicyAutonomy).
-    .default("shadow")
-    // §8/§4.3: every policy is born in shadow, without exception, and this general-purpose write is never
-    // the place autonomy is granted — promotePolicyAutonomy is, after §4.2's gates. A caller asking for
-    // "auto" made a mistake that must surface, not be silently downgraded to "shadow" — hence a rejecting
-    // refine rather than a coercing default.
-    .refine(
-      (value): value is "shadow" => value === "shadow",
-      (value) => ({
-        message: `policy autonomy must be "shadow" here; promotion is promotePolicyAutonomy's job, not an edit's (§8) — got "${value}"`,
-      }),
-    ),
-  source: z.string().min(1).max(191),
-  suspended_at: z.date().nullable().default(null),
-  suspension_reason: z.string().nullable().default(null),
-});
+export const upsert_policy_schema = z
+  .object({
+    scope: z.enum(["address", "domain"]),
+    value: z.string().min(1).max(320),
+    // §5.4/§8: a policy must never carry `purge`, the irreversible sweep action reserved for the separate
+    // Phase 8 job (§1.7). POLICY_ACTIONS is the same allowlist rules.ts enforces on read; this is the write
+    // side of that defence, and it must reject a bad value here rather than let it reach a stored row.
+    action: z.enum(POLICY_ACTIONS),
+    client: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
+    topic: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
+    // Defaults to false on every write, so an edit that omits it clears it — the same demotion-on-edit
+    // shape autonomy has below, and for the same reason: the edited rule is a different rule.
+    mark_read: z.boolean().default(false),
+    autonomy: z
+      .enum(["shadow", "auto"])
+      // This default is also §8's demotion-on-edit, not a side effect of one: upsertPolicy carries no field
+      // that preserves an existing row's autonomy, so any edit that does not explicitly re-assert "auto"
+      // lands here and writes "shadow" over it, even if the row being edited was already promoted.
+      // That is deliberate, for the same reason a rescue suspends a policy rather than merely logging it: a
+      // promotion is trust in the rule AS THE SHADOW RECORD SHOWED IT. Editing the rule — its action,
+      // client, scope — makes that record describe a rule that no longer runs, while the promotion it
+      // justified would otherwise carry on unreviewed. Demoting says the changed rule has not yet earned
+      // trust for its new shape. Do not "fix" this by threading the current autonomy through as a default —
+      // that would let an edit silently keep unattended write access to a mailbox instead of asking the
+      // operator to promote it again through the dedicated procedure (autonomy.ts's promotePolicyAutonomy).
+      .default("shadow")
+      // §8/§4.3: every policy is born in shadow, without exception, and this general-purpose write is never
+      // the place autonomy is granted — promotePolicyAutonomy is, after §4.2's gates. A caller asking for
+      // "auto" made a mistake that must surface, not be silently downgraded to "shadow" — hence a rejecting
+      // refine rather than a coercing default.
+      .refine(
+        (value): value is "shadow" => value === "shadow",
+        (value) => ({
+          message: `policy autonomy must be "shadow" here; promotion is promotePolicyAutonomy's job, not an edit's (§8) — got "${value}"`,
+        }),
+      ),
+    source: z.string().min(1).max(191),
+    suspended_at: z.date().nullable().default(null),
+    suspension_reason: z.string().nullable().default(null),
+  })
+  .refine(mark_read_rule.test, { message: mark_read_rule.message, path: ["mark_read"] });
 
 const upsert_never_touch_rule_schema = z.object({
   id: z.string().min(1).optional(),
@@ -143,6 +160,7 @@ function toPolicyRow(raw: typeof senderPolicy.$inferSelect): PolicyRow {
     action: raw.action as PolicyAction,
     client: raw.client,
     topic: raw.topic,
+    mark_read: raw.mark_read,
     autonomy: raw.autonomy as PolicyAutonomy,
     autonomy_promoted_at: raw.autonomy_promoted_at,
     source: raw.source,
@@ -214,6 +232,7 @@ export function policyEditColumns(parsed: z.infer<typeof upsert_policy_schema>, 
     action: parsed.action,
     client: parsed.client,
     topic: parsed.topic,
+    mark_read: parsed.mark_read,
     autonomy: parsed.autonomy,
     source: parsed.source,
     updatedAt: now,

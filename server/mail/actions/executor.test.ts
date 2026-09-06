@@ -294,6 +294,7 @@ function pendingRow(input: {
   policy_scope?: PolicyScope | null;
   dkim_aligned?: boolean | null;
   filing_confirmed_at?: Date | null;
+  mark_read?: boolean;
 }): PendingActionRow {
   return {
     action_id: input.action_id ?? `action-${input.uid}`,
@@ -311,6 +312,7 @@ function pendingRow(input: {
     // Unconfirmed by default: this is the shape the shadow runner proposes, and the confirmed one is what
     // filing-queue resolution produces.
     filing_confirmed_at: input.filing_confirmed_at ?? null,
+    mark_read: input.mark_read ?? false,
   };
 }
 
@@ -433,6 +435,7 @@ describe("executeActions ordering (§7.1)", () => {
 
     const plan = planFor("archive", "gmail", {
       quarantine_folder: null,
+      mark_read: false,
       source_folder: GMAIL_CANONICAL_FOLDER,
       archive_folder: null,
       trash_folder: GMAIL_TRASH_FOLDER,
@@ -1087,6 +1090,9 @@ describe("quarantine marks read (inbox-dwell 1.6/1.7)", () => {
     expect(stored_at).toBeLessThan(moved_at);
 
     expect(events[stored_at]).toBe("set_flags INBOX 11 +[\\Seen] -[]");
+    // And to_state records the prefix's effect: the server now holds \Seen, and undo's resume-point search
+    // compares against this snapshot.
+    expect(parseActionState(journal.rows.get("action-11")?.to_state_json ?? null)?.flags).toEqual(["\\Seen"]);
   });
 
   test("a message already carrying \\Seen is still marked, so the stored row and the server agree", async () => {
@@ -1128,5 +1134,162 @@ describe("quarantine marks read (inbox-dwell 1.6/1.7)", () => {
 
     expect(indexOfEvent(events, "record_self_marked_read")).toBe(-1);
     expect(indexOfEvent(events, "set_flags")).toBe(-1);
+  });
+});
+
+// docs/decisions/2026-09-06-mark-read-and-rule-scope.md: a file or archive row whose policy has mark_read
+// carries quarantine's \Seen prefix, and with it inbox-dwell 1.5's stored-isSeen write. The prefix rides
+// on the row through the same policy join that supplies policy_scope, so a fixture row is the whole input.
+describe("file and archive rules that mark read", () => {
+  const CLIENT_PATH = "Clients/Acme";
+
+  function expectMarkedReadBeforePrimary(events: string[], primary_prefix: string): void {
+    const journalled_at = indexOfEvent(events, "record_from_state");
+    const recorded_seen_at = indexOfEvent(events, "record_self_marked_read");
+    const stored_at = indexOfEvent(events, "set_flags");
+    const primary_at = indexOfEvent(events, primary_prefix);
+    expect(journalled_at).toBeGreaterThanOrEqual(0);
+    expect(journalled_at).toBeLessThan(recorded_seen_at);
+    expect(recorded_seen_at).toBeLessThan(stored_at);
+    expect(stored_at).toBeLessThan(primary_at);
+  }
+
+  test("a generic archive with mark_read stores isSeen, STOREs \\Seen, then moves", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 31, kind: "archive", mark_read: true })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 31, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+    expectMarkedReadBeforePrimary(events, "move INBOX");
+    expect(events).toContain("record_self_marked_read message-31");
+    expect(events).toContain("set_flags INBOX 31 +[\\Seen] -[]");
+    expect(parseActionState(journal.rows.get("action-31")?.to_state_json ?? null)?.flags).toEqual(["\\Seen"]);
+  });
+
+  test("a Gmail archive with mark_read STOREs \\Seen before the label write, and never moves", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 32, kind: "archive", folder: GMAIL_CANONICAL_FOLDER, mark_read: true })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      gmail: true,
+      folder: GMAIL_CANONICAL_FOLDER,
+      trash_folder: GMAIL_TRASH_FOLDER,
+      messages: [{ uid: 32, flags: [], labels: [GMAIL_INBOX_LABEL] }],
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+    expectMarkedReadBeforePrimary(events, "set_labels");
+    expect(events).toContain(`set_flags ${GMAIL_CANONICAL_FOLDER} 32 +[\\Seen] -[]`);
+    expect(events).toContain(`set_labels ${GMAIL_CANONICAL_FOLDER} 32 +[] -[${GMAIL_INBOX_LABEL}]`);
+    expect(events.some((event) => event.startsWith("move "))).toBe(false);
+  });
+
+  test("a generic file with mark_read STOREs \\Seen before the move into the destination", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 33, kind: "file", target_path: CLIENT_PATH, mark_read: true })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 33, flags: [], labels: null }] });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+    expectMarkedReadBeforePrimary(events, "move INBOX");
+    expect(events).toContain(`move INBOX 33 -> ${CLIENT_PATH}`);
+  });
+
+  test("a Gmail file with mark_read STOREs \\Seen before the label swap", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 34, kind: "file", folder: GMAIL_CANONICAL_FOLDER, target_path: CLIENT_PATH, mark_read: true })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      gmail: true,
+      folder: GMAIL_CANONICAL_FOLDER,
+      trash_folder: GMAIL_TRASH_FOLDER,
+      messages: [{ uid: 34, flags: [], labels: [GMAIL_INBOX_LABEL] }],
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "gmail",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(1);
+    expectMarkedReadBeforePrimary(events, "set_labels");
+    expect(events).toContain(`set_labels ${GMAIL_CANONICAL_FOLDER} 34 +[${CLIENT_PATH}] -[${GMAIL_INBOX_LABEL}]`);
+  });
+
+  test("a file without mark_read carries no prefix and stores nothing about isSeen", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 35, kind: "file", target_path: CLIENT_PATH })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({ events, messages: [{ uid: 35, flags: [], labels: null }] });
+
+    await executeActions({ mailbox_id: "mailbox-1", hierarchy_delimiter: "/", flavor: "generic", provider, journal, batch_size: 50 });
+
+    expect(indexOfEvent(events, "record_self_marked_read")).toBe(-1);
+    expect(indexOfEvent(events, "set_flags")).toBe(-1);
+  });
+
+  test("a marked and an unmarked archive to the same folder are two groups, so the STORE never touches the unmarked UID", async () => {
+    const events: string[] = [];
+    const pending = [pendingRow({ uid: 36, kind: "archive", mark_read: true }), pendingRow({ uid: 37, kind: "archive" })];
+    const journal = createFakeJournal({ events, pending });
+    const provider = createFakeProvider({
+      events,
+      messages: [
+        { uid: 36, flags: [], labels: null },
+        { uid: 37, flags: [], labels: null },
+      ],
+    });
+
+    const result = await executeActions({
+      mailbox_id: "mailbox-1",
+      hierarchy_delimiter: "/",
+      flavor: "generic",
+      provider,
+      journal,
+      batch_size: 50,
+    });
+
+    expect(result.applied).toBe(2);
+    expect(events).toContain("record_self_marked_read message-36");
+    expect(events).not.toContain("record_self_marked_read message-36,message-37");
+    expect(events).toContain("set_flags INBOX 36 +[\\Seen] -[]");
+    expect(events.filter((event) => event.startsWith("move INBOX")).sort()).toEqual([
+      `move INBOX 36 -> ${ARCHIVE_FOLDER}`,
+      `move INBOX 37 -> ${ARCHIVE_FOLDER}`,
+    ]);
   });
 });

@@ -32,6 +32,7 @@ import {
   deletePolicy,
   listNeverTouchRules,
   listPolicies,
+  mark_read_rule,
   upsertNeverTouchRule,
   upsertPolicy,
 } from "@server/mail/query/policies";
@@ -387,20 +388,23 @@ export const mailProcedures = {
 
   upsertPolicy: authed
     .input(
-      z.object({
-        scope: z.enum(["address", "domain"]),
-        value: z.string().min(1).max(320),
-        // POLICY_ACTIONS is the same allowlist rules.ts and the query layer enforce — imported rather than
-        // retyped, so "purge" (the irreversible sweep action reserved for the separate Phase 8 job) has
-        // exactly one place it could ever be added back.
-        action: z.enum(POLICY_ACTIONS),
-        client: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
-        topic: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
-        autonomy: policy_autonomy_schema,
-        source: z.string().min(1).max(191),
-        suspended_at: z.date().nullable().default(null),
-        suspension_reason: z.string().nullable().default(null),
-      }),
+      z
+        .object({
+          scope: z.enum(["address", "domain"]),
+          value: z.string().min(1).max(320),
+          // POLICY_ACTIONS is the same allowlist rules.ts and the query layer enforce — imported rather than
+          // retyped, so "purge" (the irreversible sweep action reserved for the separate Phase 8 job) has
+          // exactly one place it could ever be added back.
+          action: z.enum(POLICY_ACTIONS),
+          client: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
+          topic: z.string().max(191).refine(FOLDER_SEGMENT_RULE.test, { message: FOLDER_SEGMENT_RULE.message }).nullable().default(null),
+          mark_read: z.boolean().default(false),
+          autonomy: policy_autonomy_schema,
+          source: z.string().min(1).max(191),
+          suspended_at: z.date().nullable().default(null),
+          suspension_reason: z.string().nullable().default(null),
+        })
+        .refine(mark_read_rule.test, { message: mark_read_rule.message, path: ["mark_read"] }),
     )
     .handler(async ({ input }) => upsertPolicy(input)),
 

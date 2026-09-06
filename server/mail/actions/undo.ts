@@ -9,6 +9,7 @@ import {
   planFor,
   QUARANTINE_KIND,
   QUARANTINE_LOGICAL_PATH,
+  wasMarkedReadBetween,
 } from "@server/mail/actions/kinds";
 import type { ActionFolders, ActionStateSnapshot } from "@server/mail/actions/state";
 import { parseActionState, resolveActionFolders, serializeActionState } from "@server/mail/actions/state";
@@ -133,6 +134,7 @@ function requirePlan(
   flavor: MailboxFlavor,
   folders: ActionFolders,
   from_state: ActionStateSnapshot,
+  to_state: ActionStateSnapshot,
   destination_folder: string | null,
 ): PlannedAction {
   // Routed by the row's own kind, exactly as the executor does when it builds the forward plan. One
@@ -144,6 +146,9 @@ function requirePlan(
     trash_folder: folders.trash_folder,
     file_folder: row.kind === FILE_KIND ? destination_folder : null,
     quarantine_folder: row.kind === QUARANTINE_KIND ? destination_folder : null,
+    // From the recorded states, not the policy: see wasMarkedReadBetween. The row does not record which
+    // policy setting it ran under, and the policy may have changed since.
+    mark_read: wasMarkedReadBetween(from_state, to_state),
   });
 }
 
@@ -325,7 +330,7 @@ async function undoRow(input: {
   let states: MailboxState[];
   let first_index: number;
   try {
-    const plan = requirePlan(row, input.flavor, input.folders, from_state, input.destination_folder);
+    const plan = requirePlan(row, input.flavor, input.folders, from_state, to_state, input.destination_folder);
     inverse = inverseOf(plan, from_state);
     states = replayStates(plan, from_state, inverse);
     first_index = resumeIndexFor(states, to_state);

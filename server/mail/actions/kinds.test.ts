@@ -11,6 +11,8 @@ import {
   type PlannedAction,
   type PlanRequestKind,
   planFor,
+  SEEN_FLAG,
+  wasMarkedReadBetween,
 } from "@server/mail/actions/kinds";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import type { MailboxFlavor } from "@server/mail/types";
@@ -61,6 +63,7 @@ function contextFor(flavor: MailboxFlavor, from_state: MailboxState): PlanContex
       trash_folder: GMAIL_TRASH,
       file_folder: GMAIL_FILE,
       quarantine_folder: GMAIL_QUARANTINE,
+      mark_read: false,
     };
   }
   return {
@@ -69,6 +72,7 @@ function contextFor(flavor: MailboxFlavor, from_state: MailboxState): PlanContex
     trash_folder: GENERIC_TRASH,
     file_folder: GENERIC_FILE,
     quarantine_folder: GENERIC_QUARANTINE,
+    mark_read: false,
   };
 }
 
@@ -213,6 +217,7 @@ describe("archive means one thing per flavor", () => {
       trash_folder: null,
       file_folder: null,
       quarantine_folder: null,
+      mark_read: false,
     });
     const recorded = state("INBOX/Clients", [], null);
     expect(inverseOf(plan, recorded)).toEqual([{ verb: "move", source_folder: GENERIC_ARCHIVE, target_folder: "INBOX/Clients" }]);
@@ -264,6 +269,7 @@ describe("a missing target folder is rejected, never guessed", () => {
         trash_folder: GENERIC_TRASH,
         file_folder: null,
         quarantine_folder: null,
+        mark_read: false,
       }),
     ).toThrow(/SPECIAL-USE/);
   });
@@ -276,6 +282,7 @@ describe("a missing target folder is rejected, never guessed", () => {
         trash_folder: null,
         file_folder: null,
         quarantine_folder: null,
+        mark_read: false,
       }),
     ).toThrow(/SPECIAL-USE/);
   });
@@ -289,6 +296,7 @@ describe("a missing target folder is rejected, never guessed", () => {
           trash_folder: null,
           file_folder: null,
           quarantine_folder: null,
+          mark_read: false,
         }),
       ).toThrow(/SPECIAL-USE/);
     });
@@ -303,6 +311,7 @@ describe("a missing target folder is rejected, never guessed", () => {
           trash_folder: GENERIC_TRASH,
           file_folder: null,
           quarantine_folder: null,
+          mark_read: false,
         }),
       ).toThrow(/SPECIAL-USE/);
     });
@@ -401,6 +410,7 @@ describe("quarantine", () => {
       trash_folder: GENERIC_TRASH,
       file_folder: null,
       quarantine_folder: GENERIC_QUARANTINE,
+      mark_read: false,
     });
     expect(plan.mutation).toEqual({ verb: "move", source_folder: "INBOX", target_folder: GENERIC_QUARANTINE });
   });
@@ -413,6 +423,7 @@ describe("quarantine", () => {
       trash_folder: GMAIL_TRASH,
       file_folder: null,
       quarantine_folder: GMAIL_QUARANTINE,
+      mark_read: false,
     });
     expect(plan.mutation).toEqual({ verb: "set_labels", add_labels: [GMAIL_QUARANTINE], remove_labels: [GMAIL_INBOX_LABEL] });
   });
@@ -428,6 +439,7 @@ describe("quarantine", () => {
           trash_folder: GENERIC_TRASH,
           file_folder: null,
           quarantine_folder: null,
+          mark_read: false,
         }),
       ).toThrow(/quarantine destination/);
     });
@@ -525,6 +537,102 @@ describe("set_flags", () => {
         for (const kind of ["archive", "auto_trash", "file"] as const) {
           expect(plannedFor(kind, flavor, from_state).pre_mutations).toEqual([]);
         }
+      }
+    }
+  });
+});
+
+// docs/decisions/2026-09-06-mark-read-and-rule-scope.md: a file or archive rule may mark read on the way
+// out. The prefix is the one quarantine carries, so everything already proven about it — address-preserving,
+// issued before the move, inverted last — holds here without a second implementation.
+describe("mark_read on file and archive", () => {
+  const seen_prefix = [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }];
+  const marked_kinds = ["file", "archive"] as const;
+
+  function markedContext(flavor: MailboxFlavor, from_state: MailboxState): PlanContext {
+    return { ...contextFor(flavor, from_state), mark_read: true };
+  }
+
+  for (const flavor of flavors) {
+    for (const kind of marked_kinds) {
+      test(`${flavor} ${kind} with mark_read carries the \\Seen prefix and the same primary mutation`, () => {
+        const from_state = statesFor(flavor)[1];
+        const marked = planFor(kind, flavor, markedContext(flavor, from_state));
+        const unmarked = planFor(kind, flavor, contextFor(flavor, from_state));
+        expect(marked.pre_mutations).toEqual(seen_prefix);
+        expect(marked.mutation).toEqual(unmarked.mutation);
+      });
+
+      test(`${flavor} ${kind} without mark_read carries no prefix`, () => {
+        expect(planFor(kind, flavor, contextFor(flavor, statesFor(flavor)[1])).pre_mutations).toEqual([]);
+      });
+
+      statesFor(flavor).forEach((from_state, index) => {
+        test(`${flavor} ${kind} with mark_read on state ${index} round-trips flags through its inverse`, () => {
+          const plan = planFor(kind, flavor, markedContext(flavor, from_state));
+          const to_state = [...plan.pre_mutations, plan.mutation].reduce(
+            (current, mutation) => applyToState(mutation, current),
+            from_state,
+          );
+          expect(to_state.flags).toContain(SEEN_FLAG);
+          // Flags come back in applyToState's canonical order; the fixture's order is not part of the state.
+          expect(undo(plan, from_state, to_state)).toEqual({ ...from_state, flags: [...from_state.flags].sort() });
+        });
+      });
+    }
+
+    test(`${flavor} auto_trash ignores mark_read: trash is never read`, () => {
+      expect(planFor("auto_trash", flavor, markedContext(flavor, statesFor(flavor)[1])).pre_mutations).toEqual([]);
+    });
+
+    test(`${flavor} quarantine marks read whatever mark_read says`, () => {
+      expect(planFor("quarantine", flavor, contextFor(flavor, statesFor(flavor)[1])).pre_mutations).toEqual(seen_prefix);
+    });
+  }
+
+  test("a marked and an unmarked plan to the same destination differ only in the prefix", () => {
+    const from_state = generic_states[1];
+    const marked = planFor("archive", "generic", markedContext("generic", from_state));
+    const unmarked = planFor("archive", "generic", contextFor("generic", from_state));
+    expect({ ...marked, pre_mutations: [] }).toEqual(unmarked);
+  });
+});
+
+// Undo rebuilds a file or archive plan from the recorded states rather than from the policy as it stands
+// now, so this is the whole of what undo knows about mark_read.
+describe("wasMarkedReadBetween", () => {
+  const unread = state("INBOX", [], null);
+  const read = state("INBOX", [SEEN_FLAG], null);
+
+  test("unread before, read after: the sequence marked it", () => {
+    expect(wasMarkedReadBetween(unread, read)).toBe(true);
+  });
+
+  test("read before and after: nothing to observe, and the prefix's inverse would be empty anyway", () => {
+    expect(wasMarkedReadBetween(read, read)).toBe(false);
+  });
+
+  test("unread before and after: no prefix ran", () => {
+    expect(wasMarkedReadBetween(unread, unread)).toBe(false);
+  });
+
+  test("read before, unread after: no plan in this module removes \\Seen, so this is not a mark", () => {
+    expect(wasMarkedReadBetween(read, unread)).toBe(false);
+  });
+
+  test("agrees with the plan for every state: the inverse rebuilt from the observation equals the executed plan's", () => {
+    for (const flavor of flavors) {
+      for (const from_state of statesFor(flavor)) {
+        const executed = planFor("archive", flavor, { ...contextFor(flavor, from_state), mark_read: true });
+        const to_state = [...executed.pre_mutations, executed.mutation].reduce(
+          (current, mutation) => applyToState(mutation, current),
+          from_state,
+        );
+        const rebuilt = planFor("archive", flavor, {
+          ...contextFor(flavor, from_state),
+          mark_read: wasMarkedReadBetween(from_state, to_state),
+        });
+        expect(inverseOf(rebuilt, from_state)).toEqual(inverseOf(executed, from_state));
       }
     }
   });

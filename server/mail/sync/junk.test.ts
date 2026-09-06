@@ -96,6 +96,7 @@ function policyRow(input: { scope: PolicyScope; value: string; action: PolicyAct
     action: input.action,
     client: null,
     topic: null,
+    mark_read: false,
     autonomy: "shadow",
     autonomy_promoted_at: null,
     source: "test",
@@ -174,6 +175,7 @@ describe("the plan for a junk message", () => {
     trash_folder: null,
     file_folder: null,
     quarantine_folder: "INBOX.Quarantine",
+    mark_read: false,
   };
 
   test("marks it read first, then moves it out of the junk folder into Quarantine", () => {

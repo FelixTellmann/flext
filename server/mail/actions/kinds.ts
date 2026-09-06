@@ -81,6 +81,10 @@ export type PlanContext = {
   // refuses exactly as it does for the others — a quarantine with no destination must not fall back to
   // Trash or to Junk, which is the whole point of the spec's D2.
   quarantine_folder: string | null;
+  // SenderPolicy.markRead, read by the executor per row: a `file` or `archive` planned with it carries the
+  // same \Seen prefix quarantine always carries. Ignored by every other kind — quarantine marks read
+  // unconditionally, and trash never does.
+  mark_read: boolean;
 };
 
 export type PlannedAction = {
@@ -99,6 +103,28 @@ export type PlannedAction = {
 
 export function isExecutableActionKind(raw: string): raw is ExecutableActionKind {
   return EXECUTABLE_ACTION_KINDS.some((kind) => kind === raw);
+}
+
+// Inbox-dwell 1.7: marking read on the way out. A message moved to a folder the operator never opens and
+// left unread carries its badge with it, and "unread" is a claim about the INBOX that stops being true
+// the moment the message leaves it. Both flavors, so the rule does not depend on whether the primary
+// mutation happens to be a move or a label swap.
+//
+// Before the move, never after: on a generic server the MOVE invalidates the source UID, and the executor
+// issues the whole prefix against the same (folder, uids) as the primary mutation. A fresh array per
+// call because execution groups hold the prefix by reference.
+function markReadPrefix(): MailboxMutation[] {
+  return [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }];
+}
+
+// Whether the executed sequence marked the message read, read back from the two recorded states so undo
+// can rebuild a `file` or `archive` plan without consulting the policy as it stands NOW — a policy edited
+// or deleted since the action ran would otherwise yield a plan matching no recorded state, and undo would
+// refuse rows it can restore exactly. Exact, not a heuristic: nothing in this module removes \Seen, and
+// when from_state already carried it the prefix's inverse is empty either way, so the only case where the
+// prefix changes the inverse is the one this observes.
+export function wasMarkedReadBetween(from_state: MailboxState, to_state: MailboxState): boolean {
+  return !from_state.flags.includes(SEEN_FLAG) && to_state.flags.includes(SEEN_FLAG);
 }
 
 function requireTargetFolder(target: string | null, kind: ExecutableActionKind, special_use: string): string {
@@ -161,7 +187,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "file" && flavor === "gmail") {
     return {
       outcome: "planned",
-      pre_mutations: [],
+      pre_mutations: context.mark_read ? markReadPrefix() : [],
       kind,
       flavor,
       mutation: {
@@ -175,7 +201,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "file") {
     return {
       outcome: "planned",
-      pre_mutations: [],
+      pre_mutations: context.mark_read ? markReadPrefix() : [],
       kind,
       flavor,
       mutation: {
@@ -192,14 +218,8 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "quarantine" && flavor === "gmail") {
     return {
       outcome: "planned",
-      // Inbox-dwell 1.7: quarantine marks read on the way out. A first contact moved to Quarantine/ and left
-      // unread carries its badge into a folder the operator never opens, and "unread" is a claim about the
-      // INBOX that stops being true the moment the message leaves it. Both flavors, so the rule does not
-      // depend on whether quarantine happens to be a move or a label swap.
-      //
-      // Before the move, never after: on a generic server the MOVE invalidates the source UID, and the
-      // executor issues the whole prefix against the same (folder, uids) as the primary mutation.
-      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }],
+      // Unconditional: a first contact is always marked read on its way to a folder the operator reviews.
+      pre_mutations: markReadPrefix(),
       kind,
       flavor,
       mutation: {
@@ -213,14 +233,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "quarantine") {
     return {
       outcome: "planned",
-      // Inbox-dwell 1.7: quarantine marks read on the way out. A first contact moved to Quarantine/ and left
-      // unread carries its badge into a folder the operator never opens, and "unread" is a claim about the
-      // INBOX that stops being true the moment the message leaves it. Both flavors, so the rule does not
-      // depend on whether quarantine happens to be a move or a label swap.
-      //
-      // Before the move, never after: on a generic server the MOVE invalidates the source UID, and the
-      // executor issues the whole prefix against the same (folder, uids) as the primary mutation.
-      pre_mutations: [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }],
+      pre_mutations: markReadPrefix(),
       kind,
       flavor,
       mutation: {
@@ -237,7 +250,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "archive" && flavor === "gmail") {
     return {
       outcome: "planned",
-      pre_mutations: [],
+      pre_mutations: context.mark_read ? markReadPrefix() : [],
       kind,
       flavor,
       mutation: { verb: "set_labels", add_labels: [], remove_labels: [GMAIL_INBOX_LABEL] },
@@ -247,7 +260,7 @@ export function planFor(kind: PlanRequestKind, flavor: MailboxFlavor, context: P
   if (kind === "archive") {
     return {
       outcome: "planned",
-      pre_mutations: [],
+      pre_mutations: context.mark_read ? markReadPrefix() : [],
       kind,
       flavor,
       mutation: {

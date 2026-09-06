@@ -51,6 +51,9 @@ export type PendingActionRow = {
   policy_scope: PolicyScope | null;
   dkim_aligned: boolean | null;
   filing_confirmed_at: Date | null;
+  // SenderPolicy.markRead through the same left join as policy_scope, false for a row whose policy is
+  // gone. Only planFor's `file` and `archive` branches read it.
+  mark_read: boolean;
 };
 
 // An applied row, read back so server/mail/actions/undo.ts can issue its inverse. `applied_at` rides
@@ -333,8 +336,16 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
     // Projected here rather than after the mutation on purpose: applyToState refuses a label write against
     // a state with no label set, and finding that out afterwards would mean a mutated mailbox with a row
     // marked failed. Everything predictable fails before step 3.
+    //
+    // The whole sequence, prefix included: to_state records what the server holds once the group has run,
+    // and undo replays exactly this fold to find its resume point. Projecting the primary mutation alone
+    // recorded a \Seen-marked message as unread and left every quarantine row unread at apply time with a
+    // to_state undo could match nothing against.
     try {
-      projected_states.set(row.action_id, applyToState(group.mutation, from_state));
+      projected_states.set(
+        row.action_id,
+        [...group.pre_mutations, group.mutation].reduce((state, mutation) => applyToState(mutation, state), from_state),
+      );
     } catch (error) {
       pre_mutation_failures.push({ action_id: row.action_id, error: toRecordedError(error) });
       continue;
@@ -541,6 +552,7 @@ export async function executeActions(input: ExecuteActionsInput): Promise<Execut
         trash_folder: folders.trash_folder,
         file_folder: row.kind === FILE_KIND ? resolved_path : null,
         quarantine_folder: row.kind === QUARANTINE_KIND ? resolved_path : null,
+        mark_read: row.mark_read,
       });
     } catch (error) {
       // Ruling 2: a missing SPECIAL-USE folder is a hard failure. planFor refuses rather than guessing a

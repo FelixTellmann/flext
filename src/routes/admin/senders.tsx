@@ -41,6 +41,14 @@ const policy_action_label: Record<PolicyActionValue, string> = {
   auto_trash: "Auto-trash",
 };
 
+// Mirrors MARK_READ_ACTIONS in server/mail/query/policies.ts, for the same bundle reason as above; the
+// schema refuses a drifted value rather than storing it.
+const mark_read_actions: readonly PolicyActionValue[] = ["file", "archive"];
+
+function canMarkRead(action: PolicyActionValue): boolean {
+  return mark_read_actions.includes(action);
+}
+
 // Mirrors PromotionGate in server/mail/actions/autonomy.ts (an admin route can't import it without
 // pulling that module, and the db handle behind it, into the client bundle — same reasoning
 // journal_status_filters carries in journal.tsx). Each label is only the headline; the server's own
@@ -251,6 +259,7 @@ const PolicyCell: FC<{ policy: PolicyRow | null; suppressed_by: string | null }>
         {policy_action_label[policy.action]}
         <span className="ml-1 text-gray-500 text-xs dark:text-dark-text">({policy.scope === "address" ? "address" : "domain"})</span>
       </span>
+      {policy.mark_read && <span className="w-fit rounded bg-info/10 px-1.5 py-0.5 text-info text-xs">marks read</span>}
       {policy.suspended_at !== null && <span className="text-warning text-xs">suspended</span>}
       {suppressed_by !== null && <span className="text-danger text-xs">suppressed by guard: {suppressed_by}</span>}
       {guard_status_unknown && (
@@ -270,11 +279,14 @@ const AssignmentCell: FC<{
   address_policy: PolicyRow | null;
   busy_key: string | null;
   draft_action: PolicyActionValue;
+  draft_mark_read: boolean;
   onAssign: () => void;
   onDraftChange: (action: PolicyActionValue) => void;
+  onMarkReadChange: (mark_read: boolean) => void;
   onRemove: () => void;
-}> = ({ address, address_policy, busy_key, draft_action, onAssign, onDraftChange, onRemove }) => {
+}> = ({ address, address_policy, busy_key, draft_action, draft_mark_read, onAssign, onDraftChange, onMarkReadChange, onRemove }) => {
   const any_busy = busy_key !== null;
+  const mark_read_offered = canMarkRead(draft_action);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
@@ -292,6 +304,22 @@ const AssignmentCell: FC<{
               </option>
             ))}
           </select>
+        </label>
+        <label
+          className={clsx(
+            "flex items-center gap-1 text-xs",
+            mark_read_offered ? "text-gray-700 dark:text-dark-text" : "text-gray-400 dark:text-dark-border",
+          )}
+          title="Only file and archive rules can mark read: the unread badge is the point of keeping mail in the inbox."
+        >
+          <input
+            checked={mark_read_offered && draft_mark_read}
+            className={checkbox_input}
+            disabled={any_busy || !mark_read_offered}
+            onChange={(event) => onMarkReadChange(event.target.checked)}
+            type="checkbox"
+          />
+          mark read
         </label>
         <ActionButton
           busy={busy_key === `assign:${address}`}
@@ -465,7 +493,10 @@ const PoliciesPanel: FC<{ onDone: () => Promise<void>; policies: PolicyRow[] }> 
                     <span className="block truncate font-medium text-gray-900 dark:text-dark-headings">{policy.value}</span>
                     <span className="block text-gray-500 text-xs dark:text-dark-text">{policy.scope}</span>
                   </td>
-                  <td className="py-2 pr-3 text-gray-600 dark:text-dark-text">{policy_action_label[policy.action] ?? policy.action}</td>
+                  <td className="py-2 pr-3 text-gray-600 dark:text-dark-text">
+                    {policy_action_label[policy.action] ?? policy.action}
+                    {policy.mark_read && <span className="ml-1 rounded bg-info/10 px-1.5 py-0.5 text-info text-xs">marks read</span>}
+                  </td>
                   <td className="py-2 pr-3">
                     <span
                       className={clsx(
@@ -541,6 +572,7 @@ function AdminSendersPage() {
 
   const [selected_addresses, setSelectedAddresses] = useState<Set<string>>(new Set());
   const [assign_drafts, setAssignDrafts] = useState<Record<string, PolicyActionValue>>({});
+  const [mark_read_drafts, setMarkReadDrafts] = useState<Record<string, boolean>>({});
   const [bulk_action_draft, setBulkActionDraft] = useState<PolicyActionValue>("archive");
   const [busy_key, setBusyKey] = useState<string | null>(null);
   const [policy_status, setPolicyStatus] = useState<string | null>(null);
@@ -607,12 +639,18 @@ function AdminSendersPage() {
     });
   };
 
-  const assignPolicy = async (address: string, action: PolicyActionValue) => {
+  const assignPolicy = async (address: string, action: PolicyActionValue, mark_read: boolean) => {
     const key = `assign:${address}`;
     setBusyKey(key);
     setPolicyStatus(null);
     try {
-      await orpc.mail.upsertPolicy({ scope: "address", value: address, action, source: "operator" });
+      await orpc.mail.upsertPolicy({
+        scope: "address",
+        value: address,
+        action,
+        mark_read: canMarkRead(action) && mark_read,
+        source: "operator",
+      });
       await router.invalidate();
     } catch (error) {
       setPolicyStatus(`Assign failed for ${address}: ${error instanceof Error ? error.message : String(error)}`);
@@ -876,6 +914,7 @@ function AdminSendersPage() {
                 const address_policy = policy_index.by_address.get(row.address.toLowerCase()) ?? null;
                 const suppressed_by = resolveSuppression(row, resolved_policy, never_touch_rules);
                 const draft_action = assign_drafts[row.address] ?? "archive";
+                const draft_mark_read = mark_read_drafts[row.address] ?? address_policy?.mark_read ?? false;
 
                 return (
                   <tr
@@ -942,8 +981,10 @@ function AdminSendersPage() {
                         address_policy={address_policy}
                         busy_key={busy_key}
                         draft_action={draft_action}
-                        onAssign={() => void assignPolicy(row.address, draft_action)}
+                        draft_mark_read={draft_mark_read}
+                        onAssign={() => void assignPolicy(row.address, draft_action, draft_mark_read)}
                         onDraftChange={(action) => setAssignDrafts((prev) => ({ ...prev, [row.address]: action }))}
+                        onMarkReadChange={(mark_read) => setMarkReadDrafts((prev) => ({ ...prev, [row.address]: mark_read }))}
                         onRemove={() => {
                           if (address_policy !== null) {
                             void removePolicy(row.address, address_policy.id);

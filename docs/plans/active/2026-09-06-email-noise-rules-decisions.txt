@@ -445,3 +445,48 @@ Q: with declined-sweep rescues counted, what does the suspension reason say?
 A: "the settled sweep or the declined sweep archived ... Both sweeps are suspended"
    not: leaving "the settled sweep archived" — false the first time a declined rescue trips it
 why: the operator reads that sentence to judge whether the rule was wrong
+
+[2026-09-06 21:36] phase 4b — undo of a mark-read file/archive row
+Q: how does undo know a file or archive row ran with the \Seen prefix?
+A: from the two recorded states: wasMarkedReadBetween(from_state, to_state) in kinds.ts, next to SEEN_FLAG;
+   the row carries no mark_read and the policy is never consulted
+   not: joining SenderPolicy.markRead into loadActionForUndo / loadUndoableActionsByPolicy — a policy
+   edited or deleted since the action ran would rebuild a plan matching no recorded state and undo would
+   refuse rows it can restore exactly; undo-by-policy is the "this rule was wrong" path, so edit-then-undo
+   is not exotic
+why: exact, not a heuristic: nothing in kinds.ts removes \Seen, and when from_state already carried it the
+   prefix's inverse is empty either way, so the only case where the prefix changes the inverse is the one
+   the states show
+
+[2026-09-06 21:36] phase 4b — executor projected to_state without the prefix
+Q: the executor's to_state_json for a quarantine row said the message was unread after a \Seen STORE. Fix?
+A: yes, in the same change: projected_states now folds [...pre_mutations, mutation], the fold undo's
+   replayStates already does. Pre-existing bug from the dwell branch: every quarantine row applied while
+   unread has a to_state undo can match nothing against, so it refuses. Rows already applied keep the old
+   snapshot; nothing rewrites them (undo of those refuses safely, as it did before)
+   not: leaving it and deriving mark_read for undo some other way — the snapshot was wrong for quarantine
+   too, and §7.1 says to_state is what the server holds after the mutation
+why: one fold, spelled once by both writer and reader
+
+[2026-09-06 21:36] phase 4b — rescue reach for mark-read rows
+Q: which rescue signals can still fire on a file/archive row that marked read?
+A: reply only. RESCUE_SIGNALS is ["opened", "replied"]; there is no manual-move signal anywhere in
+   server/mail/rescue/. recordSelfMarkedRead stores is_seen = true before the STORE, so the sync never
+   witnesses a transition and openedAt is never stamped: the opened signal is dead for these rows, and a
+   later manual move out of the target folder is not observed as a rescue either. Recorded, not fixed
+   not: inventing a move-based signal in this phase
+why: the brief assumed a manual-move path that does not exist; the fact goes on record for the operator
+
+[2026-09-06 21:36] phase 4b — mark_read on edit and on bulk assign
+Q: does an edit preserve a policy's mark_read?
+A: no: the schema defaults it to false, so an edit that omits it clears it, the demotion-on-edit shape
+   autonomy has; the bulk Assign on /admin/senders omits it and so resets it, and the per-row Assign
+   pre-fills the checkbox from the existing address policy
+   not: threading the row's current value through as a default
+why: the edited rule is a different rule, and one write path with one set of semantics
+
+[2026-09-06 21:36] phase 4b — decide() does not see mark_read
+Q: does SenderPolicyInput / matchPolicy carry mark_read?
+A: no; it is read at execution time through the executor's existing SenderPolicy left join (PendingActionRow)
+   not: adding it to SenderPolicyInput — nothing in decide() would read it
+why: the decision is the same either way; only the plan differs
