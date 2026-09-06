@@ -774,3 +774,80 @@ A: applied or pending executable-kind rows, as the review asked; a pending mover
    its guarded write, so it cannot touch a superseded row
 why: the tick promotes shadow rows against the pending row's message in the same window; either way the
    loser fails
+
+[2026-09-06 22:42] phase 7b — bearer helper location
+Q: a new server/auth/script-secret.ts, or the file three routes already import from?
+A: server/script-auth.ts, which already held matchesScriptSecret and was imported by os-ingest, os-digest
+   and personal-capture; only mail-sync.ts still carried its own copy. requireScriptSecret(request,
+   { secret }) returns the 503/401 Response or null; the secret is an options object so a test can pass
+   { secret: undefined } without a bare undefined falling into the serverEnv() default
+why: one file, and the fourth copy is what the register entry asked to remove
+
+[2026-09-06 22:42] phase 7b — site origin
+Q: where does the digest link base come from?
+A: SITE_ORIGIN = "https://flext.dev" in server/mail/digest/links.ts; env.ts and server/env.ts name no
+   origin variable, and the digest is the first outbound mail that links back to the site
+   not: a new env variable — one more thing a deploy can forget for one weekly email
+
+[2026-09-06 22:42] phase 7b — digest rows, the exact set
+Q: the SQL behind "unopened 30 days, by volume, auto rules out, watch-only in"?
+A: inbox rows only, per flavor through isInInboxSql composed in a CASE on Mailbox.flavor; grouped on
+   LOWER(fromAddress) (bulk's dedupe is case-insensitive, two rows would be two links for one list);
+   HAVING no row opened (openedAt set or isSeen) and MIN(internalDate) <= now - 30 d; auto rules excluded
+   with NOT EXISTS over SenderPolicy at autonomy auto AND suspendedAt IS NULL; count desc, oldest asc;
+   limit 40; no List-Unsubscribe required, the File link needs none; newest header per sender via
+   ROW_NUMBER
+   not: query/unsubscribe.ts's LEFT JOIN — an address and a domain rule on one sender double-counts
+        every message, and the count is both the sort key and the number the operator reads
+   not: excluding a suspended auto rule — its mail resolves to keep_inbox, so it is still arriving
+why: "what is still reaching you unread" is the register's definition, spelled once
+
+[2026-09-06 22:42] phase 7b — which rows carry an Unsubscribe link
+Q: a sender with neither a one-click nor a mailto route?
+A: File link only. The button refuses those senders too (phase 6 entry), and a link that records
+   "skipped" and then archives is not an unsubscribe
+why: the row must not promise a request that will not be sent
+
+[2026-09-06 22:42] phase 7b — the File link on an address that already has a rule
+Q: upsert the archive rule anyway, as the brief's "if another action, leave it" implies?
+A: never upsert when any rule exists, whatever its action: upsertPolicy writes autonomy shadow on every
+   call (demotion-on-edit), and a link is valid 14 days during which the button or the Unsubscribe link
+   may have promoted that sender. The page says "already has a rule, nothing changed". New rules carry
+   source "digest" (senders.tsx writes source as a free string, never renders it as an enum)
+why: a one-tap link in a two-week-old email must not switch a live rule off
+
+[2026-09-06 22:42] phase 7b — the Unsubscribe link's wait
+Q: await unsubscribeBulk for the page's "archived n" or answer at once?
+A: race it against 6 s: done in time answers "Unsubscribed from x, request sent, archived n"; past it
+   answers "still running, see /admin/unsubscribe" and the work finishes behind the response. Bun closes
+   a socket silent for 10 s (mail-sync.ts) and one-click.ts alone may spend that on the sender
+   not: always background — the common case finishes in a few seconds and the operator wants the count
+   DIGEST_PENDING_CAP = 200 duplicates orpc/mail.ts's MAX_ACTION_BATCH_SIZE, which is not exported and
+   whose file is under another agent's edit
+
+[2026-09-06 22:42] phase 7b — statuses and an empty digest
+Q: HTTP statuses on the link page, and a Monday with no rows?
+A: expired 200 (the register says never an error), invalid 400, a thrown step 500, everything else 200;
+   /api/mail-digest GET is 405; an empty list sends nothing and answers { sent: false, senders: 0 }
+why: a weekly "nothing to see" email trains the operator to ignore the ones that matter
+
+[2026-09-06 22:42] phase 7b — mailto: what the URL may set
+Q: which RFC 6068 header fields does the unsubscribe mail honour?
+A: to, subject and body only, percent-decoded (a literal + stays a +); missing subject or body default to
+   "unsubscribe"; a recipient SMTP rejects records failed even though nothing threw
+   not: arbitrary hfields — a sender-written URL must not put headers on the server's own mail
+why: the mail says one word to one address, from felix@tellmann.co.za per the sending decision
+
+[2026-09-06 22:42] phase 7b — dates in the email
+Q: toLocaleDateString?
+A: hand-rolled "7 Sep 2026" in UTC: Bun's ICU prints "Sep", newer Node prints "Sept", and the test and
+   the digest should read the same on both
+
+[2026-09-06 22:42] phase 7b — known gaps
+- A mail client or link scanner that GETs every link performs the action; both actions are idempotent
+  and the File one is watch-only, but a scanner could send an unsubscribe. The decision names a one-tap
+  link, so no confirm page; revisit if a scanner ever shows up in UnsubscribeAttempt
+- Production Message has no listUnsubscribePost until migration 0021 is applied: listDigestSenders
+  (and phase 6's listUnsubscribeCandidates) fail with ER_BAD_FIELD_ERROR until the plan's db:migrate step
+- bulk.ts does not yet call unsubscribeMailtoSender for mailto-only senders; the supervisor wires it
+  after the other agent's fix lands
