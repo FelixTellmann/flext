@@ -31,11 +31,17 @@ test("a second acquire while held is refused and names the holder", () => {
 });
 
 test("a lock older than the stale window is treated as free", () => {
+  expect(STALE_SYNC_LOCK_MS).toBe(2 * 60 * 60 * 1000);
+
   const crashed = tryAcquireSyncLock("backfill", T0);
   expect(crashed.acquired).toBe(true);
 
-  const still_held = tryAcquireSyncLock("incremental", T0 + STALE_SYNC_LOCK_MS - 1);
+  // A full backfill runs every mailbox in sequence and can pass 30 minutes; it must still hold the lock.
+  const still_held = tryAcquireSyncLock("incremental", T0 + 45 * 60 * 1000);
   expect(still_held.acquired).toBe(false);
+
+  const still_held_at_edge = tryAcquireSyncLock("incremental", T0 + STALE_SYNC_LOCK_MS - 1);
+  expect(still_held_at_edge.acquired).toBe(false);
 
   const taken_over = tryAcquireSyncLock("incremental", T0 + STALE_SYNC_LOCK_MS);
   expect(taken_over.acquired).toBe(true);

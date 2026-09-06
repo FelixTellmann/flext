@@ -4,9 +4,9 @@ export type HeldSyncLock = { mode: SyncMode; started_at: string };
 
 export type SyncLockResult = { acquired: true; release: () => void } | { acquired: false; held: HeldSyncLock };
 
-// A run that crashed without reaching its finally (process killed mid-sync, container restart) would
-// otherwise hold the lock until the next deploy; nothing legitimate runs longer than this.
-export const STALE_SYNC_LOCK_MS = 30 * 60 * 1000;
+// The lock is module state, so a process that dies frees it by dying; this window only covers a promise
+// that hangs and never settles. Two hours clears a full backfill (about 600 s per 10k-message mailbox, run in sequence).
+export const STALE_SYNC_LOCK_MS = 2 * 60 * 60 * 1000;
 
 let held: (HeldSyncLock & { started_ms: number }) | null = null;
 

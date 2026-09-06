@@ -234,3 +234,17 @@ A: warn, and still mirror the rename. The post-rename check compares the new fol
    rather than a refetch-as-new.
    not: refuse — the mismatch predates the rename and a refusal would leave it nested for no gain
 why: the cause of the flapping validity is outside this phase; reported to the operator
+
+[2026-09-06 15:50] repair — sync endpoint (review fix)
+Q: the stale-lock window was 30 minutes — shorter than a full backfill (the 2026-08-17 schedules runbook
+   records 597 s for one 10k-message mailbox, and the endpoint backfills every mailbox in sequence). A
+   backfill past 30 min would read as stale and the next incremental tick would run alongside it, the
+   exact overlap the lock exists to prevent. What is the window for?
+A: 2 hours. The lock is module state, so a process that dies frees it by dying; the window only covers a
+   promise that hangs and never settles, and 2 h clears a full backfill with room. Also: needs_operator is
+   now read before the lock is acquired — a throw from that DB read used to exit the handler with the lock
+   held and nothing left to release it.
+   not: keep 30 min and exempt backfill — a mode-aware window is two rules where one suffices
+   not: drop the guard entirely — a hung IMAP promise would then hold the lock until the next deploy
+why: the guard's only job is a hung promise, and its cost of being too short is the concurrent run the
+     lock was added to stop; too long merely delays recovery from a hang that already needs a look
