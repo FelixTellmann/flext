@@ -1,4 +1,4 @@
-**2026-09-06** — two corrections from live counts, made before phase 4 was built. A first contact with no DKIM verdict is not disqualified from human-shaped; only a failed signature is. The "rows decided after the switch" cutoff applies to first-contact quarantine only; the settled and declined sweeps drain their existing proposals when switched on, the way a policy does.
+**2026-09-06** — two corrections from live counts, made before phase 4 was built. A first contact with no DKIM verdict is not disqualified from human-shaped; only a failed signature is. The "arrived after the switch" cutoff applies to first-contact quarantine only; the settled and declined sweeps drain their existing proposals when switched on, the way a policy does.
 
 **Lost:** requiring `dkim_aligned === true` (the 2026-09-06 first-contact decision); the cutoff on all three scheduled sources (the 2026-09-06 autonomy decision).
 
