@@ -829,11 +829,12 @@ describe("the rescue window is floored at the operator's last clear", () => {
   });
 
   test("three sweep rescues before the clear plus one after do NOT suspend", async () => {
+    const cleared_at = daysAgo(5);
     const port = createFakePort({
       rows: [sweepRow("action-w1")],
       live: { [rowKey("message-action-w1")]: facts({ opened_at: OPENED_AFTER }) },
       sweep_rescues_at: [daysAgo(10), daysAgo(9), daysAgo(8), daysAgo(2)],
-      suspension_clears: { first_contact_cleared_at: null, dwell_cleared_at: daysAgo(5) },
+      suspension_clears: { first_contact_cleared_at: null, dwell_cleared_at: cleared_at },
     });
 
     const result = await detectRescues({ port, mailbox_id: MAILBOX_ID, batch_size: 50 });
@@ -842,7 +843,7 @@ describe("the rescue window is floored at the operator's last clear", () => {
     expect(result.dwell_suspended).toBe(false);
     expect(port.dwell_suspensions).toEqual([]);
     expect(port.count_windows).toHaveLength(1);
-    expect(port.count_windows[0]?.since.getTime()).toBe(daysAgo(5).getTime());
+    expect(port.count_windows[0]?.since).toBe(cleared_at);
   });
 
   test("three sweep rescues after the clear suspend, and the reason names the clear rather than the 30 days", async () => {
