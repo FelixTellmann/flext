@@ -1,5 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import type { FC } from "react";
+import { orpc } from "~/integrations/orpc";
+import { SessionsStrip } from "./-sessions-strip";
+
+// The lead sentence plus six earlier sittings: enough to argue with the threshold from, short enough to
+// sit above the link hub without pushing it below the fold.
+const SESSION_STRIP_LIMIT = 7;
 
 const admin_links = [
   { to: "/admin/needs-action", label: "Needs Action", description: "Threads waiting on a reply from you." },
@@ -29,8 +35,11 @@ const admin_links = [
 ] as const;
 
 const AdminHome: FC = () => {
+  const { sessions, loaded_at } = Route.useLoaderData();
+
   return (
     <div className="flex flex-col gap-3">
+      <SessionsStrip loaded_at={loaded_at} sessions={sessions} />
       <p className="text-zinc-600 dark:text-dark-text">Read-only mail dashboards. Snoozing, filing and suppression arrive with phase 3.</p>
       <ul className="flex flex-col gap-2">
         {admin_links.map((link) => (
@@ -50,5 +59,9 @@ const AdminHome: FC = () => {
 };
 
 export const Route = createFileRoute("/admin/")({
+  loader: async () => ({
+    sessions: await orpc.mail.listRecentAttentionSessions({ limit: SESSION_STRIP_LIMIT }),
+    loaded_at: new Date().toISOString(),
+  }),
   component: AdminHome,
 });

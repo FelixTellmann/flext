@@ -23,6 +23,7 @@ import { createImapProvider } from "@server/mail/providers/imap";
 import { observeCertificate } from "@server/mail/providers/tls";
 import type { MailboxProvider } from "@server/mail/providers/types";
 import { ACTION_JOURNAL_STATUS_FILTERS, listActionJournal } from "@server/mail/query/actions";
+import { listRecentAttentionSessions } from "@server/mail/query/attention-sessions";
 import { listFilingQueue } from "@server/mail/query/filing";
 import { listNeedsAction } from "@server/mail/query/needs-action";
 import {
@@ -427,6 +428,13 @@ export const mailProcedures = {
   listPromotionCandidates: authed
     .input(z.object({ limit: z.number().int().positive().max(100).default(25) }))
     .handler(async ({ input }) => listPromotionCandidates({ limit: input.limit })),
+
+  // The Sessions strip (inbox-dwell §3): when the system last believed the operator was reading mail, on
+  // what evidence, in which mailboxes. Read-only — it is the calibration surface for the session
+  // threshold, and a strip that disagrees with his memory is the signal the threshold is wrong.
+  listRecentAttentionSessions: authed
+    .input(z.object({ limit: z.number().int().positive().max(50).default(7) }))
+    .handler(async ({ input }) => listRecentAttentionSessions({ limit: input.limit })),
 
   // Promoting several policies in one action, and NOT a bypass of the gate: it calls the same
   // promotePolicyAutonomy per policy, with the same reviewed_shadow_record the operator asserted, and
