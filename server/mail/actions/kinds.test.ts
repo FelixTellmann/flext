@@ -5,6 +5,7 @@ import {
   GMAIL_INBOX_LABEL,
   inverseOf,
   isExecutableActionKind,
+  type MailboxMutation,
   type MailboxState,
   NON_ACTION_KINDS,
   type PlanContext,
@@ -546,7 +547,7 @@ describe("set_flags", () => {
 // out. The prefix is the one quarantine carries, so everything already proven about it — address-preserving,
 // issued before the move, inverted last — holds here without a second implementation.
 describe("mark_read on file and archive", () => {
-  const seen_prefix = [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }];
+  const seen_prefix: MailboxMutation[] = [{ verb: "set_flags", add_flags: [SEEN_FLAG], remove_flags: [] }];
   const marked_kinds = ["file", "archive"] as const;
 
   function markedContext(flavor: MailboxFlavor, from_state: MailboxState): PlanContext {
@@ -594,7 +595,7 @@ describe("mark_read on file and archive", () => {
     const from_state = generic_states[1];
     const marked = planFor("archive", "generic", markedContext("generic", from_state));
     const unmarked = planFor("archive", "generic", contextFor("generic", from_state));
-    expect({ ...marked, pre_mutations: [] }).toEqual(unmarked);
+    expect({ ...marked, pre_mutations: [] as MailboxMutation[] }).toEqual(unmarked);
   });
 });
 

@@ -344,7 +344,7 @@ async function executeGroup(input: { group: ExecutionGroup; provider: MailboxPro
     try {
       projected_states.set(
         row.action_id,
-        [...group.pre_mutations, group.mutation].reduce((state, mutation) => applyToState(mutation, state), from_state),
+        [...group.pre_mutations, group.mutation].reduce<MailboxState>((state, mutation) => applyToState(mutation, state), from_state),
       );
     } catch (error) {
       pre_mutation_failures.push({ action_id: row.action_id, error: toRecordedError(error) });
