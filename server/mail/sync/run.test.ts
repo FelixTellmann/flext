@@ -34,6 +34,8 @@ function okPort(): RescuePort {
     suspendPolicy: async () => false,
     countRecentSweepRescues: async () => 0,
     suspendMailboxDwell: async () => false,
+    countRecentFirstContactRescues: async () => 0,
+    suspendMailboxFirstContact: async () => false,
   };
 }
 
@@ -232,6 +234,7 @@ function createFakeJournal(rows: FakeActionRow[]): ActionJournal & { writes: str
     },
     loadActionForPromotion: async (): Promise<ActionPromotionLookup | null> => null,
     loadShadowActionsByPolicy: async (): Promise<ActionPromotionLookup[]> => [],
+    loadShadowActionsBySource: async (): Promise<ActionPromotionLookup[]> => [],
     promoteShadowActions: async (): Promise<string[]> => {
       writes.push("promoteShadowActions");
       return [];

@@ -1,7 +1,11 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, senderPolicy } from "@server/db/schema";
 import type { ActionJournal } from "@server/mail/actions/executor";
+import type { ExecutableActionKind } from "@server/mail/actions/kinds";
+import { QUARANTINE_KIND } from "@server/mail/actions/kinds";
 import { promotePolicyActions } from "@server/mail/actions/promote";
+import { FIRST_CONTACT_SOURCE, SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import type { PolicyAutonomy } from "@server/mail/query/policies";
 import { demotePolicyToShadow, loadPolicyById, promotePolicyToAuto } from "@server/mail/query/policies";
 import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 
@@ -13,7 +17,62 @@ export type AutoPolicyRow = { sender_policy_id: string };
 // implementation would query production's live sender policies.
 export type AutonomyPort = {
   loadAutoPolicies: () => Promise<AutoPolicyRow[]>;
+  // The mailbox's three source switches and their suspensions, read fresh from the row rather than off
+  // the MailboxRow the sync loaded at its start: rescue detection runs between the two and may have just
+  // suspended first contact, and that suspension must take effect in this run. Null when no such mailbox
+  // exists, which promotes nothing.
+  loadSourceAutonomy: (mailbox_id: string) => Promise<SourceAutonomyRow | null>;
 };
+
+// docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md. The three decide() sources whose
+// rows carry no policy id, so the policy join above can never reach them.
+export type ScheduledSource = typeof FIRST_CONTACT_SOURCE | typeof SWEEP_SETTLED_SOURCE | typeof SWEEP_DECLINED_SOURCE;
+
+// The Mailbox columns the eligibility decision reads, and nothing else.
+export type SourceAutonomyRow = {
+  first_contact_autonomy: PolicyAutonomy;
+  first_contact_autonomy_set_at: Date | null;
+  first_contact_suspended_at: Date | null;
+  settled_sweep_autonomy: PolicyAutonomy;
+  declined_sweep_autonomy: PolicyAutonomy;
+  // Suspends BOTH sweeps: 1.11 suspends the mailbox's sweeping, not one sweep.
+  dwell_suspended_at: Date | null;
+};
+
+export type EligibleSource = {
+  source: ScheduledSource;
+  // The one executable kind this source emits. A guard-suppressed row shares the source but is
+  // keep_inbox, and planFor throws on it, so the read is scoped by kind and never by source alone.
+  kind: ExecutableActionKind;
+  // The promotion cutoff: only rows decided after this moment are promoted. Null means no cutoff.
+  decided_after: Date | null;
+};
+
+// Pure: which sources this mailbox row lets the tick promote, in the order the budget is spent. First
+// contact first — it is the source with the freshest, smallest set (the cutoff excludes its backlog),
+// and behind the sweeps' waiting proposals it would sit unpromoted for as many ticks as they take to
+// drain.
+//
+// First contact's cutoff is `first_contact_autonomy_set_at`, and a row at `auto` with no set-at time is
+// NOT eligible rather than promoted without one: docs/decisions/2026-09-06-first-contact-dkim-unknown-
+// and-cutoff-scope.md makes the cutoff the thing that keeps weeks of proposals made under the old rule
+// from moving, so a switch thrown without recording when is a switch this function refuses to read. The
+// sweeps have no cutoff: their old proposals were made by the same rule being switched on.
+export function eligibleScheduledSources(row: SourceAutonomyRow): EligibleSource[] {
+  const eligible: EligibleSource[] = [];
+
+  if (row.first_contact_autonomy === "auto" && row.first_contact_suspended_at === null && row.first_contact_autonomy_set_at !== null) {
+    eligible.push({ source: FIRST_CONTACT_SOURCE, kind: QUARANTINE_KIND, decided_after: row.first_contact_autonomy_set_at });
+  }
+  if (row.settled_sweep_autonomy === "auto" && row.dwell_suspended_at === null) {
+    eligible.push({ source: SWEEP_SETTLED_SOURCE, kind: "archive", decided_after: null });
+  }
+  if (row.declined_sweep_autonomy === "auto" && row.dwell_suspended_at === null) {
+    eligible.push({ source: SWEEP_DECLINED_SOURCE, kind: "archive", decided_after: null });
+  }
+
+  return eligible;
+}
 
 export type PromoteAutoPoliciesInput = {
   mailbox_id: string;
@@ -70,6 +129,62 @@ export async function promoteAutoPolicies(input: PromoteAutoPoliciesInput): Prom
   return promoted_action_ids;
 }
 
+// The scheduled-source sibling of promoteAutoPolicies, under the same contract: only the ids THIS CALL's
+// guarded UPDATEs flipped come back, and `batch_size` is a total budget spent down across the sources
+// eligibleScheduledSources lists. The suspension check is in the row that function reads, which the port
+// loads fresh — see loadSourceAutonomy.
+export async function promoteAutoSources(input: PromoteAutoPoliciesInput): Promise<string[]> {
+  if (input.batch_size < 1) {
+    return [];
+  }
+
+  const row = await input.port.loadSourceAutonomy(input.mailbox_id);
+  if (row === null) {
+    return [];
+  }
+
+  const promoted_action_ids: string[] = [];
+
+  for (const eligible of eligibleScheduledSources(row)) {
+    const remaining = input.batch_size - promoted_action_ids.length;
+    if (remaining <= 0) {
+      break;
+    }
+
+    const rows = await input.journal.loadShadowActionsBySource({
+      mailbox_id: input.mailbox_id,
+      source: eligible.source,
+      kind: eligible.kind,
+      decided_after: eligible.decided_after,
+      batch_size: remaining,
+    });
+    if (rows.length === 0) {
+      continue;
+    }
+
+    promoted_action_ids.push(
+      ...(await input.journal.promoteShadowActions(rows.map((shadow_row) => ({ action_id: shadow_row.action_id })))),
+    );
+  }
+
+  return promoted_action_ids;
+}
+
+// Everything the scheduled tick may promote for one mailbox, under ONE budget: policies first, then the
+// scheduled sources with whatever is left. Policies first because a policy at `auto` passed a reviewed
+// shadow record and a rescue gate to get there, and because it keeps the tick's behaviour for policies
+// exactly what it was before sources could be promoted at all.
+export async function promoteAutoDecisions(input: PromoteAutoPoliciesInput): Promise<string[]> {
+  const from_policies = await promoteAutoPolicies(input);
+  const remaining = input.batch_size - from_policies.length;
+  if (remaining <= 0) {
+    return from_policies;
+  }
+
+  const from_sources = await promoteAutoSources({ ...input, batch_size: remaining });
+  return [...from_policies, ...from_sources];
+}
+
 // The suspension guard is right here, in the WHERE clause: `isNull(senderPolicy.suspended_at)` alongside
 // `autonomy = 'auto'`. Nothing upstream of this query can substitute for it — a caller-side check is one a
 // second caller can skip, which is exactly Requirement 3's failure mode.
@@ -80,6 +195,21 @@ export function createDatabaseAutonomyPort(): AutonomyPort {
         .select({ sender_policy_id: senderPolicy.id })
         .from(senderPolicy)
         .where(and(eq(senderPolicy.autonomy, "auto"), isNull(senderPolicy.suspended_at)));
+    },
+    loadSourceAutonomy: async (mailbox_id) => {
+      const rows = await db
+        .select({
+          first_contact_autonomy: mailbox.first_contact_autonomy,
+          first_contact_autonomy_set_at: mailbox.first_contact_autonomy_set_at,
+          first_contact_suspended_at: mailbox.first_contact_suspended_at,
+          settled_sweep_autonomy: mailbox.settled_sweep_autonomy,
+          declined_sweep_autonomy: mailbox.declined_sweep_autonomy,
+          dwell_suspended_at: mailbox.dwell_suspended_at,
+        })
+        .from(mailbox)
+        .where(eq(mailbox.id, mailbox_id))
+        .limit(1);
+      return rows[0] ?? null;
     },
   };
 }

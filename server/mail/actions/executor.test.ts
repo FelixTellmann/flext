@@ -273,6 +273,9 @@ function createFakeJournal(input: {
     loadShadowActionsByPolicy: async () => {
       throw new Error("loadShadowActionsByPolicy is not part of this fixture");
     },
+    loadShadowActionsBySource: async () => {
+      throw new Error("loadShadowActionsBySource is not part of this fixture");
+    },
     promoteShadowActions: async () => {
       throw new Error("promoteShadowActions is not part of this fixture");
     },

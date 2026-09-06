@@ -1,6 +1,6 @@
 import { db } from "@server/db/drizzle";
 import { mailbox, syncRun } from "@server/db/schema";
-import { createDatabaseAutonomyPort, promoteAutoPolicies } from "@server/mail/actions/autonomy";
+import { createDatabaseAutonomyPort, promoteAutoDecisions } from "@server/mail/actions/autonomy";
 import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
 import { executeActions } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
@@ -137,14 +137,15 @@ export type AutoPromotionInput = { mailbox_id: string; run_id: string };
 // set by joining to the policy's autonomy: a row's autonomy at execution time is not necessarily what
 // promoted it, and an id list is precise where a join is a guess.
 //
-// A thin wrapper around promoteAutoPolicies, wiring the real database-backed port and journal. The
-// promotion logic itself — including the suspension guard — lives in server/mail/actions/autonomy.ts,
+// A thin wrapper around promoteAutoDecisions — auto policies first, then the mailbox's scheduled sources
+// at `auto` with what is left of the one budget — wiring the real database-backed port and journal. The
+// promotion logic itself, including both suspension guards, lives in server/mail/actions/autonomy.ts,
 // where it can be exercised over fakes instead of the production database. `run_id` rides on
 // AutoPromotionInput for symmetry with the rest of this pipeline's per-mailbox inputs; promotion has no
-// use for it, since eligibility is a property of the policy and the shadow rows, not of which sync run is
-// asking.
+// use for it, since eligibility is a property of the policy, the mailbox and the shadow rows, not of
+// which sync run is asking.
 export async function promoteAutoActions(input: AutoPromotionInput): Promise<string[]> {
-  return promoteAutoPolicies({
+  return promoteAutoDecisions({
     mailbox_id: input.mailbox_id,
     batch_size: EXECUTOR_BATCH_SIZE,
     port: createDatabaseAutonomyPort(),

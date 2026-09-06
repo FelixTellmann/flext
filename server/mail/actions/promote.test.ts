@@ -69,6 +69,10 @@ function createFakeJournal(input: { events: string[]; seed: FakeRow[] }): FakeJo
       return matches.slice(0, query.batch_size);
     },
 
+    loadShadowActionsBySource: async () => {
+      throw new Error("loadShadowActionsBySource is not part of this fixture");
+    },
+
     // Mirrors journal.ts's `WHERE status = 'shadow'` guard AND its return value: only a row still at
     // "shadow" moves, nothing but `status` changes, and only the ids that moved come back — the
     // fixture's stand-in for affectedRows.

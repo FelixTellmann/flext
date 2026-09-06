@@ -89,6 +89,8 @@ const source_label: Record<string, string> = {
   suspended_policy: "Suppressed — policy suspended",
   guard: "Suppressed by guard",
   thread_state: "Suppressed — thread snoozed/done",
+  first_contact: "First contact, machine-shaped",
+  first_contact_human: "First contact, human-shaped",
   derived: "Derived default, no policy",
   fallback: "No rule matched",
 };
@@ -104,7 +106,7 @@ type SourceCategory = "applied" | "suppressed" | "neutral";
 const APPLIED_SOURCES = ["address_policy", "domain_policy"];
 const SUPPRESSED_SOURCES = ["guard", "suspended_policy", "thread_state"];
 
-// A null source is a row whose `Action.source` is not one of the seven decide() emits (toDecisionSource
+// A null source is a row whose `Action.source` is not one of the sources decide() emits (toDecisionSource
 // in classify/rules.ts). It must not read as "applied" or "suppressed" — neither is known to be true.
 function classifySource(source: string | null): SourceCategory {
   if (source !== null && APPLIED_SOURCES.includes(source)) {

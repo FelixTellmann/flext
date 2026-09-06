@@ -1,7 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message, senderPolicy } from "@server/db/schema";
 import { APPLIED_STATUS } from "@server/mail/actions/executor";
-import { SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import { FIRST_CONTACT_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import { isSentByMeSql, threadGroupKeySql } from "@server/mail/query/signal-sql";
 import type {
   DwellSuspensionEntry,
@@ -308,6 +308,33 @@ async function suspendMailboxDwell(entry: DwellSuspensionEntry): Promise<boolean
   return header.affectedRows > 0;
 }
 
+// First contact's pair of the two above: the same stamped-rescue count and the same SQL guard, on the
+// mailbox's own first-contact columns.
+async function countRecentFirstContactRescues(input: { mailbox_id: string; since: Date }): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(action)
+    .where(
+      and(
+        eq(action.mailbox_id, input.mailbox_id),
+        eq(action.source, FIRST_CONTACT_SOURCE),
+        isNotNull(action.rescued_at),
+        gte(action.rescued_at, input.since),
+      ),
+    );
+
+  return Number(row?.total ?? 0);
+}
+
+async function suspendMailboxFirstContact(entry: DwellSuspensionEntry): Promise<boolean> {
+  const [header] = await db
+    .update(mailbox)
+    .set({ first_contact_suspended_at: entry.suspended_at, first_contact_suspension_reason: entry.reason, updatedAt: new Date() })
+    .where(and(eq(mailbox.id, entry.mailbox_id), isNull(mailbox.first_contact_suspended_at)));
+
+  return header.affectedRows > 0;
+}
+
 export function createDatabaseRescuePort(): RescuePort {
   return {
     loadRescueCandidates,
@@ -316,5 +343,7 @@ export function createDatabaseRescuePort(): RescuePort {
     suspendPolicy,
     countRecentSweepRescues,
     suspendMailboxDwell,
+    countRecentFirstContactRescues,
+    suspendMailboxFirstContact,
   };
 }

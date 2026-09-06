@@ -315,3 +315,61 @@ A: one transport per sendMail call, closed in finally; the stored IMAP port (993
    a constant
    not: a pooled module-level transport — a weekly digest plus a handful of mail-to unsubscribes
 why: nothing to pool for; a per-call transport cannot hold a stale socket across a quiet week
+
+[2026-09-06 22:40] phase 4a — source labels
+Q: which admin source labels get the new first_contact_human?
+A: both maps (shadow.tsx, journal.tsx), and first_contact gets one beside it; the stale "seven decide()
+   emits" count in shadow.tsx reworded count-free
+   not: first_contact_human alone — a labelled "human-shaped" next to a raw "first_contact" reads as a bug
+why: the two are one split; the page has to show both halves the same way
+
+[2026-09-06 22:40] phase 4a — autonomy column type
+Q: type the three Mailbox autonomy columns with PolicyAutonomy from query/policies.ts?
+A: varchar(..., { enum: ["shadow", "auto"] }) in the schema; autonomy.ts types its row with PolicyAutonomy
+   not: importing PolicyAutonomy into schema.ts — policies.ts imports schema, a cycle
+why: the enum option gives the same union with no import; the two are structurally identical
+
+[2026-09-06 22:40] phase 4a — where the shadow-by-source read lives
+Q: ActionJournal or AutonomyPort?
+A: ActionJournal.loadShadowActionsBySource, beside loadShadowActionsByPolicy; five test fakes gain a
+   one-line stub
+   not: AutonomyPort — one fake fewer, but the journal is the Action-table port and the write already
+   goes through journal.promoteShadowActions
+why: one port per table; a read of Action rows on the mailbox-eligibility port is a second seam for the
+   same rows
+
+[2026-09-06 22:40] phase 4a — kind filter on source promotion
+Q: filter by EXECUTABLE_ACTION_KINDS or the one kind each source emits?
+A: the one kind: first_contact -> quarantine, both sweeps -> archive
+   not: IN (executable kinds) — satisfies the brief too, but admits a kind decide() never emits for
+   that source if a row is ever rewritten by hand
+why: a subset of executable kinds is still executable, and the tighter predicate is what the source
+   actually means
+
+[2026-09-06 22:40] phase 4a — budget order
+Q: one batch budget per tick: policies first or sources first? and among sources?
+A: policies first, sources with the remainder; among sources first_contact, then sweep_settled, then
+   sweep_declined
+   not: sources first — would change what the tick does for policies that were already at auto
+why: an auto policy passed a reviewed shadow record and a rescue gate; first contact is the smallest,
+   freshest set (cutoff) and would starve behind the sweeps' 245 waiting rows otherwise
+
+[2026-09-06 22:40] phase 4a — first contact at auto with no set-at time
+Q: promote with no cutoff, or refuse?
+A: not eligible; nothing promoted until first_contact_autonomy_set_at is set
+   not: promote everything — moves the whole pre-split backlog the cutoff exists to protect
+why: the cutoff is the decision's safety property; a switch without a time is a switch it cannot read
+
+[2026-09-06 22:40] phase 4a — fresh mailbox read for source eligibility
+Q: read the autonomy switches off the MailboxRow the sync loaded, or fresh from the port?
+A: AutonomyPort.loadSourceAutonomy(mailbox_id), read at promotion time
+   not: mailbox_row — loaded before rescue detection ran, so a suspension written this run is not in it
+why: same argument autonomy.ts makes for the policy suspension: it must take effect in this run
+
+[2026-09-06 22:40] phase 4a — rescue port shape
+Q: generalise countRecentSweepRescues by source, or add a first-contact pair?
+A: two new port methods (countRecentFirstContactRescues, suspendMailboxFirstContact); the 1.11
+   threshold and window constants are shared and the comment says so; DetectRescuesResult gains
+   first_contact_suspended
+   not: a source parameter on the existing count — renames a method three fakes and journal.ts spell
+why: same three-in-30 rule, its own columns, and the existing method keeps its name and callers

@@ -11,6 +11,7 @@ import type {
   FromStateEntry,
   PendingActionRow,
   PromotedEntry,
+  ShadowActionsBySourceQuery,
   UndoableActionRow,
   UndoFailureEntry,
   UndoneEntry,
@@ -21,7 +22,8 @@ import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 import type { PolicyScope } from "@server/mail/classify/rules";
 import { loadFilingBindings } from "@server/mail/filing/bindings";
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, or } from "drizzle-orm";
 
 // The only drizzle-backed implementation of the executor's journal port, kept out of executor.ts so a test
 // importing the executor cannot reach a real connection: every DATABASE_URL variant points at the same
@@ -363,6 +365,41 @@ async function loadShadowActionsByPolicy(input: {
   return rows;
 }
 
+// The same scoping discipline as loadShadowActionsByPolicy, for rows that carry no policy id. `kind` is
+// in the WHERE clause rather than filtered by the caller because a source-only read would hand back the
+// guard-suppressed keep_inbox rows that share the source, and the executor's planFor throws on those.
+// `gt` on decided_at also drops a null decided_at, which is what a cutoff should do with a row whose
+// moment is unknown.
+async function loadShadowActionsBySource(input: ShadowActionsBySourceQuery): Promise<ActionPromotionLookup[]> {
+  if (input.mailbox_id.length === 0 || input.source.length === 0) {
+    throw new Error(
+      "loadShadowActionsBySource needs both a mailbox id and a source: an unscoped promote would approve every shadow decision in this mailbox.",
+    );
+  }
+  if (!Number.isInteger(input.batch_size) || input.batch_size < 1) {
+    throw new Error(
+      `loadShadowActionsBySource needs a positive batch size, got ${input.batch_size}. The caller bounds how many decisions one run may promote.`,
+    );
+  }
+
+  const clauses: SQL[] = [
+    eq(action.status, SHADOW_STATUS) as SQL,
+    eq(action.mailbox_id, input.mailbox_id) as SQL,
+    eq(action.source, input.source) as SQL,
+    eq(action.kind, input.kind) as SQL,
+  ];
+  if (input.decided_after !== null) {
+    clauses.push(gt(action.decided_at, input.decided_after) as SQL);
+  }
+
+  return db
+    .select({ action_id: action.id, mailbox_id: action.mailbox_id, status: action.status })
+    .from(action)
+    .where(and(...clauses))
+    .orderBy(asc(action.decided_at), asc(action.id))
+    .limit(input.batch_size);
+}
+
 // Writes status "pending" and NOTHING else. The `WHERE status = 'shadow'` guard is the enforcement point
 // for Ruling 1: no row this statement touches can have been "applied" (or undone, deferred, or already
 // pending) a moment before, because any of those fails the guard and the row is left exactly as it was.
@@ -430,6 +467,7 @@ export function createDatabaseJournal(): ActionJournal {
     recordUndoFailure,
     loadActionForPromotion,
     loadShadowActionsByPolicy,
+    loadShadowActionsBySource,
     promoteShadowActions,
     resolveFilingActions,
   };

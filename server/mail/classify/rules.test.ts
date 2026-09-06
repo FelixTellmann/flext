@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { GuardInput } from "@server/mail/classify/guards";
 import type { Decision, DecisionInput, SenderPolicyInput, ThreadStateValue } from "@server/mail/classify/rules";
-import { DERIVED_ACTIONS, decide } from "@server/mail/classify/rules";
+import { DERIVED_ACTIONS, decide, isHumanShapedFirstContact } from "@server/mail/classify/rules";
 import type { MessageSignals } from "@server/mail/classify/signals";
 
 const base_signals: MessageSignals = {
@@ -632,9 +632,11 @@ describe("a policy can never name purge", () => {
 });
 
 describe("first contact", () => {
-  const first_contact: DecisionInput = { ...base_input, signals: { ...base_signals, is_first_contact: true } };
+  // Machine-shaped: base_signals is a person writing to me directly, so one failed test is what puts this
+  // fixture on the quarantine path. The human-shaped split has its own describe below.
+  const first_contact: DecisionInput = { ...base_input, signals: { ...base_signals, is_first_contact: true, is_automated: true } };
 
-  test("a first contact with no policy is quarantined", () => {
+  test("a machine-shaped first contact with no policy is quarantined", () => {
     const decision = decide(first_contact);
     expect(decision.action).toBe("quarantine");
     expect(decision.source).toBe("first_contact");
@@ -653,7 +655,7 @@ describe("first contact", () => {
   });
 
   test("a sender with history is not a first contact and is not quarantined", () => {
-    const decision = decide({ ...first_contact, signals: { ...base_signals, is_first_contact: false } });
+    const decision = decide({ ...first_contact, signals: { ...base_signals, is_first_contact: false, is_automated: true } });
     expect(decision.action).not.toBe("quarantine");
   });
 
@@ -687,6 +689,96 @@ describe("first contact", () => {
     });
     expect(decision.action).toBe("quarantine");
     expect(decision.source).toBe("first_contact");
+  });
+});
+
+// docs/decisions/2026-09-06-first-contact-human-or-machine.md: a first email that could be a person
+// writing to the operator stays in the inbox; only the machine-shaped remainder is quarantined.
+describe("first contact, human-shaped or machine-shaped", () => {
+  const human: MessageSignals = { ...base_signals, is_first_contact: true };
+
+  test("isHumanShapedFirstContact is the four tests and nothing else", () => {
+    expect(isHumanShapedFirstContact(human)).toBe(true);
+    expect(isHumanShapedFirstContact({ ...human, is_bulk: true })).toBe(false);
+    expect(isHumanShapedFirstContact({ ...human, is_automated: true })).toBe(false);
+    expect(isHumanShapedFirstContact({ ...human, dkim_aligned: false })).toBe(false);
+    expect(isHumanShapedFirstContact({ ...human, addressed_to_me: false })).toBe(false);
+    // Not a test the function runs: a sender with history is simply not a first contact, and that is
+    // decide()'s question, asked before this one.
+    expect(isHumanShapedFirstContact({ ...human, is_first_contact: false })).toBe(true);
+  });
+
+  test("a human-shaped first contact keeps the inbox under its own source", () => {
+    const decision = decide({ ...base_input, signals: human });
+
+    expect(outcome(decision)).toEqual({ action: "keep_inbox", source: "first_contact_human", policy_id: null, suppressed_by: null });
+    expect(decision.reasons.join(" ")).toContain("looks like a person");
+    expect(decision.reasons.join(" ")).toContain("DKIM signature passed");
+  });
+
+  test("each failed test on its own is enough to quarantine", () => {
+    const failing: Partial<MessageSignals>[] = [
+      { is_bulk: true },
+      { is_automated: true },
+      { dkim_aligned: false },
+      { addressed_to_me: false },
+    ];
+    for (const failure of failing) {
+      const decision = decide({ ...base_input, signals: { ...human, ...failure } });
+      expect(decision.action).toBe("quarantine");
+      expect(decision.source).toBe("first_contact");
+      expect(decision.reasons.join(" ")).toContain("does not look like a person");
+    }
+  });
+
+  test("the quarantine reasons name the test that failed", () => {
+    const decision = decide({ ...base_input, signals: { ...human, is_bulk: true, addressed_to_me: false } });
+
+    expect(decision.reasons).toContain("it carries list headers or a bulk precedence");
+    expect(decision.reasons).toContain("it is not addressed to me directly");
+    expect(decision.reasons.join(" ")).not.toContain("DKIM");
+  });
+
+  // docs/decisions/2026-09-06-first-contact-dkim-unknown-and-cutoff-scope.md: xneelo stamps no verdict
+  // on nearly every tellmann message, so "no verdict" must read as "no evidence", never as "failed".
+  test("no DKIM verdict at all still reads as human-shaped", () => {
+    const decision = decide({ ...base_input, signals: { ...human, dkim_aligned: null } });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("first_contact_human");
+    expect(decision.reasons).toContain("the server recorded no DKIM verdict, which is not a failure");
+  });
+
+  test("a failed DKIM signature quarantines", () => {
+    const decision = decide({ ...base_input, signals: { ...human, dkim_aligned: false } });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.reasons).toContain("its DKIM signature failed");
+  });
+
+  test("a guard still wins over the human-shaped test: an absolute guard names itself as the source", () => {
+    const decision = decide({ ...base_input, signals: human, is_starred: true });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("guard");
+  });
+
+  test("a guard still wins over the quarantine: the row is a suppressed first_contact, not a human one", () => {
+    const decision = decide({ ...base_input, signals: { ...human, is_automated: true }, replied_in_thread: true });
+
+    expect(outcome(decision)).toEqual({
+      action: "keep_inbox",
+      source: "first_contact",
+      policy_id: null,
+      suppressed_by: "replied_in_thread",
+    });
+  });
+
+  test("a policy naming the sender outranks both shapes", () => {
+    for (const signals of [human, { ...human, is_automated: true }]) {
+      const decision = decide({ ...base_input, signals, policies: [address_archive] });
+      expect(decision.policy_id).toBe(address_archive.id);
+    }
   });
 });
 
@@ -779,11 +871,18 @@ describe("the settled sweep, at step 6.5", () => {
     expect(decision.source).toBe("domain_policy");
   });
 
-  test("step 5 beats it: a first contact is quarantined, not archived", () => {
-    const decision = decide({ ...settled, signals: { ...base_signals, is_first_contact: true } });
+  test("step 5 beats it: a machine-shaped first contact is quarantined, not archived", () => {
+    const decision = decide({ ...settled, signals: { ...base_signals, is_first_contact: true, is_automated: true } });
 
     expect(decision.action).toBe("quarantine");
     expect(decision.source).toBe("first_contact");
+  });
+
+  test("step 5 beats it: a human-shaped first contact is kept, not archived", () => {
+    const decision = decide({ ...settled, signals: { ...base_signals, is_first_contact: true } });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("first_contact_human");
   });
 
   test("step 6 beats it when derived names an action", () => {
@@ -928,8 +1027,8 @@ describe("calendar messages, in the derived rung", () => {
   test("an invitation from a stranger is not archived — it is a first contact", () => {
     const decision = decide({ ...base_input, signals: { ...colleague, sender_known: false, is_first_contact: true } });
 
-    expect(decision.action).toBe("quarantine");
-    expect(decision.source).toBe("first_contact");
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("first_contact_human");
   });
 
   test("a recent invitation is left alone until the dwell passes", () => {

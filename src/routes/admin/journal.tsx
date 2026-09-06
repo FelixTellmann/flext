@@ -109,6 +109,8 @@ const source_label: Record<string, string> = {
   suspended_policy: "Policy suspended",
   guard: "Guard",
   thread_state: "Thread snoozed/done",
+  first_contact: "First contact, machine-shaped",
+  first_contact_human: "First contact, human-shaped",
   derived: "Derived default",
   fallback: "No rule matched",
   junk_folder: "Host spam folder",

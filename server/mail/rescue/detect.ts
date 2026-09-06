@@ -1,4 +1,4 @@
-import { SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
+import { FIRST_CONTACT_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 import type { MessageAddress } from "@server/mail/rescue/locate";
 import { messageAddressForAction } from "@server/mail/rescue/locate";
 import type { RescueSignal } from "@server/mail/rescue/signals";
@@ -49,6 +49,10 @@ export type DwellSuspensionEntry = { mailbox_id: string; suspended_at: Date; rea
 // Inbox-dwell 1.11. A rescue against a SWEEP means something weaker than a rescue against a policy —
 // opening week-old archived mail is ordinary behaviour, not necessarily a mistake — so one is journaled
 // and surfaced rather than acted on. Three inside a rolling window is a pattern.
+//
+// The same threshold and window govern first-contact quarantine (docs/decisions/2026-09-06-scheduled-
+// source-autonomy-per-mailbox.md): it is the other scheduled source with no policy to blame, and a
+// message the operator went and pulled out of Quarantine is the same weak signal a re-opened archive is.
 export const SWEEP_RESCUE_SUSPENSION_THRESHOLD = 3;
 export const SWEEP_RESCUE_WINDOW_DAYS = 30;
 
@@ -100,6 +104,10 @@ export type RescuePort = {
   // actually suspended anything — so a mailbox the operator deliberately un-suspended is not re-suspended
   // on the next pass off the same aged evidence, and the result counts suspensions rather than attempts.
   suspendMailboxDwell: (entry: DwellSuspensionEntry) => Promise<boolean>;
+  // First contact's pair, on its own columns: a rescue out of Quarantine says nothing about the sweeps,
+  // and the operator clears each suspension on its own evidence. Same window, same SQL guard.
+  countRecentFirstContactRescues: (input: { mailbox_id: string; since: Date }) => Promise<number>;
+  suspendMailboxFirstContact: (entry: DwellSuspensionEntry) => Promise<boolean>;
 };
 
 export type DetectRescuesResult = {
@@ -113,6 +121,8 @@ export type DetectRescuesResult = {
   unresolved: number;
   // 1.11: whether THIS pass suspended the mailbox's sweeps. False when they were already suspended.
   dwell_suspended: boolean;
+  // Whether THIS pass suspended the mailbox's first-contact quarantine, on the same terms.
+  first_contact_suspended: boolean;
 };
 
 const NO_SUBJECT = "(no subject)";
@@ -124,6 +134,7 @@ const KIND_PHRASES: Record<string, string> = {
   archive: "archived it",
   file: "filed it away",
   auto_trash: "moved it to trash",
+  quarantine: "moved it to Quarantine",
 };
 
 const SIGNAL_PHRASES: Record<RescueSignal, string> = {
@@ -199,19 +210,20 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
   // threshold is about a PATTERN over a window, so asking after every single stamp would both cost a query
   // per rescue and read a count that does not yet include the stamps this pass is about to write.
   let sweep_rescues_this_run = 0;
+  let first_contact_rescues_this_run = 0;
 
-  async function finish(): Promise<DetectRescuesResult> {
+  async function resolveSweepSuspension(): Promise<boolean> {
     if (sweep_rescues_this_run === 0) {
-      return { examined, rescued, suspended, unresolved, dwell_suspended: false };
+      return false;
     }
 
     const since = new Date(Date.now() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
     const recent = await input.port.countRecentSweepRescues({ mailbox_id: input.mailbox_id, since });
     if (recent < SWEEP_RESCUE_SUSPENSION_THRESHOLD) {
-      return { examined, rescued, suspended, unresolved, dwell_suspended: false };
+      return false;
     }
 
-    const dwell_suspended = await input.port.suspendMailboxDwell({
+    return input.port.suspendMailboxDwell({
       mailbox_id: input.mailbox_id,
       suspended_at: new Date(),
       reason:
@@ -219,7 +231,33 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
         `${SWEEP_RESCUE_WINDOW_DAYS} days. The sweep is suspended on this mailbox until you clear it; ` +
         "every action it took is in the journal and can be undone.",
     });
-    return { examined, rescued, suspended, unresolved, dwell_suspended };
+  }
+
+  async function resolveFirstContactSuspension(): Promise<boolean> {
+    if (first_contact_rescues_this_run === 0) {
+      return false;
+    }
+
+    const since = new Date(Date.now() - SWEEP_RESCUE_WINDOW_DAYS * 86_400_000);
+    const recent = await input.port.countRecentFirstContactRescues({ mailbox_id: input.mailbox_id, since });
+    if (recent < SWEEP_RESCUE_SUSPENSION_THRESHOLD) {
+      return false;
+    }
+
+    return input.port.suspendMailboxFirstContact({
+      mailbox_id: input.mailbox_id,
+      suspended_at: new Date(),
+      reason:
+        `${recent} first contacts moved to Quarantine were opened or replied to within the last ` +
+        `${SWEEP_RESCUE_WINDOW_DAYS} days. First-contact quarantine is suspended on this mailbox until you ` +
+        "clear it; every action it took is in the journal and can be undone.",
+    });
+  }
+
+  async function finish(): Promise<DetectRescuesResult> {
+    const dwell_suspended = await resolveSweepSuspension();
+    const first_contact_suspended = await resolveFirstContactSuspension();
+    return { examined, rescued, suspended, unresolved, dwell_suspended, first_contact_suspended };
   }
 
   for (let iteration = 0; iteration < MAX_CHUNK_ITERATIONS; iteration += 1) {
@@ -267,6 +305,9 @@ export async function detectRescues(input: { port: RescuePort; mailbox_id: strin
         // resolved once in finish(); everything else with no policy id genuinely has nothing to do.
         if (candidate.source === SWEEP_SETTLED_SOURCE) {
           sweep_rescues_this_run += 1;
+        }
+        if (candidate.source === FIRST_CONTACT_SOURCE) {
+          first_contact_rescues_this_run += 1;
         }
         continue;
       }

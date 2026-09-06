@@ -1,5 +1,6 @@
 import type { ActionClass, GuardInput, GuardName, GuardVerdict } from "@server/mail/classify/guards";
 import { evaluateGuards, isBlocked } from "@server/mail/classify/guards";
+import type { MessageSignals } from "@server/mail/classify/signals";
 
 export const THREAD_STATE_VALUES = ["open", "snoozed", "done", "dismissed"] as const;
 
@@ -59,6 +60,7 @@ export const DECISION_SOURCES = [
   "domain_policy",
   "suspended_policy",
   "first_contact",
+  "first_contact_human",
   "derived",
   "sweep_settled",
   "sweep_declined",
@@ -75,6 +77,16 @@ export const SWEEP_SETTLED_SOURCE = "sweep_settled" as const satisfies DecisionS
 // The unread sweep's source. Same reasoning as the settled one: the candidate query filters on it to stay
 // idempotent per message, and 1.11's rescue handler keys on it to know a rescue has no policy to blame.
 export const SWEEP_DECLINED_SOURCE = "sweep_declined" as const satisfies DecisionSource;
+
+// The machine-shaped first contact's source — the one that quarantines. The scheduled promotion keys on
+// it to find rows the mailbox's first-contact switch may move, and rescue detection keys on it the way it
+// keys on the sweeps: a first-contact row carries no policy, so a rescue against it suspends the switch.
+export const FIRST_CONTACT_SOURCE = "first_contact" as const satisfies DecisionSource;
+
+// The human-shaped first contact's source. keep_inbox only, so nothing ever promotes or executes it; it
+// exists so the shadow page can tell "kept because it looked like a person" from "kept because a guard
+// blocked the quarantine", which share an action and a policy id of null.
+export const FIRST_CONTACT_HUMAN_SOURCE = "first_contact_human" as const satisfies DecisionSource;
 
 // The junk-folder stage's source (server/mail/sync/junk.ts). Deliberately NOT a DecisionSource: decide()
 // never emits it, because the stage does not decide — the host's spam filter already did, and the stage
@@ -130,6 +142,37 @@ export function matchesNeedsActionSignals(input: NeedsActionSignalInput): boolea
     input.thread_state === "open" &&
     !input.sender_suppressed
   );
+}
+
+// docs/decisions/2026-09-06-first-contact-human-or-machine.md: a first email that could be a person
+// writing to the operator stays in the inbox; everything else is the long tail of one-off senders that
+// per-sender rules can never cover. Four tests, each a signal deriveSignals already computes.
+//
+// `dkim_aligned !== false`, not `=== true`. Null means the server stamps no Authentication-Results at all
+// (xneelo, on 9,971 of 10,697 tellmann messages), which says nothing about the sender; only a signature
+// that was checked and FAILED is evidence against them. docs/decisions/2026-09-06-first-contact-dkim-
+// unknown-and-cutoff-scope.md.
+export function isHumanShapedFirstContact(signals: MessageSignals): boolean {
+  return !signals.is_bulk && !signals.is_automated && signals.dkim_aligned !== false && signals.addressed_to_me;
+}
+
+// Which of the four tests the message failed, for the quarantine row's reasons: the operator reading a
+// proposal on the shadow page needs to know why this one was not treated as a person.
+function machineShapedReasons(signals: MessageSignals): string[] {
+  const reasons: string[] = [];
+  if (signals.is_bulk) {
+    reasons.push("it carries list headers or a bulk precedence");
+  }
+  if (signals.is_automated) {
+    reasons.push("it is auto-submitted or from a no-reply address");
+  }
+  if (signals.dkim_aligned === false) {
+    reasons.push("its DKIM signature failed");
+  }
+  if (!signals.addressed_to_me) {
+    reasons.push("it is not addressed to me directly");
+  }
+  return reasons;
 }
 
 function isApplicablePolicyAction(action: string): action is PolicyAction {
@@ -292,11 +335,13 @@ function derivedOutcome(input: DecisionInput): DerivedOutcome | null {
   return null;
 }
 
-// dkim_aligned is deliberately never read here. It is a tri-state whose `null` means "the server does
-// not stamp Authentication-Results", not "DKIM failed", and reading it as failure would mis-handle the
-// largest mailbox in the system. The one rule that genuinely wants DKIM evidence — §6's requirement that
-// filing be alignment-verified — declines to act by routing to `filing_queue`, which is filing/resolver.ts's
-// job because a Decision has no way to name that queue.
+// dkim_aligned is read in exactly one place here: isHumanShapedFirstContact, and only for `false`. It is
+// a tri-state whose `null` means "the server does not stamp Authentication-Results", not "DKIM failed",
+// and reading null as failure would mis-handle the largest mailbox in the system — so null passes the
+// human-shaped test and nothing else in the ladder consults the column at all. The other rule that
+// genuinely wants DKIM evidence — §6's requirement that filing be alignment-verified — declines to act by
+// routing to `filing_queue`, which is filing/resolver.ts's job because a Decision has no way to name that
+// queue.
 export function decide(input: DecisionInput): Decision {
   const verdicts = evaluateGuards(input);
 
@@ -341,11 +386,27 @@ export function decide(input: DecisionInput): Decision {
   // and a first contact has no behaviour to infer from. There is nothing here for the two to disagree
   // about.
   if (input.signals.is_first_contact) {
+    if (isHumanShapedFirstContact(input.signals)) {
+      return {
+        action: "keep_inbox",
+        source: FIRST_CONTACT_HUMAN_SOURCE,
+        policy_id: null,
+        suppressed_by: null,
+        reasons: [
+          `first message ever from ${input.from_address}, and it looks like a person wrote it`,
+          "not bulk mail: no list headers, no bulk precedence",
+          "not automated: no Auto-Submitted header, not a no-reply address",
+          input.signals.dkim_aligned === null ? "the server recorded no DKIM verdict, which is not a failure" : "the DKIM signature passed",
+          "addressed to me directly, not only copied",
+        ],
+      };
+    }
+
     const suppressed_by = isBlocked(verdicts, "quarantine", false);
     if (suppressed_by !== null) {
       return {
         action: "keep_inbox",
-        source: "first_contact",
+        source: FIRST_CONTACT_SOURCE,
         policy_id: null,
         suppressed_by,
         reasons: [
@@ -356,13 +417,14 @@ export function decide(input: DecisionInput): Decision {
     }
     return {
       action: "quarantine",
-      source: "first_contact",
+      source: FIRST_CONTACT_SOURCE,
       policy_id: null,
       suppressed_by: null,
       reasons: [
-        `first message ever from ${input.from_address}`,
+        `first message ever from ${input.from_address}, and it does not look like a person wrote it`,
         "nothing has ever been sent back to this sender",
         "no address or domain policy names them",
+        ...machineShapedReasons(input.signals),
       ],
     };
   }

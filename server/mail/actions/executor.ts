@@ -99,6 +99,14 @@ export type UndoFailureEntry = { action_id: string; error: string; to_state_json
 export type ActionPromotionLookup = { action_id: string; mailbox_id: string | null; status: string };
 export type PromotedEntry = { action_id: string };
 
+export type ShadowActionsBySourceQuery = {
+  mailbox_id: string;
+  source: string;
+  kind: ExecutableActionKind;
+  decided_after: Date | null;
+  batch_size: number;
+};
+
 // Carries no `status`: journal.ts writes `pending` and nothing else can be expressed here. That is the
 // same shape PromotedEntry uses, and for the same reason — a status the caller could name is a status the
 // caller could get wrong.
@@ -156,6 +164,11 @@ export type ActionJournal = {
     sender_policy_id: string;
     batch_size: number;
   }) => Promise<ActionPromotionLookup[]>;
+  // The scheduled-source counterpart: shadow rows a policy-scoped read can never reach, because a
+  // first-contact or sweep row carries no policy id. Scoped by source AND kind — a guard-suppressed row
+  // shares the source but is keep_inbox, which planFor refuses — and, when `decided_after` is set, to
+  // rows decided after that moment (first contact's promotion cutoff).
+  loadShadowActionsBySource: (input: ShadowActionsBySourceQuery) => Promise<ActionPromotionLookup[]>;
   // Writes status "pending" and NOTHING else — no from_state_json, to_state_json, or applied_at. Those
   // belong to the executor's own steps 1-4; promotion only approves a shadow decision for the executor to
   // pick up, and journal.ts's UPDATE is guarded on `WHERE status = 'shadow'` so this can never move a row

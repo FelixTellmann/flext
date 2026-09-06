@@ -140,6 +140,28 @@ export const mailbox = mysqlTable(
     // rule in the system for want of an id to blame. Suspension is per mailbox because the sweep is.
     dwell_suspended_at: datetime("dwellSuspendedAt", { fsp: 3 }),
     dwell_suspension_reason: text("dwellSuspensionReason"),
+    // docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md: the three scheduled sources
+    // that carry no policy id (first-contact quarantine, the settled sweep, the declined sweep) each get
+    // SenderPolicy.autonomy's switch here, per mailbox, because their rows have no policy row to hold it.
+    // The set-at time is first contact's promotion cutoff — only rows decided after it are promoted —
+    // and is recorded for the sweeps too so the mailboxes page can show when each switch was thrown.
+    first_contact_autonomy: varchar("firstContactAutonomy", { length: 191, enum: ["shadow", "auto"] })
+      .default("shadow")
+      .notNull(),
+    first_contact_autonomy_set_at: datetime("firstContactAutonomySetAt", { fsp: 3 }),
+    settled_sweep_autonomy: varchar("settledSweepAutonomy", { length: 191, enum: ["shadow", "auto"] })
+      .default("shadow")
+      .notNull(),
+    settled_sweep_autonomy_set_at: datetime("settledSweepAutonomySetAt", { fsp: 3 }),
+    declined_sweep_autonomy: varchar("declinedSweepAutonomy", { length: 191, enum: ["shadow", "auto"] })
+      .default("shadow")
+      .notNull(),
+    declined_sweep_autonomy_set_at: datetime("declinedSweepAutonomySetAt", { fsp: 3 }),
+    // dwellSuspendedAt's sibling for first contact. Its own pair rather than the dwell one: a rescue
+    // against a quarantined first contact says nothing about the sweeps, and the operator clears each
+    // on its own evidence.
+    first_contact_suspended_at: datetime("firstContactSuspendedAt", { fsp: 3 }),
+    first_contact_suspension_reason: text("firstContactSuspensionReason"),
     enabled: boolean("enabled").default(true).notNull(),
     backfilled_at: datetime("backfilledAt", { fsp: 3 }),
     last_error: text("lastError"),

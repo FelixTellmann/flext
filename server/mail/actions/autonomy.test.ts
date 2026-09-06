@@ -1,8 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import type { AutonomyPort, AutoPolicyRow, PolicyForGate, PromoteAutoPoliciesInput, PromotionPort } from "@server/mail/actions/autonomy";
+import type {
+  AutonomyPort,
+  AutoPolicyRow,
+  PolicyForGate,
+  PromoteAutoPoliciesInput,
+  PromotionPort,
+  SourceAutonomyRow,
+} from "@server/mail/actions/autonomy";
 import {
   demotePolicyAutonomy,
+  eligibleScheduledSources,
+  promoteAutoDecisions,
   promoteAutoPolicies,
+  promoteAutoSources,
   promotePolicyAutonomy,
   promotePolicyAutonomyBatch,
 } from "@server/mail/actions/autonomy";
@@ -14,8 +24,11 @@ const BATCH_SIZE = 100;
 type FakeActionRow = {
   action_id: string;
   mailbox_id: string;
-  sender_policy_id: string;
+  sender_policy_id: string | null;
   status: string;
+  source: string;
+  kind: string;
+  decided_at: Date | null;
 };
 
 type FakePolicyRow = {
@@ -24,8 +37,48 @@ type FakePolicyRow = {
   suspended_at: Date | null;
 };
 
+const SWITCHED_ON = new Date("2026-09-06T12:00:00Z");
+const BEFORE_SWITCH = new Date("2026-09-01T12:00:00Z");
+const AFTER_SWITCH = new Date("2026-09-07T12:00:00Z");
+
 function shadowRow(action_id: string, sender_policy_id: string, overrides: Partial<FakeActionRow> = {}): FakeActionRow {
-  return { action_id, mailbox_id: MAILBOX_ID, sender_policy_id, status: "shadow", ...overrides };
+  return {
+    action_id,
+    mailbox_id: MAILBOX_ID,
+    sender_policy_id,
+    status: "shadow",
+    source: "address_policy",
+    kind: "archive",
+    decided_at: AFTER_SWITCH,
+    ...overrides,
+  };
+}
+
+// A row a scheduled source wrote: no policy id, which is exactly what keeps loadShadowActionsByPolicy
+// from ever reaching it.
+function sourceRow(action_id: string, source: string, kind: string, overrides: Partial<FakeActionRow> = {}): FakeActionRow {
+  return {
+    action_id,
+    mailbox_id: MAILBOX_ID,
+    sender_policy_id: null,
+    status: "shadow",
+    source,
+    kind,
+    decided_at: AFTER_SWITCH,
+    ...overrides,
+  };
+}
+
+function autonomyRow(overrides: Partial<SourceAutonomyRow> = {}): SourceAutonomyRow {
+  return {
+    first_contact_autonomy: "shadow",
+    first_contact_autonomy_set_at: null,
+    first_contact_suspended_at: null,
+    settled_sweep_autonomy: "shadow",
+    declined_sweep_autonomy: "shadow",
+    dwell_suspended_at: null,
+    ...overrides,
+  };
 }
 
 function unsupported(name: string): never {
@@ -43,6 +96,23 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
       const matches: ActionPromotionLookup[] = [];
       for (const row of rows.values()) {
         if (row.status !== "shadow" || row.mailbox_id !== query.mailbox_id || row.sender_policy_id !== query.sender_policy_id) {
+          continue;
+        }
+        matches.push({ action_id: row.action_id, mailbox_id: row.mailbox_id, status: row.status });
+      }
+      return matches.slice(0, query.batch_size);
+    },
+
+    // Mirrors journal.ts's loadShadowActionsBySource: status, mailbox, source AND kind, and a strict
+    // `decided_at > decided_after` that drops a null decided_at when a cutoff is set.
+    loadShadowActionsBySource: async (query) => {
+      input.events.push(`load_shadow_by_source ${query.source} ${query.kind} limit ${query.batch_size}`);
+      const matches: ActionPromotionLookup[] = [];
+      for (const row of [...rows.values()].sort((a, b) => (a.decided_at?.getTime() ?? 0) - (b.decided_at?.getTime() ?? 0))) {
+        if (row.status !== "shadow" || row.mailbox_id !== query.mailbox_id || row.source !== query.source || row.kind !== query.kind) {
+          continue;
+        }
+        if (query.decided_after !== null && (row.decided_at === null || row.decided_at.getTime() <= query.decided_after.getTime())) {
           continue;
         }
         matches.push({ action_id: row.action_id, mailbox_id: row.mailbox_id, status: row.status });
@@ -87,7 +157,7 @@ function createFakeJournal(input: { events: string[]; seed: FakeActionRow[] }): 
 // Mirrors the WHERE clause createDatabaseAutonomyPort issues against SenderPolicy — `autonomy = 'auto'
 // AND suspendedAt IS NULL` (server/mail/actions/autonomy.ts) — rather than reaching the real
 // drizzle-backed implementation: a test that did would query production's live sender policies.
-function createFakePort(input: { events: string[]; policies: FakePolicyRow[] }): AutonomyPort {
+function createFakePort(input: { events: string[]; policies: FakePolicyRow[]; source_autonomy?: SourceAutonomyRow | null }): AutonomyPort {
   return {
     loadAutoPolicies: async () => {
       input.events.push("load_auto_policies");
@@ -98,6 +168,10 @@ function createFakePort(input: { events: string[]; policies: FakePolicyRow[] }):
         }
       }
       return eligible;
+    },
+    loadSourceAutonomy: async () => {
+      input.events.push("load_source_autonomy");
+      return input.source_autonomy === undefined ? autonomyRow() : input.source_autonomy;
     },
   };
 }
@@ -257,6 +331,242 @@ describe("promoteAutoPolicies (Task 7)", () => {
     expect([...first, ...second].sort()).toEqual(["action-1", "action-2"]);
     expect(journal.rows.get("action-1")?.status).toBe("pending");
     expect(journal.rows.get("action-2")?.status).toBe("pending");
+  });
+});
+
+// docs/decisions/2026-09-06-scheduled-source-autonomy-per-mailbox.md: which of the three policy-less
+// sources a mailbox row lets the tick promote.
+describe("eligibleScheduledSources", () => {
+  test("every switch at shadow: nothing", () => {
+    expect(eligibleScheduledSources(autonomyRow())).toEqual([]);
+  });
+
+  test("first contact at auto: quarantine rows decided after the switch was set", () => {
+    const eligible = eligibleScheduledSources(autonomyRow({ first_contact_autonomy: "auto", first_contact_autonomy_set_at: SWITCHED_ON }));
+
+    expect(eligible).toEqual([{ source: "first_contact", kind: "quarantine", decided_after: SWITCHED_ON }]);
+  });
+
+  test("first contact at auto with no set-at time is refused rather than promoted without a cutoff", () => {
+    expect(eligibleScheduledSources(autonomyRow({ first_contact_autonomy: "auto" }))).toEqual([]);
+  });
+
+  test("a suspended first contact is not eligible, whatever the switch says", () => {
+    const row = autonomyRow({
+      first_contact_autonomy: "auto",
+      first_contact_autonomy_set_at: SWITCHED_ON,
+      first_contact_suspended_at: AFTER_SWITCH,
+    });
+
+    expect(eligibleScheduledSources(row)).toEqual([]);
+  });
+
+  test("the sweeps at auto: archive rows with no cutoff", () => {
+    const eligible = eligibleScheduledSources(autonomyRow({ settled_sweep_autonomy: "auto", declined_sweep_autonomy: "auto" }));
+
+    expect(eligible).toEqual([
+      { source: "sweep_settled", kind: "archive", decided_after: null },
+      { source: "sweep_declined", kind: "archive", decided_after: null },
+    ]);
+  });
+
+  test("a dwell suspension takes both sweeps out and leaves first contact alone", () => {
+    const row = autonomyRow({
+      first_contact_autonomy: "auto",
+      first_contact_autonomy_set_at: SWITCHED_ON,
+      settled_sweep_autonomy: "auto",
+      declined_sweep_autonomy: "auto",
+      dwell_suspended_at: AFTER_SWITCH,
+    });
+
+    expect(eligibleScheduledSources(row).map((eligible) => eligible.source)).toEqual(["first_contact"]);
+  });
+
+  test("first contact is spent before the sweeps", () => {
+    const row = autonomyRow({
+      first_contact_autonomy: "auto",
+      first_contact_autonomy_set_at: SWITCHED_ON,
+      settled_sweep_autonomy: "auto",
+      declined_sweep_autonomy: "auto",
+    });
+
+    expect(eligibleScheduledSources(row).map((eligible) => eligible.source)).toEqual(["first_contact", "sweep_settled", "sweep_declined"]);
+  });
+});
+
+describe("promoteAutoSources", () => {
+  const first_contact_on = autonomyRow({ first_contact_autonomy: "auto", first_contact_autonomy_set_at: SWITCHED_ON });
+
+  test("first-contact quarantine rows decided after the switch are promoted; the backlog before it stays", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        sourceRow("fc-old", "first_contact", "quarantine", { decided_at: BEFORE_SWITCH }),
+        sourceRow("fc-at", "first_contact", "quarantine", { decided_at: SWITCHED_ON }),
+        sourceRow("fc-new", "first_contact", "quarantine"),
+      ],
+    });
+    const port = createFakePort({ events, policies: [], source_autonomy: first_contact_on });
+
+    const promoted = await promoteAutoSources({ ...promoteInput(), port, journal });
+
+    expect(promoted).toEqual(["fc-new"]);
+    expect(journal.rows.get("fc-old")?.status).toBe("shadow");
+    expect(journal.rows.get("fc-at")?.status).toBe("shadow");
+  });
+
+  // A guard-suppressed first contact is journaled as keep_inbox under the same source, and planFor throws
+  // on keep_inbox. Reading by source alone would hand the executor a row it cannot plan.
+  test("a guard-suppressed row sharing the source is never promoted", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [sourceRow("fc-kept", "first_contact", "keep_inbox"), sourceRow("fc-human", "first_contact_human", "keep_inbox")],
+    });
+    const port = createFakePort({ events, policies: [], source_autonomy: first_contact_on });
+
+    const promoted = await promoteAutoSources({ ...promoteInput(), port, journal });
+
+    expect(promoted).toEqual([]);
+    expect(journal.rows.get("fc-kept")?.status).toBe("shadow");
+    expect(journal.rows.get("fc-human")?.status).toBe("shadow");
+  });
+
+  test("the sweeps drain their backlog: no cutoff", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        sourceRow("s-old", "sweep_settled", "archive", { decided_at: BEFORE_SWITCH }),
+        sourceRow("d-old", "sweep_declined", "archive", { decided_at: BEFORE_SWITCH }),
+        sourceRow("d-kept", "sweep_declined", "keep_inbox", { decided_at: BEFORE_SWITCH }),
+      ],
+    });
+    const port = createFakePort({
+      events,
+      policies: [],
+      source_autonomy: autonomyRow({ settled_sweep_autonomy: "auto", declined_sweep_autonomy: "auto" }),
+    });
+
+    const promoted = await promoteAutoSources({ ...promoteInput(), port, journal });
+
+    expect(promoted.slice().sort()).toEqual(["d-old", "s-old"]);
+    expect(journal.rows.get("d-kept")?.status).toBe("shadow");
+  });
+
+  test("a mailbox with every switch at shadow reads nothing from the journal", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({ events, seed: [sourceRow("fc-new", "first_contact", "quarantine")] });
+    const port = createFakePort({ events, policies: [] });
+
+    const promoted = await promoteAutoSources({ ...promoteInput(), port, journal });
+
+    expect(promoted).toEqual([]);
+    expect(events).toEqual(["load_source_autonomy"]);
+  });
+
+  test("an unknown mailbox promotes nothing", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({ events, seed: [sourceRow("fc-new", "first_contact", "quarantine")] });
+    const port = createFakePort({ events, policies: [], source_autonomy: null });
+
+    expect(await promoteAutoSources({ ...promoteInput(), port, journal })).toEqual([]);
+  });
+
+  test("the budget is a TOTAL across sources, first contact first", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        sourceRow("fc-1", "first_contact", "quarantine"),
+        sourceRow("fc-2", "first_contact", "quarantine"),
+        sourceRow("s-1", "sweep_settled", "archive"),
+        sourceRow("s-2", "sweep_settled", "archive"),
+      ],
+    });
+    const port = createFakePort({
+      events,
+      policies: [],
+      source_autonomy: { ...first_contact_on, settled_sweep_autonomy: "auto" },
+    });
+
+    const promoted = await promoteAutoSources({ ...promoteInput({ batch_size: 3 }), port, journal });
+
+    expect(promoted).toEqual(["fc-1", "fc-2", "s-1"]);
+    expect(journal.rows.get("s-2")?.status).toBe("shadow");
+  });
+
+  test("two concurrent promotions return disjoint id sets and claim every row exactly once", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [sourceRow("fc-1", "first_contact", "quarantine"), sourceRow("fc-2", "first_contact", "quarantine")],
+    });
+    const port = createFakePort({ events, policies: [], source_autonomy: first_contact_on });
+
+    const [first, second] = await Promise.all([
+      promoteAutoSources({ ...promoteInput(), port, journal }),
+      promoteAutoSources({ ...promoteInput(), port, journal }),
+    ]);
+
+    expect(first.filter((id) => second.includes(id))).toEqual([]);
+    expect([...first, ...second].sort()).toEqual(["fc-1", "fc-2"]);
+  });
+});
+
+describe("promoteAutoDecisions", () => {
+  test("policies are spent first, sources get what is left, and the executor sees one list", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [
+        shadowRow("p-1", "policy-auto"),
+        shadowRow("p-2", "policy-auto"),
+        sourceRow("fc-1", "first_contact", "quarantine"),
+        sourceRow("fc-2", "first_contact", "quarantine"),
+      ],
+    });
+    const port = createFakePort({
+      events,
+      policies: [{ sender_policy_id: "policy-auto", autonomy: "auto", suspended_at: null }],
+      source_autonomy: autonomyRow({ first_contact_autonomy: "auto", first_contact_autonomy_set_at: SWITCHED_ON }),
+    });
+
+    const promoted = await promoteAutoDecisions({ ...promoteInput({ batch_size: 3 }), port, journal });
+
+    expect(promoted).toEqual(["p-1", "p-2", "fc-1"]);
+    expect(journal.rows.get("fc-2")?.status).toBe("shadow");
+  });
+
+  test("a budget the policies exhaust never reads the source switches", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("p-1", "policy-auto"), sourceRow("fc-1", "first_contact", "quarantine")],
+    });
+    const port = createFakePort({
+      events,
+      policies: [{ sender_policy_id: "policy-auto", autonomy: "auto", suspended_at: null }],
+      source_autonomy: autonomyRow({ first_contact_autonomy: "auto", first_contact_autonomy_set_at: SWITCHED_ON }),
+    });
+
+    const promoted = await promoteAutoDecisions({ ...promoteInput({ batch_size: 1 }), port, journal });
+
+    expect(promoted).toEqual(["p-1"]);
+    expect(events).not.toContain("load_source_autonomy");
+  });
+
+  test("with nothing at auto anywhere, nothing is written", async () => {
+    const events: string[] = [];
+    const journal = createFakeJournal({
+      events,
+      seed: [shadowRow("p-1", "policy-shadow"), sourceRow("fc-1", "first_contact", "quarantine")],
+    });
+    const port = createFakePort({ events, policies: [{ sender_policy_id: "policy-shadow", autonomy: "shadow", suspended_at: null }] });
+
+    expect(await promoteAutoDecisions({ ...promoteInput(), port, journal })).toEqual([]);
+    expect(events).toEqual(["load_auto_policies", "load_source_autonomy"]);
   });
 });
 
