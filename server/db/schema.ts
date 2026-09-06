@@ -1,5 +1,18 @@
 import { sql } from "drizzle-orm";
-import { boolean, datetime, decimal, float, index, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import {
+  boolean,
+  datetime,
+  decimal,
+  float,
+  index,
+  int,
+  mysqlTable,
+  primaryKey,
+  text,
+  tinyint,
+  uniqueIndex,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 // ─── Account ─────────────────────────────────────────────────────────────────
 // Prisma @map directives rename DB columns: e.g. refresh_token → "refreshToken" in DB
@@ -563,17 +576,27 @@ export const filingBinding = mysqlTable(
 
 // ─── PersonalArea ────────────────────────────────────────────────────────────
 // The personal OS lives behind the same ADMIN_EMAIL gate as everything else under /admin.
-export const personalArea = mysqlTable("PersonalArea", {
-  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
-  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
-  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
-  name: varchar("name", { length: 191 }).notNull(),
-  // dormant | maintenance | sprint | always_on — validated at the zod layer, never a DB enum
-  mode: varchar("mode", { length: 191 }).default("always_on").notNull(),
-  soft_floor_hours: int("softFloorHours"),
-  sort_order: int("sortOrder").default(0).notNull(),
-  archived_at: datetime("archivedAt", { fsp: 3 }),
-});
+export const personalArea = mysqlTable(
+  "PersonalArea",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    // The stable pointer brain files use to name an area. Lowercase, hyphenated, seeded from name.
+    slug: varchar("slug", { length: 191 }),
+    // dormant | maintenance | sprint | always_on — validated at the zod layer, never a DB enum. The
+    // default a project inherits while its own mode is null.
+    mode: varchar("mode", { length: 191 }).default("always_on").notNull(),
+    // Kept for one release as the fallback for an area's only project; the floor now lives on the project.
+    soft_floor_hours: int("softFloorHours"),
+    sort_order: int("sortOrder").default(0).notNull(),
+    archived_at: datetime("archivedAt", { fsp: 3 }),
+  },
+  (table) => ({
+    slugUnique: uniqueIndex("PersonalArea_slug_key").on(table.slug),
+  }),
+);
 
 // ─── PersonalProject ─────────────────────────────────────────────────────────
 export const personalProject = mysqlTable(
@@ -584,10 +607,11 @@ export const personalProject = mysqlTable(
     updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
     area_id: varchar("areaId", { length: 191 }).notNull(),
     name: varchar("name", { length: 191 }).notNull(),
-    // The Wakapi project name, when this project maps to tracked coding work. One project can
-    // answer to several names upstream (doveras / doveras-donor-parser), so the ledger phase
-    // normalises rather than trusting this to be one-to-one.
-    waka_project: varchar("wakaProject", { length: 191 }),
+    // A stream is a project. Same four values as the area; null inherits the area's mode.
+    mode: varchar("mode", { length: 191 }),
+    soft_floor_hours: int("softFloorHours"),
+    // 1 to 4, the validated ledger palette. Unslotted streams fold into Other.
+    palette_slot: tinyint("paletteSlot"),
     sort_order: int("sortOrder").default(0).notNull(),
     archived_at: datetime("archivedAt", { fsp: 3 }),
   },
@@ -595,6 +619,33 @@ export const personalProject = mysqlTable(
     areaIndex: index("PersonalProject_areaId_idx").on(table.area_id),
   }),
 );
+
+// ─── PersonalProjectWakaName ─────────────────────────────────────────────────
+// Many-to-one: one project answers to several names upstream (doveras / doveras-donor-parser). One row
+// per NORMALISED name, the same form ActivityBucket.project is stored in, so a lookup is an equality.
+export const personalProjectWakaName = mysqlTable(
+  "PersonalProjectWakaName",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    project_id: varchar("projectId", { length: 191 }).notNull(),
+    waka_name: varchar("wakaName", { length: 191 }).notNull(),
+  },
+  (table) => ({
+    projectIndex: index("PersonalProjectWakaName_projectId_idx").on(table.project_id),
+    wakaNameUnique: uniqueIndex("PersonalProjectWakaName_wakaName_key").on(table.waka_name),
+  }),
+);
+
+// ─── PersonalSetting ─────────────────────────────────────────────────────────
+// The numbers that need changing without a deploy. Read through server/personal-settings.ts, which
+// falls back to the constants in server/personal-thresholds.ts when a key is absent.
+export const personalSetting = mysqlTable("PersonalSetting", {
+  key: varchar("key", { length: 191 }).primaryKey(),
+  value: varchar("value", { length: 191 }).notNull(),
+  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+});
 
 // ─── PersonalTask ────────────────────────────────────────────────────────────
 export const personalTask = mysqlTable(

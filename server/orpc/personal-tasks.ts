@@ -1,9 +1,19 @@
 import { ORPCError } from "@orpc/server";
 import { db } from "@server/db/drizzle";
-import { personalArea, personalProject, personalTask, personalTaskDeferral } from "@server/db/schema";
+import {
+  activityBucket,
+  personalArea,
+  personalProject,
+  personalProjectWakaName,
+  personalTask,
+  personalTaskDeferral,
+} from "@server/db/schema";
 import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
+import { readSetting } from "@server/personal-settings";
+import { resolveStreams } from "@server/personal-streams";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
 
@@ -33,10 +43,15 @@ const mapTask = (row: TaskRow) => ({
 });
 
 // A steady weekly budget would fire a warning most weeks and be dismissed most weeks, because the work
-// genuinely arrives in bursts. The mode is what lets a zero-hour fortnight on a dormant area read as
+// genuinely arrives in bursts. The mode is what lets a zero-hour fortnight on a dormant stream read as
 // normal rather than as a deficit. Validated here rather than as a DB enum so adding a fifth mode is a
-// code change, not a migration.
-const area_mode_schema = z.enum(["dormant", "maintenance", "sprint", "always_on"]);
+// code change, not a migration. Shared by areas and projects; a project's null mode inherits its area's.
+const mode_schema = z.enum(["dormant", "maintenance", "sprint", "always_on"]);
+
+const soft_floor_hours_schema = z.number().int().min(0).max(168).nullable();
+
+// Unmapped names older than this are noise from a machine long since wiped, not a stream to assign.
+const UNMAPPED_LOOKBACK_DAYS = 90;
 
 const id_schema = z.object({ id: z.string().min(1) });
 
@@ -153,7 +168,9 @@ export const personalTaskProcedures = {
       throw new ORPCError("NOT_FOUND");
     }
 
-    if (row.deferral_count >= DEFERRAL_LIMIT) {
+    const deferral_limit = await readSetting("deferral_limit", DEFERRAL_LIMIT);
+
+    if (row.deferral_count >= deferral_limit) {
       return { id: row.id, deferral_count: row.deferral_count, blocked: true };
     }
 
@@ -207,7 +224,7 @@ export const personalTaskProcedures = {
   // One query per table rather than a join, then assembled here: the tree is five areas deep at most, and
   // a join would repeat every area row once per project only to be unpicked again on this side.
   listAreas: authed.handler(async () => {
-    const [areas, projects, open_rows] = await Promise.all([
+    const [areas, projects, open_rows, waka_names] = await Promise.all([
       db.select().from(personalArea).where(isNull(personalArea.archived_at)).orderBy(asc(personalArea.sort_order), asc(personalArea.name)),
       db
         .select()
@@ -219,10 +236,16 @@ export const personalTaskProcedures = {
         .from(personalTask)
         .where(inArray(personalTask.state, [...ACTIVE_STATES]))
         .groupBy(personalTask.area_id, personalTask.project_id),
+      db.select().from(personalProjectWakaName).orderBy(asc(personalProjectWakaName.waka_name)),
     ]);
 
     const area_open = new Map<string, number>();
     const project_open = new Map<string, number>();
+    const names_by_project = new Map<string, string[]>();
+
+    for (const row of waka_names) {
+      names_by_project.set(row.project_id, [...(names_by_project.get(row.project_id) ?? []), row.waka_name]);
+    }
 
     for (const row of open_rows) {
       if (row.area_id !== null) {
@@ -236,6 +259,7 @@ export const personalTaskProcedures = {
     return areas.map((area) => ({
       id: area.id,
       name: area.name,
+      slug: area.slug,
       mode: area.mode,
       soft_floor_hours: area.soft_floor_hours,
       sort_order: area.sort_order,
@@ -247,7 +271,10 @@ export const personalTaskProcedures = {
         .map((project) => ({
           id: project.id,
           name: project.name,
-          waka_project: project.waka_project,
+          mode: project.mode,
+          soft_floor_hours: project.soft_floor_hours,
+          palette_slot: project.palette_slot,
+          waka_names: names_by_project.get(project.id) ?? [],
           sort_order: project.sort_order,
           open_count: project_open.get(project.id) ?? 0,
         })),
@@ -255,9 +282,7 @@ export const personalTaskProcedures = {
   }),
 
   createArea: authed
-    .input(
-      z.object({ name: z.string().min(1).max(191), mode: area_mode_schema.default("always_on"), sort_order: z.number().int().default(0) }),
-    )
+    .input(z.object({ name: z.string().min(1).max(191), mode: mode_schema.default("always_on"), sort_order: z.number().int().default(0) }))
     .handler(async ({ input }) => {
       const id = crypto.randomUUID();
 
@@ -270,8 +295,8 @@ export const personalTaskProcedures = {
     .input(
       id_schema.extend({
         name: z.string().min(1).max(191).optional(),
-        mode: area_mode_schema.optional(),
-        soft_floor_hours: z.number().int().min(0).max(168).nullable().optional(),
+        mode: mode_schema.optional(),
+        soft_floor_hours: soft_floor_hours_schema.optional(),
       }),
     )
     .handler(async ({ input }) => {
@@ -295,30 +320,24 @@ export const personalTaskProcedures = {
     return { id: input.id };
   }),
 
-  createProject: authed
-    .input(
-      z.object({
-        area_id: z.string().min(1),
-        name: z.string().min(1).max(191),
-        waka_project: z.string().min(1).max(191).nullable().default(null),
-      }),
-    )
-    .handler(async ({ input }) => {
-      const id = crypto.randomUUID();
+  createProject: authed.input(z.object({ area_id: z.string().min(1), name: z.string().min(1).max(191) })).handler(async ({ input }) => {
+    const id = crypto.randomUUID();
 
-      await db
-        .insert(personalProject)
-        .values({ id, area_id: input.area_id, name: input.name, waka_project: input.waka_project, updatedAt: new Date() });
+    await db.insert(personalProject).values({ id, area_id: input.area_id, name: input.name, updatedAt: new Date() });
 
-      return { id };
-    }),
+    return { id };
+  }),
 
+  // palette_slot is unique among unarchived projects by contract (spec §3), not by index — an archived
+  // project keeps its slot in history. The Areas screen is where a clash is prevented.
   updateProject: authed
     .input(
       id_schema.extend({
         area_id: z.string().min(1).optional(),
         name: z.string().min(1).max(191).optional(),
-        waka_project: z.string().min(1).max(191).nullable().optional(),
+        mode: mode_schema.nullable().optional(),
+        soft_floor_hours: soft_floor_hours_schema.optional(),
+        palette_slot: z.number().int().min(1).max(4).nullable().optional(),
       }),
     )
     .handler(async ({ input }) => {
@@ -338,5 +357,52 @@ export const personalTaskProcedures = {
     await db.update(personalProject).set({ archived_at: now, updatedAt: now }).where(eq(personalProject.id, input.id));
 
     return { id: input.id };
+  }),
+
+  // Every name the tracker has reported lately that resolves to no live project. Bucket names are already
+  // normalised, so this is the exact set the ledger will render as its own streams.
+  listUnmappedWakaNames: authed.handler(async () => {
+    const since = new Date(operatorDayStart().getTime() - UNMAPPED_LOOKBACK_DAYS * DAY_MS);
+
+    const [rows, { by_waka_name }] = await Promise.all([
+      db
+        .select({ project: activityBucket.project, seconds: sql<number>`SUM(${activityBucket.seconds})` })
+        .from(activityBucket)
+        .where(gte(activityBucket.bucket_start, since))
+        .groupBy(activityBucket.project),
+      resolveStreams(),
+    ]);
+
+    return (
+      rows
+        .filter((row) => !by_waka_name.has(row.project))
+        // mysql2 returns SUM as a string; Number() at the mapping boundary, as everywhere else.
+        .map((row) => ({ waka_name: row.project, total_seconds: Number(row.seconds) }))
+        .sort((left, right) => right.total_seconds - left.total_seconds)
+    );
+  }),
+
+  // Stored normalised so the ledger's lookup is an equality. Assigning a name already held by another
+  // project moves it: the unique index is on the name, and the select this serves is a reassignment.
+  assignWakaName: authed
+    .input(z.object({ project_id: z.string().min(1), waka_name: z.string().min(1).max(191) }))
+    .handler(async ({ input }) => {
+      const waka_name = normaliseProjectName(input.waka_name);
+      const now = new Date();
+
+      await db
+        .insert(personalProjectWakaName)
+        .values({ id: crypto.randomUUID(), project_id: input.project_id, waka_name, updatedAt: now })
+        .onDuplicateKeyUpdate({ set: { project_id: input.project_id, updatedAt: now } });
+
+      return { project_id: input.project_id, waka_name };
+    }),
+
+  unassignWakaName: authed.input(z.object({ waka_name: z.string().min(1).max(191) })).handler(async ({ input }) => {
+    const waka_name = normaliseProjectName(input.waka_name);
+
+    await db.delete(personalProjectWakaName).where(eq(personalProjectWakaName.waka_name, waka_name));
+
+    return { waka_name };
   }),
 };

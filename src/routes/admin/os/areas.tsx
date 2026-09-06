@@ -61,7 +61,7 @@ function PersonalOsAreasPage() {
     }
 
     return run(area_id, "Could not add the project", async () => {
-      await orpc.personalTasks.createProject({ area_id, name, waka_project: null });
+      await orpc.personalTasks.createProject({ area_id, name });
       setNewProjectName((current) => ({ ...current, [area_id]: "" }));
     });
   };
@@ -123,11 +123,14 @@ function PersonalOsAreasPage() {
                 key={project.id}
               >
                 <span className="flex-grow text-gray-600 text-sm dark:text-dark-text">{project.name}</span>
-                {project.waka_project !== null && (
-                  <span className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text">
-                    {project.waka_project}
+                {project.waka_names.map((waka_name) => (
+                  <span
+                    className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text"
+                    key={waka_name}
+                  >
+                    {waka_name}
                   </span>
-                )}
+                ))}
                 <OpenCount count={project.open_count} />
                 <button
                   className="text-gray-400 text-xs hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:text-dark-text"

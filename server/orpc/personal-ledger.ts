@@ -1,8 +1,9 @@
 import { db } from "@server/db/drizzle";
-import { activityBucket, personalArea, personalProject } from "@server/db/schema";
+import { activityBucket } from "@server/db/schema";
 import { DAY_MS, OPERATOR_UTC_OFFSET_MINUTES, operatorDayStartOf } from "@server/operator-day";
+import { resolveStreams, type Stream } from "@server/personal-streams";
 import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, gte, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
 
@@ -33,38 +34,26 @@ const eachDate = (from: string, to: string): string[] => {
   return dates;
 };
 
-// A soft floor lives on an Area, while a bucket is keyed by a tracker project name. The two are joined by
-// name: an area whose name matches the stream (Listify), or a project carrying waka_project. That is
-// enough for the streams that exist today and visibly not a general solution — PersonalProject.waka_project
-// is a single column, so a project answering to several upstream names can only record one of them.
-const floorsByStream = async (): Promise<Map<string, number>> => {
-  const [areas, projects] = await Promise.all([
-    db
-      .select({ name: personalArea.name, soft_floor_hours: personalArea.soft_floor_hours })
-      .from(personalArea)
-      .where(isNull(personalArea.archived_at)),
-    db
-      .select({ soft_floor_hours: personalArea.soft_floor_hours, waka_project: personalProject.waka_project })
-      .from(personalProject)
-      .innerJoin(personalArea, eq(personalProject.area_id, personalArea.id))
-      .where(isNull(personalProject.archived_at)),
-  ]);
+type StreamKey = { key: string; project: string; label: string; palette_slot: number | null; mapped: boolean; floor_hours: number | null };
 
-  const floors = new Map<string, number>();
+// A stream is a project. Every bucket name mapped to one folds into a single row, so a project answering to
+// two upstream names is charged its floor once rather than once per name. A name with no live project is
+// its own stream, labelled by the name. `project` keeps the normalised name the screen keys on.
+const streamOf = (bucket_name: string, by_waka_name: Map<string, Stream>): StreamKey => {
+  const stream = by_waka_name.get(bucket_name);
 
-  for (const area of areas) {
-    if (area.soft_floor_hours !== null) {
-      floors.set(normaliseProjectName(area.name), area.soft_floor_hours);
-    }
+  if (stream === undefined) {
+    return { key: bucket_name, project: bucket_name, label: bucket_name, palette_slot: null, mapped: false, floor_hours: null };
   }
 
-  for (const project of projects) {
-    if (project.waka_project !== null && project.soft_floor_hours !== null) {
-      floors.set(normaliseProjectName(project.waka_project), project.soft_floor_hours);
-    }
-  }
-
-  return floors;
+  return {
+    key: stream.project_id,
+    project: normaliseProjectName(stream.project_name),
+    label: stream.project_name,
+    palette_slot: stream.palette_slot,
+    mapped: true,
+    floor_hours: stream.soft_floor_hours,
+  };
 };
 
 export const personalLedgerProcedures = {
@@ -81,35 +70,45 @@ export const personalLedgerProcedures = {
       .groupBy(local_date, activityBucket.project);
 
     const dates = eachDate(input.from, input.to);
-    const floors = await floorsByStream();
-    const by_stream = new Map<string, Map<string, number>>();
+    const { by_waka_name } = await resolveStreams();
+    const by_stream = new Map<string, { stream: StreamKey; per_day: Map<string, number> }>();
 
     for (const row of rows) {
+      const stream = streamOf(row.project, by_waka_name);
+      const entry = by_stream.get(stream.key) ?? { stream, per_day: new Map<string, number>() };
+      const date = String(row.date).slice(0, 10);
+
       // mysql2 returns SUM as a string. Every read of an aggregate in this codebase goes through Number()
       // at the mapping boundary, and `seconds` is no exception.
-      const per_day = by_stream.get(row.project) ?? new Map<string, number>();
-      per_day.set(String(row.date).slice(0, 10), Number(row.seconds));
-      by_stream.set(row.project, per_day);
+      entry.per_day.set(date, (entry.per_day.get(date) ?? 0) + Number(row.seconds));
+      by_stream.set(stream.key, entry);
     }
 
-    const streams = [...by_stream.entries()]
-      .map(([project, per_day]) => {
+    const streams = [...by_stream.values()]
+      .map(({ stream, per_day }) => {
         const total_seconds = [...per_day.values()].reduce((sum, seconds) => sum + seconds, 0);
-        const floor_hours = floors.get(project) ?? null;
 
         return {
-          project,
+          project: stream.project,
+          label: stream.label,
+          palette_slot: stream.palette_slot,
+          mapped: stream.mapped,
           // null, not zero, for a day with nothing recorded. Absent and zero are different claims and the
           // screen has to be able to tell them apart to draw a dash instead of a bar.
           per_day: dates.map((date) => per_day.get(date) ?? null),
           total_seconds,
-          floor_hours,
-          deficit_seconds: floor_hours === null ? null : Math.max(0, floor_hours * 3600 - total_seconds),
+          floor_hours: stream.floor_hours,
+          deficit_seconds: stream.floor_hours === null ? null : Math.max(0, stream.floor_hours * 3600 - total_seconds),
         };
       })
       .sort((left, right) => right.total_seconds - left.total_seconds);
 
-    return { dates, streams, total_seconds: streams.reduce((sum, stream) => sum + stream.total_seconds, 0) };
+    return {
+      dates,
+      streams,
+      total_seconds: streams.reduce((sum, stream) => sum + stream.total_seconds, 0),
+      unmapped_count: streams.filter((stream) => !stream.mapped).length,
+    };
   }),
 
   // The second resource dimension. Hour-fairness is not slot-fairness for this operator: the US streams can
@@ -132,7 +131,26 @@ export const personalLedgerProcedures = {
       )
       .groupBy(activityBucket.project);
 
-    const streams = rows.map((row) => ({ project: row.project, seconds: Number(row.seconds) })).sort((l, r) => r.seconds - l.seconds);
+    const { by_waka_name } = await resolveStreams();
+    const by_stream = new Map<string, { stream: StreamKey; seconds: number }>();
+
+    for (const row of rows) {
+      const stream = streamOf(row.project, by_waka_name);
+      const entry = by_stream.get(stream.key) ?? { stream, seconds: 0 };
+
+      entry.seconds += Number(row.seconds);
+      by_stream.set(stream.key, entry);
+    }
+
+    const streams = [...by_stream.values()]
+      .map(({ stream, seconds }) => ({
+        project: stream.project,
+        label: stream.label,
+        palette_slot: stream.palette_slot,
+        mapped: stream.mapped,
+        seconds,
+      }))
+      .sort((left, right) => right.seconds - left.seconds);
 
     return {
       window: { end_hour: OVERLAP_END_HOUR, start_hour: OVERLAP_START_HOUR },

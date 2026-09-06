@@ -1,6 +1,7 @@
 import { db } from "@server/db/drizzle";
 import { personalReview, personalTask, personalTaskDeferral } from "@server/db/schema";
 import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
+import { readSetting } from "@server/personal-settings";
 import { DEFERRAL_LIMIT, SOMEDAY_AGE_DAYS } from "@server/personal-thresholds";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import { z } from "zod";
@@ -29,7 +30,8 @@ const dispose_schema = z
 // a badge and never as a notification. It runs when the review opens rather than on the daily
 // surface, so nothing ever disappears out from under a day in progress.
 const ageOutStale = async (now: Date): Promise<number> => {
-  const cutoff = new Date(now.getTime() - SOMEDAY_AGE_DAYS * DAY_MS);
+  const someday_age_days = await readSetting("someday_age_days", SOMEDAY_AGE_DAYS);
+  const cutoff = new Date(now.getTime() - someday_age_days * DAY_MS);
 
   const stale = await db
     .select({ id: personalTask.id })
@@ -92,10 +94,11 @@ export const personalReviewProcedures = {
   // been given the debt is settled, even though deferral_count keeps its history — the count means
   // "how many times did I promise this and not do it", and that never stops being true.
   listDispositionsRequired: authed.handler(async () => {
+    const deferral_limit = await readSetting("deferral_limit", DEFERRAL_LIMIT);
     const candidates = await db
       .select()
       .from(personalTask)
-      .where(and(inArray(personalTask.state, [...ACTIVE_STATES]), gte(personalTask.deferral_count, DEFERRAL_LIMIT)))
+      .where(and(inArray(personalTask.state, [...ACTIVE_STATES]), gte(personalTask.deferral_count, deferral_limit)))
       .orderBy(desc(personalTask.deferral_count), asc(personalTask.createdAt));
 
     if (candidates.length === 0) {

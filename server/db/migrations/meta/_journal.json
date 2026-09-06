@@ -162,6 +162,13 @@
       "when": 1788725994254,
       "tag": "0022_lucky_blue_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1788726258268,
+      "tag": "0023_bent_harrier",
+      "breakpoints": true
     }
   ]
 }
