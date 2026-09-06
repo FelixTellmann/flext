@@ -2,7 +2,7 @@ import { db } from "@server/db/drizzle";
 import { action, message } from "@server/db/schema";
 import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
 import { APPLIED_STATUS, PENDING_STATUS } from "@server/mail/actions/executor";
-import { QUARANTINE_KIND } from "@server/mail/actions/kinds";
+import { EXECUTABLE_ACTION_KINDS, QUARANTINE_KIND } from "@server/mail/actions/kinds";
 import { JUNK_FOLDER_SOURCE } from "@server/mail/classify/rules";
 import { classifyMailboxError } from "@server/mail/errors";
 import type { FolderInfo, MailboxProvider } from "@server/mail/providers/types";
@@ -93,18 +93,18 @@ export function junkCandidateQuery(input: { mailbox_id: string; junk_folders: st
         eq(message.mailbox_id, input.mailbox_id),
         isNull(message.disappeared_at),
         inArray(message.folder, input.junk_folders),
-        // A quarantine already applied or in flight is not proposed again: `applied` covers the window
-        // between this stage's move and the next fetch noticing the row is gone, `pending` covers a row the
-        // executor is holding. Any other status — failed, deferred — is retried, which is why the check is
-        // on these two and not on "any quarantine row".
+        // Any executable kind, not only quarantine: the classify-and-execute stage runs before this one and
+        // walks Junk too, so an `auto` policy may already have moved the message out — the row still says
+        // INBOX.Junk until the next fetch, and a quarantine journaled now would fail on a UID that is gone.
+        // `applied` and `pending` only: a failed or deferred row is retried.
         notExists(
           db
-            .select({ quarantined: sql`1` })
+            .select({ moved: sql`1` })
             .from(action)
             .where(
               and(
                 eq(action.message_id, message.id),
-                eq(action.kind, QUARANTINE_KIND),
+                inArray(action.kind, [...EXECUTABLE_ACTION_KINDS]),
                 inArray(action.status, [APPLIED_STATUS, PENDING_STATUS]),
               ),
             ),

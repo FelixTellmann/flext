@@ -107,3 +107,14 @@ A: yes: the candidate query excludes only applied and pending quarantines, and t
    the first capture (recordFromState is first-write-wins).
    not: exclude any quarantine row — a transient IMAP error would then leave the message in Junk forever
 why: the purge window is unknown; a retry every fifteen minutes is the point of the stage
+
+[2026-09-06 18:40] phase 2 — junk to quarantine (review fix)
+Q: the candidate query excluded only applied/pending `quarantine` rows — what about a message stage 5
+   already moved out of Junk under an auto archive/file/auto_trash policy?
+A: exclude any message with an action of ANY executable kind (EXECUTABLE_ACTION_KINDS) at applied or
+   pending. Stage 5 runs first and its shadow pass is folder-blind on generic, so the Message row still
+   says INBOX.Junk until the next fetch and the executor would fail the junk row on a vanished UID —
+   permanently, since the next fetch marks the message disappeared and nothing retries it.
+   not: keep the quarantine-only check and tolerate the failed rows — one per such message, forever, and
+        a misleading `failed N` in every note once phase 5's domain rules land
+why: a message another action has already claimed is not in Junk any more, whatever its row says

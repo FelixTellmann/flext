@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ActionJournal, ExecuteActionsInput, ExecuteActionsResult } from "@server/mail/actions/executor";
-import { inverseOf, planFor, SEEN_FLAG } from "@server/mail/actions/kinds";
+import { EXECUTABLE_ACTION_KINDS, inverseOf, planFor, SEEN_FLAG } from "@server/mail/actions/kinds";
 import type { PolicyAction, PolicyScope } from "@server/mail/classify/rules";
 import { JUNK_FOLDER_SOURCE } from "@server/mail/classify/rules";
 import type { FolderInfo, MailboxProvider } from "@server/mail/providers/types";
@@ -61,17 +61,25 @@ describe("junk folder detection", () => {
 });
 
 describe("the candidate query", () => {
-  test("takes live messages in the junk folders with no applied or pending quarantine", () => {
-    const sql = junkCandidateQuery({ mailbox_id: "mailbox-1", junk_folders: ["INBOX.Junk", "INBOX.spambucket"], batch_size: 200 }).toSQL()
-      .sql;
+  test("takes live messages in the junk folders that no executable action has applied or is holding", () => {
+    const query = junkCandidateQuery({
+      mailbox_id: "mailbox-1",
+      junk_folders: ["INBOX.Junk", "INBOX.spambucket"],
+      batch_size: 200,
+    }).toSQL();
 
-    expect(sql).toContain("`Message`.`disappearedAt` is null");
-    expect(sql).toContain("`Message`.`folder` in (?, ?)");
-    expect(sql).toContain("not exists");
-    expect(sql).toContain("`Action`.`messageId` = `Message`.`id`");
-    expect(sql).toContain("`Action`.`kind` = ?");
-    expect(sql).toContain("`Action`.`status` in (?, ?)");
-    expect(sql).toContain("order by `Message`.`internalDate` asc");
+    expect(query.sql).toContain("`Message`.`disappearedAt` is null");
+    expect(query.sql).toContain("`Message`.`folder` in (?, ?)");
+    expect(query.sql).toContain("not exists");
+    expect(query.sql).toContain("`Action`.`messageId` = `Message`.`id`");
+    // Every executable kind, not quarantine alone: the classify pass runs first and may already have moved
+    // the message out of Junk under an auto policy.
+    expect(query.sql).toContain(`\`Action\`.\`kind\` in (${EXECUTABLE_ACTION_KINDS.map(() => "?").join(", ")})`);
+    for (const kind of EXECUTABLE_ACTION_KINDS) {
+      expect(query.params).toContain(kind);
+    }
+    expect(query.sql).toContain("`Action`.`status` in (?, ?)");
+    expect(query.sql).toContain("order by `Message`.`internalDate` asc");
   });
 
   test("refuses an empty folder list rather than emitting IN ()", () => {
