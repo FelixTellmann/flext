@@ -134,3 +134,35 @@ A: acknowledge-then-run: the handler takes an in-process lock, reads needs_opera
         and migration for no extra safety
 why: the scheduled task only needs to know the run started and the previous one left no dead mailbox; a
      one-tick delay on the red signal costs nothing, a red signal on every tick was the alarm going mute
+
+[2026-09-06 17:05] repair — tellmann uidvalidity
+Q: the re-key wants to write a (folder, validity, uid) that a vanished row already holds — which row wins?
+A: the vanished row is resurrected (disappearedAt cleared) and the row under the retired validity is
+   marked disappeared as its duplicate; nothing is moved onto an occupied key and nothing is deleted
+   not: delete the vanished row and move the newer one in — Action rows reference message ids, and the
+        older row is the one the journal since 2026-08-17 points at
+   not: move the newer row and leave the old one vanished — the unique index rejects that write, which is
+        the failure being fixed
+why: the server says that UID holds that Message-ID again; the row that always represented it is the truth
+
+[2026-09-06 17:05] repair — tellmann uidvalidity
+Q: an occupant at the target UID carrying a DIFFERENT stable key (true UID reuse under a revived validity)?
+A: leave both rows untouched; the row under the retired validity retires as unmatched, the occupant is
+   refreshed by the next fetch's upsert exactly as before this change
+   not: resurrect it anyway — it would announce a different message as live at that UID
+why: the re-key has no header data to correct the occupant with; the fetch that follows does
+
+[2026-09-06 17:05] repair — tellmann uidvalidity
+Q: the resurrect happens in the re-key; does the writer's upsert path need a change too?
+A: no — writer.ts's ON DUPLICATE KEY UPDATE already sets disappearedAt = NULL and refreshes flags/labels,
+   and Message has no second unique key on generic IMAP for the UPDATE half to collide with
+   not: add an explicit resurrect step to the writer — it would duplicate what the upsert does
+why: the throwing statement was the re-key's plain UPDATE, verified against SyncRun and the 586 rows it
+     moved back at 14:00 before it hit uid 40233
+
+[2026-09-06 17:05] repair — tellmann uidvalidity
+Q: the pure seam for fixtures — extract a planner, or leave rekeyFolder db-bound and untested?
+A: planRekey(rows, identities, occupants, gmail) returns moves/resurrected/disappeared; rekeyFolder applies
+   it. A row the server lists twice now gets ONE update to its final UID instead of two
+   not: an integration test against the production database — read-only for this repair
+why: the collision rule is a decision over three sets and is only trustworthy from fixtures

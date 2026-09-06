@@ -198,7 +198,7 @@ export async function syncFolderIncrementally(input: {
     return {
       folder: input.folder,
       new_messages: 0,
-      flag_updates: rekey.rekeyed,
+      flag_updates: rekey.rekeyed + rekey.resurrected,
       vanished: rekey.disappeared,
       resynced: true,
       seen_transitions: 0,
