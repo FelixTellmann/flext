@@ -290,3 +290,28 @@ A: duplicate count (expect 0); folder renames on tellmann; policy flattening; ph
    (tellmann first contact, settled sweep all four); trash retention then throwaway rules; draft-rules;
    calendar reclassify LAST because it holds the sync lock for minutes
 why: the policies script refuses while rows sit in nested folders; reclassify blocks every other tick
+
+[2026-09-06 22:05] phase 7a — smtp dual-stack workaround
+Q: where does the Bun dual-stack workaround go for the SMTP socket?
+A: autoSelectFamily: false inside the transport's tls block, exactly as connectImapClient does it;
+   nodemailer Object.assigns options.tls into tls.connect (smtp-connection/index.js) so the socket
+   option reaches net the same way it does through imapflow
+   not: net.setDefaultAutoSelectFamily(false) at module scope — a process-wide side effect from an import;
+   the probe script sets it for itself because its mysql2 pool is not covered by the tls block
+why: one workaround, one placement, one comment pointing at the paragraph in imap.ts
+
+[2026-09-06 22:05] phase 7a — sender mailbox lookup
+Q: how is the sending Mailbox row found?
+A: select every Mailbox row and filter with mailboxIdentityAddresses(row).includes("felix@tellmann.co.za");
+   exactly one match or throw; the row's enabled flag is ignored
+   not: a LIKE on the JSON identityAddresses column — would also match xfelix@tellmann.co.za
+   not: honouring enabled — that flag gates sync after repeated auth failures; a send that fails
+   propagates its own error to the caller, which records it
+why: four rows, an existing parser, and sending is not syncing
+
+[2026-09-06 22:05] phase 7a — smtp transport lifetime
+Q: pooled transport or one per send?
+A: one transport per sendMail call, closed in finally; the stored IMAP port (993) is ignored and 465 is
+   a constant
+   not: a pooled module-level transport — a weekly digest plus a handful of mail-to unsubscribes
+why: nothing to pool for; a per-call transport cannot hold a stale socket across a quiet week
