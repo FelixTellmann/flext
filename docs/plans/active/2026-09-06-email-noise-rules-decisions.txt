@@ -897,3 +897,16 @@ Q: the per-sender line still says "N waiting for the next tick" for rows in a di
 A: yes; the mailbox line beside it says "mailbox disabled, nothing will run until it is re-enabled",
    and the counts cannot tell which mailbox a waiting row is in without a second shape
 why: the disabled state is per mailbox and is reported per mailbox
+
+[2026-09-06 23:15] phase 6 fix — which shadow-page counts exclude a superseded row
+Q: getShadowReport / getShadowSummary aggregate the latest operator run by run_id with no status
+   predicate at all; add ne(status, superseded)?
+A: no. Those counts already include the run's applied and undone rows — they describe what the sweep
+   decided, not what is still open — and excluding superseded alone would make them inconsistent with
+   their own treatment of applied rows. What "the shadow page does not count" in practice is the
+   approvable list (listActionJournal status = shadow) and the promotion page's counts
+   (query/promotion.ts, status = shadow), and both exclude superseded rows already
+   not: a status predicate on the report — it would also have to drop applied rows, changing what the
+   promotion gate's "reviewed shadow record" shows
+why: one meaning per surface; the operator may overturn this with a one-line ne() if the report should
+   read as "still open"

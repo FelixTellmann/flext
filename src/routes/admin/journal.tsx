@@ -157,7 +157,7 @@ function whereaboutsNote(row: JournalRow): string {
     return "Untouched — nothing was sent to the mailbox.";
   }
   if (row.known_status === "superseded") {
-    return "Wherever the action that superseded this one put it — see the applied row for the same message.";
+    return "Wherever the action that superseded this one put it — see the other row for the same message.";
   }
   return "Whereabouts unknown — the status is unrecognised.";
 }
