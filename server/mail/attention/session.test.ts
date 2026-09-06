@@ -115,12 +115,28 @@ describe("foldEvidence", () => {
     expect(outcome.kind === "extended" && outcome.session.evidence_mailbox_ids).toEqual(["mailbox-1", "mailbox-2"]);
   });
 
-  test("a non-qualifying run does not extend an open session either", () => {
-    // Otherwise a stray preview-pane transition would keep a session alive indefinitely, and a session
-    // that never ends is a session that never counts a second time.
+  test("a lone read inside the gap does not extend an open session when nothing else was witnessed in the window", () => {
+    // The open session alone is not evidence; only pooled runs are. With an empty window this is the
+    // pre-pooling case: one preview-pane transition, nothing to pool it with, ignored.
     const outcome = foldEvidence({ open: openSession(), evidence: evidence({ observed_at: at(10), seen_transitions: 1 }), window: [] });
 
     expect(outcome.kind).toBe("ignored");
+  });
+
+  test("a lone read inside the gap extends an open session when the window pools it past the threshold", () => {
+    // The intended behaviour under pooling: the session's own runs are inside the two-hour window, so one
+    // more read is someone still working, and the session grows by that one read only.
+    const open = openSession({ started_at: NOON, ended_at: at(30), seen_transitions: 2, flag_changes: 1 });
+    const outcome = foldEvidence({
+      open,
+      evidence: evidence({ observed_at: at(50), seen_transitions: 1 }),
+      window: [run(0, { seen_transitions: 1 }), run(30, { seen_transitions: 1, flag_changes: 1 })],
+    });
+
+    expect(outcome.kind).toBe("extended");
+    expect(outcome.kind === "extended" && outcome.session.ended_at).toEqual(at(50));
+    expect(outcome.kind === "extended" && outcome.session.seen_transitions).toBe(3);
+    expect(outcome.kind === "extended" && outcome.session.flag_changes).toBe(1);
   });
 });
 

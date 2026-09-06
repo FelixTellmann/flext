@@ -11,9 +11,9 @@ export type AttentionPort = {
   // The most recent session, whatever its age. foldEvidence decides whether it is close enough to extend
   // — the gap rule lives there, so it stays testable, and this stays a plain read.
   loadLatestSession: () => Promise<OpenSession | null>;
-  // Every incremental run started at or after `since`, across all mailboxes and whatever its status — a
-  // run that failed after its fetch still witnessed what it witnessed. foldEvidence makes the window cut
-  // itself, so this is a plain read too.
+  // Every incremental run started at or after `since`, across all mailboxes, whatever its status. A failed
+  // run contributes zero: runMailboxSync's failure path writes only status and error, so its counters
+  // stay at the column default. foldEvidence makes the window cut itself, so this is a plain read too.
   loadEvidenceSince: (since: Date) => Promise<EvidenceRun[]>;
   openSession: (session: Omit<OpenSession, "id">) => Promise<void>;
   extendSession: (session: OpenSession) => Promise<void>;

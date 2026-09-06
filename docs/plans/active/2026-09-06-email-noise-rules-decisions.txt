@@ -51,3 +51,11 @@ A: RunTotals.replies_sent, still 0: scanSentFolder returns scanned/senders, not 
    not: derive it from scanSentFolder's `scanned` — that counts every Sent entry, not replies, and the
         first scan of a folder would count the whole folder
 why: the brief said leave replies at 0; the column exists so a later change writes it without a migration
+
+[2026-09-06 17:30] phase 1 — auth three-strike (correction)
+Q: the 16:40 entry said no re-enable path exists in code — is that so?
+A: no. orpc testConnection sets enabled: true after a successful login; it now resets authFailureCount
+   to 0 in the same write
+   not: leave the counter — a mailbox reconnected at strike 3 would be disabled again as "strike 4 of 3"
+        by one transient auth error
+why: a successful login is the reset, and testConnection is one

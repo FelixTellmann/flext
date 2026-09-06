@@ -212,6 +212,9 @@ export const mailProcedures = {
           enabled: true,
           last_error: null,
           last_error_at: null,
+          // A successful login is what resets the strike count. Reconnecting a mailbox disabled at strike
+          // three without this would leave it one transient auth error from "strike 4 of 3".
+          auth_failure_count: 0,
           updatedAt: now,
         })
         .where(eq(mailbox.id, row.id));

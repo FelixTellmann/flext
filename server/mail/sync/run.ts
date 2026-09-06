@@ -332,9 +332,10 @@ async function runMode(input: { provider: MailboxProvider; mailbox_row: MailboxR
       mailbox_id: input.mailbox_row.id,
       seen_transitions: totals.seen_transitions,
       flag_changes: totals.flag_changes,
-      // Replies are counted by the Sent scan further down, which has not run yet this pass. Left at zero
-      // rather than guessed: a reply is sufficient evidence on its own, and inventing one here would open
-      // a session off no evidence at all.
+      // Nothing counts replies yet: scanSentFolder reports scanned entries and touched senders, not messages
+      // the operator authored this run. Zero rather than a guess, because a reply is sufficient evidence
+      // on its own and an invented one would open a session off no evidence at all. SyncRun.repliesSent
+      // exists so the count can be written without a migration once the scan produces it.
       replies_sent: 0,
     },
   });
