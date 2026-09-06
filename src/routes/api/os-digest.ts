@@ -1,11 +1,15 @@
 import { db } from "@server/db/drizzle";
 import { activityBucket, personalTask } from "@server/db/schema";
-import { DAY_MS, isoWeekOf, operatorDayStart } from "@server/operator-day";
+import { DAY_MS, isoWeekOf, operatorDateOf, operatorDayStart } from "@server/operator-day";
 import { requireScriptSecret } from "@server/script-auth";
 import { createFileRoute } from "@tanstack/react-router";
 import { and, count, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 const hours = (seconds: number): string => `${Math.floor(seconds / 3600)}h${String(Math.round((seconds % 3600) / 60)).padStart(2, "0")}`;
+
+// UTC and the operator disagree for the two hours after local midnight: 00:30 on the operator's Sunday is
+// still Saturday in UTC, so a weekday read off the instant would withhold the review line exactly then.
+const isOperatorSunday = (at: Date): boolean => new Date(`${operatorDateOf(at)}T00:00:00.000Z`).getUTCDay() === 0;
 
 // Rendered text, not a payload. §6.6 makes this the only push the system sends and requires the
 // content to live in the notification itself — the operator is usually out in the evening, and a
@@ -52,7 +56,7 @@ async function renderDigest(now: Date): Promise<string> {
 
   // Availability, never an obligation — the review is offered on Sunday and stays offered. It is
   // not late on Monday, so this never says "due" or "overdue".
-  if (now.getUTCDay() === 0) {
+  if (isOperatorSunday(now)) {
     lines.push(`The ${isoWeekOf(now)} review is open when you want it.`);
   }
 
