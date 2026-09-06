@@ -53,6 +53,17 @@ const soft_floor_hours_schema = z.number().int().min(0).max(168).nullable();
 // Unmapped names older than this are noise from a machine long since wiped, not a stream to assign.
 const UNMAPPED_LOOKBACK_DAYS = 90;
 
+const deleteWakaNameRows = async (normalised_name: string): Promise<void> => {
+  const rows = await db
+    .select({ id: personalProjectWakaName.id, waka_name: personalProjectWakaName.waka_name })
+    .from(personalProjectWakaName);
+  const ids = rows.filter((row) => normaliseProjectName(row.waka_name) === normalised_name).map((row) => row.id);
+
+  if (ids.length > 0) {
+    await db.delete(personalProjectWakaName).where(inArray(personalProjectWakaName.id, ids));
+  }
+};
+
 const id_schema = z.object({ id: z.string().min(1) });
 
 export const capture_input_schema = z.object({ title: z.string().min(1).max(512) });
@@ -382,18 +393,18 @@ export const personalTaskProcedures = {
     );
   }),
 
-  // Stored normalised so the ledger's lookup is an equality. Assigning a name already held by another
-  // project moves it: the unique index is on the name, and the select this serves is a reassignment.
+  // Stored normalised so the ledger's lookup is an equality. Rows the migration copied from waka_project
+  // are verbatim, so a match is by normalised form rather than by the column, and assigning a name
+  // another project holds moves it: the select this serves is a reassignment.
   assignWakaName: authed
     .input(z.object({ project_id: z.string().min(1), waka_name: z.string().min(1).max(191) }))
     .handler(async ({ input }) => {
       const waka_name = normaliseProjectName(input.waka_name);
-      const now = new Date();
 
+      await deleteWakaNameRows(waka_name);
       await db
         .insert(personalProjectWakaName)
-        .values({ id: crypto.randomUUID(), project_id: input.project_id, waka_name, updatedAt: now })
-        .onDuplicateKeyUpdate({ set: { project_id: input.project_id, updatedAt: now } });
+        .values({ id: crypto.randomUUID(), project_id: input.project_id, waka_name, updatedAt: new Date() });
 
       return { project_id: input.project_id, waka_name };
     }),
@@ -401,7 +412,7 @@ export const personalTaskProcedures = {
   unassignWakaName: authed.input(z.object({ waka_name: z.string().min(1).max(191) })).handler(async ({ input }) => {
     const waka_name = normaliseProjectName(input.waka_name);
 
-    await db.delete(personalProjectWakaName).where(eq(personalProjectWakaName.waka_name, waka_name));
+    await deleteWakaNameRows(waka_name);
 
     return { waka_name };
   }),
