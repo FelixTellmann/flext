@@ -676,3 +676,32 @@ Q: bun run tsc reports 5 errors; are they this phase's?
 A: no: all in actions/executor.ts:347 (applyToState reduce) and actions/kinds.test.ts:562, both clean in
    git and untouched here; every file this phase changed type-checks. Left for the owner of that change
 why: not this phase's scope, and a fix would touch the executor's fold
+
+[2026-09-06 22:15] phase 5 — realign: refusing an auto rule
+Q: one address rule at auto in the realign set: refuse the whole --write or that row?
+A: that row only, reported "refused: auto" and listed after the rewrites; the rest go through
+   not: refuse the batch — one promoted rule would block ten shadow rewrites the decision already made
+why: the rewrite is upsertPolicy, whose schema demotes to shadow; a demotion is the operator's act at /admin/promote
+
+[2026-09-06 22:15] phase 5 — realign: what counts as "matches"
+Q: compare action/topic/mark_read only, as the task lists, or client too?
+A: client too, target null: policyEditColumns writes client on every upsert, so a row with a client set
+   would be clobbered by a "matching" rewrite; a set client is also printed as a NOTE. mark_read null
+   (markRead column missing) never matches — the rewrite sets it, and --write is refused without the column
+why: "matches" must mean the rewrite would change nothing
+
+[2026-09-06 22:15] phase 5 — realign: which addresses are in scope
+Q: exact domain after the last @, or any suffix (subdomains)?
+A: exact, lowercased, against the six NOTIFICATION_DOMAINS; suspended_at is left alone (policyEditColumns
+   omits it) and printed as a NOTE when set; source kept when upsert_policy_schema accepts it, else "operator"
+why: the domain rules match from_domain exactly too, so a subdomain address would not be outranking them
+
+[2026-09-06 23:35] phase 6 — a guard-refused message is not re-decided
+Q: a message the press refuses (too_recent, flagged, never_touch, a snoozed thread) gets no Action row;
+   when is it decided again under the new archive rule?
+A: not by the tick: the new-mail pass decides only messages with no Action row and the sweeps journal
+   only their own source, so a message classified before the press keeps its old row. It stays in the
+   inbox until the operator re-sweeps from /admin/shadow, which is the codebase's documented policy-edit
+   behaviour; the outcome line says "kept by a guard" rather than "waiting"
+   not: a second journal pass from the button after 24 h — a timer the operator did not press
+why: the brief said a refused message stays; how long it stays is the existing re-sweep rule
