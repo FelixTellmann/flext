@@ -57,8 +57,8 @@ Decisions: `2026-09-06-first-contact-human-or-machine.md`, `2026-09-06-scheduled
 
 ### Phase 4c — after the 4b review
 Decision: `2026-09-06-clear-suspension-resets-the-window.md`.
-- [ ] `Mailbox.first_contact_suspension_cleared_at` and `dwell_suspension_cleared_at` (migration); clearMailboxSuspension stamps them; rescue detection counts rescues since `max(now - 30d, cleared_at)` for each pair.
-- [ ] The senders page's bulk-assign gets the same mark-read checkbox as single assign (today bulk silently resets it).
+- [x] `Mailbox.first_contact_suspension_cleared_at` and `dwell_suspension_cleared_at` (migration 0022, 47811c6); clearMailboxSuspension stamps them; rescue detection counts rescues since `max(now - 30d, cleared_at)` for each pair.
+- [x] The senders page's bulk-assign gets the same mark-read checkbox as single assign (1eb925e).
 
 ### Phase 5 — the rules themselves
 - [x] `tmp/create-noise-policies.ts` (written, dry-run clean; realigns the 11 notification address rules first, decision `2026-09-06-notification-address-rules-realigned.md`), dry-run by default, `--write` to apply, idempotent against rows that exist (noreply-iam@booking.com is also in `create-throwaway-policies.ts`). Domain rules: logalert.app, github.com, npmjs.com, vercel.com, planetscale.com, wakatime.com to `Notifications`, mark read. booking.com domain to `Travel`; `noreply-iam@booking.com` address to `auto_trash`. fnb.co.za, standardbank.co.za, bobpay.co.za to `Finances`.
@@ -69,10 +69,10 @@ Decision: `2026-09-06-clear-suspension-resets-the-window.md`.
 
 ### Phase 6 — one-click unsubscribe
 Decision: `2026-09-06-unsubscribe-button-and-digest-links.md`.
-- [ ] Fetch and store `List-Unsubscribe-Post` (new header in `providers/headers.ts`, column on `Message`, migration, reclassify backfill).
-- [ ] `UnsubscribeAttempt` table (sender address, mailbox, method `http` | `mailto`, status, response code, attempted_at). Migration.
-- [ ] ORPC `unsubscribeBulk`: per ticked sender, POST `List-Unsubscribe=One-Click` from the server (mailto senders wait for phase 7's sender); record the attempt; upsert an `archive` rule for the address and promote it to `auto`; journal `pending` archive rows (mark read) for the sender's inbox messages and apply them through the same path `/admin` uses for operator-approved rows.
-- [ ] `/admin/unsubscribe` gains checkboxes, select-all for the one-click group, one button, and the last attempt's outcome per row.
+- [x] Fetch and store `List-Unsubscribe-Post` (475cedd: header, `Message.listUnsubscribePost`, migration 0021, reclassify backfill).
+- [x] `UnsubscribeAttempt` table (475cedd, migration 0021).
+- [x] ORPC `unsubscribeBulk` (6d152c0; SSRF hardening 10d48f2; review fixes follow, decision `2026-09-06-superseded-proposals.md`): per ticked sender, POST `List-Unsubscribe=One-Click` from the server (mailto senders wait for phase 7's sender); record the attempt; upsert an `archive` rule for the address and promote it to `auto`; journal `pending` archive rows (mark read) for the sender's inbox messages and apply them through the same path `/admin` uses for operator-approved rows.
+- [x] `/admin/unsubscribe` (c81632c) gains checkboxes, select-all for the one-click group, one button, and the last attempt's outcome per row.
 
 ### Phase 7 — SMTP and the Monday digest
 Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-button-and-digest-links.md`.
@@ -90,7 +90,7 @@ Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-b
 
 ### Deploy and operator batch (session-run, after the review)
 - [ ] Operator runs `bun run db:migrate` once. Session pushes `main`, verifies the engine after the next quarter-hour tick.
-- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write` (realign, then create); `promote-reference-policies.ts --write`; `repair-quarantine-snapshots.ts --write`; `rewrite-first-contact-backlog.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
+- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write` (realign, then create); `promote-reference-policies.ts --write`; `repair-quarantine-snapshots.ts --write`; `supersede-stale-proposals.ts --write`; `rewrite-first-contact-backlog.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
 - [ ] Coolify: add the Monday digest task, narrated in the browser.
 - [ ] GitHub: disconnect the dead Vercel integration, narrated in the browser.
 - [ ] `git mv` this plan to `docs/plans/completed/` with the closing marker.
