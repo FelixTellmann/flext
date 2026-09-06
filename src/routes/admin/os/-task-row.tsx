@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { FC, ReactNode } from "react";
 import type { orpc } from "~/integrations/orpc";
@@ -48,6 +49,17 @@ export const DeferralBadge: FC<{ count: number }> = ({ count }) => {
   );
 };
 
+// The title of every row is the way into the detail editor, wherever the row is read.
+export const TaskTitleLink: FC<{ task: Pick<PersonalTask, "id" | "title"> }> = ({ task }) => (
+  <Link
+    className="min-w-0 flex-grow text-gray-900 text-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:text-dark-headings"
+    params={{ taskId: task.id }}
+    to="/admin/os/task/$taskId"
+  >
+    {task.title}
+  </Link>
+);
+
 // One row, shared by Today and the week pool, which differ only in the verb on the right: Today can push a
 // task out, the pool can pull one in. Everything else about a task looks the same wherever it is read.
 export const TaskRow: FC<{
@@ -67,7 +79,7 @@ export const TaskRow: FC<{
       onClick={() => onComplete()}
       type="button"
     />
-    <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">{task.title}</span>
+    <TaskTitleLink task={task} />
 
     {overdue_since !== null && <span className="text-danger text-xs">was {overdue_since}</span>}
 

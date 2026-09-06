@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 import { orpc } from "~/integrations/orpc";
 import { Banner } from "../-outcome-banner";
-import { BlockedNotice, DeferralBadge, OsPanel, type PersonalTask, TaskRow } from "./-task-row";
+import { BlockedNotice, DeferralBadge, OsPanel, type PersonalTask, TaskRow, TaskTitleLink } from "./-task-row";
 import { useTaskAction } from "./-use-task-action";
 
 export const Route = createFileRoute("/admin/os/pool")({
@@ -152,7 +152,7 @@ function PersonalOsPoolPage() {
                 >
                   &#10303;
                 </button>
-                <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">{task.title}</span>
+                <TaskTitleLink task={task} />
                 <DeferralBadge count={task.deferral_count} />
                 <button
                   className="rounded border border-gray-300 px-2.5 py-1 text-gray-900 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-headings"
