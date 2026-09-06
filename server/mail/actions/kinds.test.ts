@@ -386,7 +386,7 @@ describe("state model guards", () => {
     expect(moved.labels).toBeNull();
   });
 
-  test("no action touches flags", () => {
+  test("no action touches flags unless mark_read asks for it", () => {
     const flagged = state(GMAIL_CANONICAL_FOLDER, ["\\Seen", "\\Flagged"], [GMAIL_INBOX_LABEL]);
     for (const kind of EXECUTABLE_ACTION_KINDS) {
       const plan = planFor(kind, "gmail", contextFor("gmail", flagged));

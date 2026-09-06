@@ -342,7 +342,7 @@ async function undoRow(input: {
     return {
       outcome: "failed",
       action_id: row.action_id,
-      error: `the recorded to_state ${canonicalState(to_state)} matches no point on this action's path back from ${canonicalState(states[0])}. The mailbox's folder layout most likely changed since the action ran, so the inverse would address the wrong folder. Nothing was mutated.`,
+      error: `the recorded to_state ${canonicalState(to_state)} matches no point on this action's path back from ${canonicalState(states[0])}. Either the mailbox's folder layout changed since the action ran, so the inverse would address the wrong folder, or the action ran before to_state recorded its \\Seen prefix (quarantines applied unread before 2026-09-06). Nothing was mutated.`,
     };
   }
 
