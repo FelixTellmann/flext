@@ -115,9 +115,17 @@ function PersonalOsAreasPage() {
     setOverrides((current) => without(current, project_id, displaced));
   };
 
-  // Blur decides. Empty clears the floor; anything that is not a whole number of hours in range reverts.
+  // Blur decides, and only after something was typed. Empty clears the floor — and a number input reports
+  // empty for text it rejected, so "abc" clears rather than reverts. A fraction or an out-of-range whole
+  // number is the case that reverts.
   const saveFloor = (project: Project) => {
-    const raw = (floor_drafts[project.id] ?? "").trim();
+    const draft = floor_drafts[project.id];
+
+    if (draft === undefined) {
+      return;
+    }
+
+    const raw = draft.trim();
     const hours = raw === "" ? null : Number(raw);
     const valid = hours === null || (Number.isInteger(hours) && hours >= 0 && hours <= MAX_FLOOR_HOURS);
 

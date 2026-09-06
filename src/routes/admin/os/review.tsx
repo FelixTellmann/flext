@@ -90,19 +90,16 @@ function PersonalOsReviewPage() {
       <Step number={2} title="Allocation variance">
         {ledger.total_seconds === 0 && <p className="text-gray-500 text-sm dark:text-dark-text">Nothing was tracked this week.</p>}
         {under_floor.map((stream) => (
-          <div
-            className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1.5 dark:border-dark-border"
-            key={stream.project}
-          >
+          <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1.5 dark:border-dark-border" key={stream.key}>
             <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">
-              {stream.project} {formatColon(stream.total_seconds)} &mdash; under the {stream.floor_hours}h soft floor
+              {stream.label} {formatColon(stream.total_seconds)} &mdash; under the {stream.floor_hours}h soft floor
             </span>
             <span className="text-danger text-sm tabular-nums">&minus;{formatColon(stream.deficit_seconds ?? 0)}</span>
           </div>
         ))}
         {under_floor.length > 0 && top_consumer !== undefined && (
           <p className="mt-2 text-[13px] text-gray-600 dark:text-dark-text">
-            What consumed it instead: {top_consumer.project} {formatColon(top_consumer.total_seconds)}.
+            What consumed it instead: {top_consumer.label} {formatColon(top_consumer.total_seconds)}.
           </p>
         )}
         {under_floor.length === 0 && ledger.total_seconds > 0 && (
