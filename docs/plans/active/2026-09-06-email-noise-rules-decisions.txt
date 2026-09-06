@@ -373,3 +373,49 @@ A: two new port methods (countRecentFirstContactRescues, suspendMailboxFirstCont
    first_contact_suspended
    not: a source parameter on the existing count — renames a method three fakes and journal.ts spell
 why: same three-in-30 rule, its own columns, and the existing method keeps its name and callers
+
+[2026-09-06 23:10] phase 8a — sessions strip query shape
+Q: which columns does listRecentAttentionSessions return, and in what order?
+A: newest by ended_at desc, the same ordering loadLatestSession uses; dates as ISO strings like
+   listSyncRuns; only the columns AttentionSession actually has
+   not: sync_run_id / manual_moves — the brief named them but the table has neither, and inventing them
+   would mean a schema change in another agent's file
+   not: started_at desc as tmp/attention-report.ts does — "last believed reading mail" is the end of
+   the last sitting, and an extended session moves its end, not its start
+why: the strip answers "when did it last think I was reading", which is the end instant
+
+[2026-09-06 23:10] phase 8a — sessions strip rendering
+Q: how are relative and absolute times kept identical between the server render and hydration?
+A: the loader stamps loaded_at once and every formatter takes it as `now`; absolute day/time render in
+   OPERATOR_TIME_ZONE via Intl, the os/-format.ts precedent
+   not: Date.now() in render — a different minute on server and client is a hydration mismatch
+   not: raw ISO strings as mail.tsx does — UTC on a "when did I last read" surface argues with memory
+why: the strip is a calibration surface; a time that disagrees with the operator's memory has to be
+   his memory that is wrong, never the timezone
+
+[2026-09-06 23:10] phase 8a — zero-length session wording
+Q: what does a session whose started_at equals ended_at say for its duration?
+A: "a single check" — one sync window held all the evidence
+   not: "0 min" — reads as a broken clock
+why: the sitting was real; only its span is unknown
+
+[2026-09-06 23:10] phase 8a — deleted mailbox in evidence_mailbox_ids
+Q: what does a session show for a mailbox id with no Mailbox row?
+A: the bare id, kept in the list
+   not: dropped silently — the strip would name fewer mailboxes than the session counted
+why: the evidence count and the mailbox list must stay consistent with each other
+
+[2026-09-06 23:10] phase 8a — promote toggle param
+Q: how does "Show all" persist in the URL?
+A: ?all=true through validateSearch z.object({ all: z.boolean().optional() })
+   not: ?all=1 as the brief suggested — TanStack serialises search as JSON, so 1 fails z.boolean()
+why: the native search shape, and filter state lives in the URL per CLAUDE.md
+
+[2026-09-06 23:10] phase 8a — promote cut scope and Select all
+Q: what does the top-10 cut apply to, and what does Select all select?
+A: the cut applies to movers only, sorted by waiting in the helper rather than trusted from the query;
+   "Select all shown" selects the visible rows only
+   not: cutting the pins list — already a compact one-liner list and never in a batch
+   not: leaving Select all over every mover — with 30 rows hidden it would assert reviewed_shadow_record
+   for rows the operator never saw, the exact gate the page says it does not weaken
+why: the tick is the review; a row that was not on screen was not reviewed

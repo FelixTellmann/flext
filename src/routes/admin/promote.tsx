@@ -1,8 +1,14 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import clsx from "clsx";
 import { type FC, useState } from "react";
+import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import { DEFAULT_VISIBLE_RULES, visibleRules } from "./-promote-list";
 import { ActionButton, accent_button, Panel, secondary_button } from "./-ui";
+
+const promote_search_schema = z.object({
+  all: z.boolean().optional(),
+});
 
 type Candidate = Awaited<ReturnType<typeof orpc.mail.listPromotionCandidates>>[number];
 type BatchResult = Awaited<ReturnType<typeof orpc.mail.promotePolicyAutonomyBulk>>;
@@ -18,6 +24,8 @@ const CANDIDATE_LIMIT = 40;
 // per-policy control has always required.
 const TurnRulesOn: FC = () => {
   const candidates = Route.useLoaderData();
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<BatchResult | null>(null);
@@ -25,6 +33,7 @@ const TurnRulesOn: FC = () => {
   const [busy, setBusy] = useState(false);
 
   const movers = candidates.filter((candidate) => candidate.moves_mail);
+  const { visible: shown_movers, hidden } = visibleRules(movers, search.all === true);
   const pins = candidates.filter((candidate) => !candidate.moves_mail);
   const selected_total = movers
     .filter((candidate) => selected.has(candidate.policy_id))
@@ -99,7 +108,7 @@ const TurnRulesOn: FC = () => {
       <Panel title={`Rules that would move mail (${movers.length})`}>
         {movers.length === 0 && <p className="text-sm text-zinc-600 dark:text-dark-text">Nothing waiting to be turned on.</p>}
         <ul className="flex flex-col gap-2">
-          {movers.map((candidate) => (
+          {shown_movers.map((candidate) => (
             <CandidateRow
               candidate={candidate}
               key={candidate.policy_id}
@@ -108,6 +117,16 @@ const TurnRulesOn: FC = () => {
             />
           ))}
         </ul>
+        {hidden > 0 && (
+          <button className={clsx(secondary_button, "mt-3")} onClick={() => void navigate({ search: { all: true } })} type="button">
+            Show all {movers.length}
+          </button>
+        )}
+        {search.all === true && movers.length > DEFAULT_VISIBLE_RULES && (
+          <button className={clsx(secondary_button, "mt-3")} onClick={() => void navigate({ search: {} })} type="button">
+            Show top {DEFAULT_VISIBLE_RULES}
+          </button>
+        )}
       </Panel>
 
       {movers.length > 0 && (
@@ -122,8 +141,8 @@ const TurnRulesOn: FC = () => {
             onClick={() => void promote()}
             variant={accent_button}
           />
-          <button className={secondary_button} onClick={() => setSelected(new Set(movers.map((row) => row.policy_id)))} type="button">
-            Select all
+          <button className={secondary_button} onClick={() => setSelected(new Set(shown_movers.map((row) => row.policy_id)))} type="button">
+            Select all shown
           </button>
           <button className={secondary_button} onClick={() => setSelected(new Set())} type="button">
             Clear
@@ -175,13 +194,18 @@ const CandidateRow: FC<{ candidate: Candidate; selected: boolean; onToggle: () =
             </span>
           )}
         </span>
-        {candidate.sample_subjects.length > 0 && (
-          <span className="mt-1 block text-xs text-zinc-500 dark:text-dark-text">
-            e.g. {candidate.sample_subjects.slice(0, 3).join(" · ")}
-          </span>
-        )}
       </span>
     </label>
+    {candidate.sample_subjects.length > 0 && (
+      <details className="mt-1 pl-7 text-xs text-zinc-500 dark:text-dark-text">
+        <summary className="cursor-pointer select-none">samples ({candidate.sample_subjects.length})</summary>
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {[...new Set(candidate.sample_subjects)].map((subject) => (
+            <li key={subject}>{subject}</li>
+          ))}
+        </ul>
+      </details>
+    )}
   </li>
 );
 
@@ -201,6 +225,7 @@ function describeAction(policy_action: string): string {
 }
 
 export const Route = createFileRoute("/admin/promote")({
+  validateSearch: promote_search_schema,
   loader: () => orpc.mail.listPromotionCandidates({ limit: CANDIDATE_LIMIT }),
   component: TurnRulesOn,
 });
