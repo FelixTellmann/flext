@@ -10,6 +10,8 @@
 
 **Register:** calls made without asking go to `docs/plans/active/2026-09-06-email-noise-rules-decisions.txt`.
 
+**Workflow from 2026-09-06 21:00 (operator's instruction, widget 3):** no handover files. The session runs every operator script itself after printing a dry-run summary table, batched at the end after phases 4 to 8 are built and committed. The session pushes `main`. The operator runs one command, `bun run db:migrate`, once, before that push. Anything build-blocking is asked at once.
+
 ## Global constraints
 
 - No `any`; `type` over `interface`; named exports; Biome line width 140.
@@ -43,24 +45,46 @@ Each phase is one subagent, fresh context, one commit, type-check and one review
 - [x] tellmann.co.za UIDVALIDITY flip-and-revert: re-key planner resurrects vanished occupants (f64bd59).
 - [x] `/api/mail-sync` acknowledges at once and runs in the background with a lock (76a8c53, 38413a7); Coolify tasks re-created with the reconcile at minute 7.
 
-### Phase 4 — first contact and mark-read rules
-- [ ] `decide()` first-contact rung splits: human-shaped stays (`keep_inbox`, source `first_contact_human`), machine-shaped quarantines. Signals already exist: `is_bulk`, `is_automated`, `dkim_aligned`, `addressed_to_me`.
-- [ ] `SenderPolicy.mark_read` boolean (migration). When set, `file` and `archive` plans carry the same `\Seen` pre-mutation quarantine uses. `/admin/senders` exposes it.
-- [ ] Promote first-contact quarantine to `auto` for felix@tellmann.co.za only (script, `--write`).
+### Phase 4 — first contact, mark-read, per-mailbox autonomy for scheduled sources
+Decisions: `2026-09-06-first-contact-human-or-machine.md`, `2026-09-06-scheduled-source-autonomy-per-mailbox.md`, `2026-09-06-mark-read-and-rule-scope.md`, `2026-09-06-declined-needs-action-archives.md`.
+- [ ] `decide()` first-contact rung splits: human-shaped (`!is_bulk`, `!is_automated`, `dkim_aligned === true`, `addressed_to_me`) returns `keep_inbox` with source `first_contact_human` (new `DecisionSource`); machine-shaped quarantines as today. Signals already in `deriveSignals`.
+- [ ] `Mailbox` gains `first_contact_autonomy`, `settled_sweep_autonomy`, `declined_sweep_autonomy` (`shadow` | `auto`, default `shadow`) and the matching `*_autonomy_set_at` timestamps. Migration.
+- [ ] A promotion path in the scheduled tick for source-carried rows: for each source at `auto` on the mailbox, shadow rows of that source with `decided_at > *_autonomy_set_at` move to `pending` under the same shared batch budget and the same affectedRows contract as `promoteAutoPolicies`. Rescue against a first-contact row suspends the mailbox's first-contact switch the way §1.11 suspends the sweeps.
+- [ ] `SenderPolicy.mark_read` boolean (same migration). Executor: a `file` or `archive` row whose policy has `mark_read` carries the `\Seen` pre-mutation quarantine uses, and the stored-`is_seen` write from §1.5. Exposed on `/admin/senders` and `upsertPolicy`; refused on `keep_inbox` and `auto_trash`.
+- [ ] Mailboxes admin page shows the three switches per mailbox with their set-at time.
+- [ ] `tmp/rewrite-first-contact-backlog.ts` (dry-run, `--write`): re-runs the split over every shadow `first_contact` row and rewrites kind/source/reasons in place. Nothing deleted.
+- [ ] `tmp/set-source-autonomy.ts` (dry-run, `--write`): tellmann `first_contact_autonomy = auto`; `settled_sweep_autonomy = auto` on all four. Run in the operator batch, after the deploy.
 
 ### Phase 5 — the rules themselves
-- [ ] Scripts, dry-run by default, `--write` to apply. Domain rules: logalert.app, github.com, npmjs.com, vercel.com, planetscale.com, wakatime.com to `Notifications`, mark read. booking.com domain to `Travel`; `noreply-iam@booking.com` address to `auto_trash`. fnb.co.za, standardbank.co.za, bobpay.co.za to `Finances`. Housing and VitaminShoppe rules from 2026-08-26 promoted.
-- [ ] Every rule starts `shadow`; the script prints what each would have done to the last 30 days before `--write`.
+- [ ] `tmp/create-noise-policies.ts`, dry-run by default, `--write` to apply, idempotent against rows that exist (noreply-iam@booking.com is also in `create-throwaway-policies.ts`). Domain rules: logalert.app, github.com, npmjs.com, vercel.com, planetscale.com, wakatime.com to `Notifications`, mark read. booking.com domain to `Travel`; `noreply-iam@booking.com` address to `auto_trash`. fnb.co.za, standardbank.co.za, bobpay.co.za to `Finances`.
+- [ ] `tmp/promote-reference-policies.ts`: Housing and VitaminShoppe rules from 2026-08-26 to `auto` via `promotePolicyAutonomy`.
+- [ ] Every rule starts `shadow`; the dry run prints, as a table, what each would have done to the last 30 days.
+- [ ] The dry-run table for `flatten-tellmann-folders.ts` and `flatten-filing-policies.ts` is shown to the operator before the batch; both run in the batch, folders first.
 
 ### Phase 6 — one-click unsubscribe
+Decision: `2026-09-06-unsubscribe-button-and-digest-links.md`.
 - [ ] Fetch and store `List-Unsubscribe-Post` (new header in `providers/headers.ts`, column on `Message`, migration, reclassify backfill).
-- [ ] ORPC `unsubscribeBulk`: for each selected sender with a one-click target, POST `List-Unsubscribe=One-Click` from the server; record the outcome on the sender. Mail-to targets wait for phase 7.
-- [ ] `/admin/unsubscribe` gains checkboxes, select-all for the one-click group, one button.
+- [ ] `UnsubscribeAttempt` table (sender address, mailbox, method `http` | `mailto`, status, response code, attempted_at). Migration.
+- [ ] ORPC `unsubscribeBulk`: per ticked sender, POST `List-Unsubscribe=One-Click` from the server (mailto senders wait for phase 7's sender); record the attempt; upsert an `archive` rule for the address and promote it to `auto`; journal `pending` archive rows (mark read) for the sender's inbox messages and apply them through the same path `/admin` uses for operator-approved rows.
+- [ ] `/admin/unsubscribe` gains checkboxes, select-all for the one-click group, one button, and the last attempt's outcome per row.
 
 ### Phase 7 — SMTP and the Monday digest
-- [ ] `server/mail/send/` : SMTP over 465 to mail.tellmann.co.za with the mailbox's stored credentials and the same SPKI pin. One function: `sendMail`.
-- [ ] Mail-to unsubscribes send through it.
-- [ ] `/api/mail-digest`: bearer-secret endpoint; renders senders unopened for 30 days by volume, each row with a signed `unsubscribe` and `file` link back to the server; sends to felix@tellmann.co.za. Coolify scheduled task, Monday 07:00.
+Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-button-and-digest-links.md`.
+- [ ] `server/mail/send/`: SMTP over 465 to mail.tellmann.co.za with the mailbox's stored credentials and the same SPKI pin. One function: `sendMail`.
+- [ ] Mail-to unsubscribes send through it, always from felix@tellmann.co.za, recorded like the http ones.
+- [ ] `/api/mail-digest`: bearer-secret endpoint (shared helper, register entry); renders senders unopened for 30 days by volume (register entry for the exact set); each row carries a signed `unsubscribe` link (does what the button does) and a signed `file` link (creates a watch-only archive rule); sends to felix@tellmann.co.za. Links valid 14 days. Coolify scheduled task, `0 5 * * 1` UTC = 07:00 Africa/Johannesburg.
+
+### Phase 8 — admin surfaces (operator's extra scope, widget 5)
+- [ ] Sessions strip on `/admin`: when the system last believed the operator was reading mail, on what evidence, in which mailboxes.
+- [ ] `/admin/review`: one page folding together rules waiting to be switched on (top 10 by waiting count, one Switch-on button each), proposals waiting for approval grouped by rule with Approve-all / Dismiss per group, the sessions strip, and unsubscribe candidates with checkboxes and one button. Sketch: `docs/mockups/2026-09-06-first-contact-proposals/index.html`, section 5. Old pages stay.
+- [ ] `/admin/promote` defaults to the top 10 with samples collapsed.
 
 ### Review
 - [ ] One review agent over the whole diff: cross-phase assumptions, duplicated helpers, convention drift, and the question for each phase: would a fix commit follow this?
+
+### Deploy and operator batch (session-run, after the review)
+- [ ] Operator runs `bun run db:migrate` once. Session pushes `main`, verifies the engine after the next quarter-hour tick.
+- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write`; `promote-reference-policies.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
+- [ ] Coolify: add the Monday digest task, narrated in the browser.
+- [ ] GitHub: disconnect the dead Vercel integration, narrated in the browser.
+- [ ] `git mv` this plan to `docs/plans/completed/` with the closing marker.

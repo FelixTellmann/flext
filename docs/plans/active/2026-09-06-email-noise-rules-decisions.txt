@@ -248,3 +248,45 @@ A: 2 hours. The lock is module state, so a process that dies frees it by dying; 
    not: drop the guard entirely — a hung IMAP promise would then hold the lock until the next deploy
 why: the guard's only job is a hung promise, and its cost of being too short is the concurrent run the
      lock was added to stop; too long merely delays recovery from a hang that already needs a look
+
+[2026-09-06 21:10] session workflow (operator instructions, recorded so later phases follow them)
+Q: handover files, pushes, migrations, operator scripts — who runs what?
+A: no claude-run handover files this session. The session runs every operator script itself after
+   printing a dry-run summary table for review, batched at the end after all phases are built. The
+   session pushes main. The operator runs exactly one command: bun run db:migrate, once, before the push.
+   Anything build-blocking is asked at once.
+why: operator's instruction on widget 3
+
+[2026-09-06 21:10] phase 7 — digest links
+Q: how long is a signed digest link valid, and what signs it?
+A: 14 days (two digests), HMAC over the link payload with SCRIPT_SECRET; a link past its window renders a
+   plain "expired, open the site" page, never an error
+   not: no expiry — a forwarded email would carry a working rule-creating link forever
+why: the digest is weekly; a link the operator did not tap within two digests is not going to be tapped
+
+[2026-09-06 21:10] phase 7 — digest rows
+Q: which senders make the digest?
+A: senders with mail still in an inbox, none of it opened, oldest unopened 30 days or more, by volume;
+   senders with a rule at auto are excluded, senders with a watch-only rule are included (their mail is
+   still arriving in the inbox)
+why: the digest is "what is still reaching you unread", and a live rule already answers that
+
+[2026-09-06 21:10] phase 7 — digest endpoint
+Q: bearer for /api/mail-digest?
+A: SCRIPT_SECRET, the same timing-safe check the four existing routes copy-paste; the check moves into one
+   shared helper and the four routes use it
+why: one secret for every scheduled task, and the fourth copy of a security check is one too many
+
+[2026-09-06 21:10] phase 6 — outcome storage
+Q: where is an unsubscribe attempt recorded?
+A: a new table (sender address, mailbox, method http|mailto, status, response code, attempted_at)
+   not: columns on SenderPolicy — half the candidates have no policy row
+why: an attempt is an event, a policy is a rule
+
+[2026-09-06 21:10] operator batch — order
+Q: order of the batched runs at the end?
+A: duplicate count (expect 0); folder renames on tellmann; policy flattening; phase 5 rule scripts;
+   Housing/VitaminShoppe promotion; clear the mailer@shopify.com suspension; set source autonomy
+   (tellmann first contact, settled sweep all four); trash retention then throwaway rules; draft-rules;
+   calendar reclassify LAST because it holds the sync lock for minutes
+why: the policies script refuses while rows sit in nested folders; reclassify blocks every other tick

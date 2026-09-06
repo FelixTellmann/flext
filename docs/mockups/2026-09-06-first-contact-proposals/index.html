@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>First contact: proposals, the new rule, and the old proposals</title>
+<style>
+  :root {
+    --ink: #1f2933;
+    --muted: #5b6770;
+    --paper: #fbfaf7;
+    --line: #d9d4cb;
+    --panel: #ffffff;
+    --accent: #0b6e6e;
+    --accent-soft: #e3f1f0;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); }
+  body {
+    margin: 0;
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+  header { margin-bottom: 56px; }
+  .kicker {
+    color: var(--accent);
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-size: 34px;
+    line-height: 1.2;
+    margin: 0 0 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h2 {
+    font-size: 24px;
+    line-height: 1.3;
+    margin: 72px 0 16px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    font-weight: 700;
+  }
+  h3 {
+    font-size: 18px;
+    margin: 36px 0 8px;
+    font-weight: 700;
+  }
+  p { margin: 0 0 16px; }
+  ul, ol { margin: 0 0 16px; padding-left: 24px; }
+  li { margin-bottom: 6px; }
+  .lede { font-size: 19px; color: var(--muted); }
+  .note {
+    background: var(--accent-soft);
+    border-left: 4px solid var(--accent);
+    padding: 14px 18px;
+    margin: 24px 0;
+    border-radius: 0 8px 8px 0;
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .answer {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+  figure {
+    margin: 28px 0 36px;
+    padding: 20px 20px 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+  figure svg {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    color: var(--ink);
+  }
+  figcaption {
+    margin-top: 12px;
+    font-size: 15px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .options { display: grid; gap: 12px; margin: 16px 0 24px; }
+  .option {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+    background: var(--panel);
+  }
+  .option.recommended { border-color: var(--accent); }
+  .option .label {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .option h3 { margin-top: 0; }
+  .option p:last-child { margin-bottom: 0; }
+  .tag {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 2px 10px;
+    vertical-align: middle;
+    margin-left: 8px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0 24px; font-size: 16px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 700; color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* wireframe */
+  .wire {
+    border: 2px dashed #9aa4ad;
+    border-radius: 12px;
+    padding: 18px;
+    background: #fdfdfc;
+    margin: 24px 0;
+    font-size: 15px;
+  }
+  .wire-title {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    border-bottom: 2px dashed #9aa4ad; padding-bottom: 10px; margin-bottom: 16px;
+  }
+  .wire-title strong { font-size: 18px; }
+  .wire-title span { color: var(--muted); }
+  .panel {
+    border: 1px solid #9aa4ad;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    background: #fff;
+  }
+  .panel h4 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .panel h4 small { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    padding: 6px 0;
+    border-top: 1px dashed #d0d5da;
+  }
+  .row:first-of-type { border-top: 0; }
+  .row .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .btn {
+    display: inline-block;
+    border: 1px solid #6b7680;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 13px;
+    color: #1f2933;
+    background: #f3f4f5;
+    white-space: nowrap;
+  }
+  .btn.primary { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .group { margin: 10px 0; padding: 8px 10px; border: 1px dashed #c3c9cf; border-radius: 6px; }
+  .group-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .group-head .actions { display: flex; gap: 6px; }
+  .group ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+  .strip {
+    display: flex; gap: 4px; align-items: flex-end; height: 44px; padding: 4px 0;
+  }
+  .strip i {
+    display: block; flex: 1; background: #e6e8ea; border-radius: 3px 3px 0 0; height: 30%;
+  }
+  .strip i.on { background: var(--accent); height: 100%; }
+  .strip-legend { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+  .check { display: inline-block; width: 14px; height: 14px; border: 1px solid #6b7680; border-radius: 3px; vertical-align: middle; margin-right: 8px; }
+  .folded { columns: 2; gap: 32px; font-size: 15px; color: var(--muted); }
+  .folded li { break-inside: avoid; }
+  footer { margin-top: 72px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    h1 { font-size: 28px; }
+    .folded { columns: 1; }
+    .row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <p class="kicker">flext.dev mail engine, 6 September 2026</p>
+  <h1>First contact: what a proposal is, the new rule, and what to do with the old proposals</h1>
+  <p class="lede">A plain-English walk through one decision. Every chart shows the same machinery from a different angle, so you can point at the thing you are choosing between.</p>
+</header>
+
+<h2 id="proposal">What a proposal is</h2>
+
+<p>Every 15 minutes the engine looks at the four mailboxes. For each email that has not been looked at before, it runs the rules and decides what it would do with that email. It does not do it. It writes the decision down as a <strong>proposal</strong>: "if I were live, I would have moved this email to Quarantine".</p>
+
+<p>Proposals pile up in a table. The Shadow Report page lists them, and you can approve any of them by hand, which moves the email. Nothing moves until either you approve it or the rule that made it has been switched on.</p>
+
+<p>Switching a rule on (the engine calls this "auto") changes one thing: the engine picks up that rule's waiting proposals itself on each tick and carries them out, instead of waiting for you. That includes proposals the rule made before it was switched on; the backlog section below explains how far back that reaches.</p>
+
+<figure>
+  <svg viewBox="0 0 860 380" role="img" aria-label="An email arrives, the engine runs every 15 minutes, a rule decides, and a proposal is written. With the rule off the proposal waits on the Shadow Report page until Felix approves it. With the rule on the engine executes it on the next tick. Either way the email is then moved.">
+    <defs>
+      <marker id="arrow1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-size="16" font-family="inherit" text-anchor="middle">
+      <rect x="20" y="30" width="180" height="64" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="110" y="67">Email arrives</text>
+
+      <rect x="240" y="30" width="180" height="64" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="330" y="58">Engine wakes up</text>
+      <text x="330" y="78" fill="#5b6770" font-size="15">every 15 minutes</text>
+
+      <rect x="460" y="30" width="180" height="64" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="550" y="58">A rule decides</text>
+      <text x="550" y="78" fill="#5b6770" font-size="15">"I would move this"</text>
+
+      <rect x="680" y="30" width="160" height="64" rx="10" fill="#e3f1f0" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="760" y="58" fill="#0b6e6e" font-weight="700">Proposal</text>
+      <text x="760" y="78" fill="#0b6e6e" font-size="15">written to the table</text>
+
+      <line x1="200" y1="62" x2="238" y2="62" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow1)"/>
+      <line x1="420" y1="62" x2="458" y2="62" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow1)"/>
+      <line x1="640" y1="62" x2="678" y2="62" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow1)"/>
+
+      <polyline points="760,94 760,130 220,130 220,168" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow1)"/>
+      <polyline points="760,94 760,130 640,130 640,168" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow1)"/>
+      <text x="480" y="122" fill="#5b6770" font-size="15">is the rule switched on?</text>
+
+      <rect x="40" y="170" width="360" height="70" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="220" y="199" font-weight="700">Rule off (the default)</text>
+      <text x="220" y="221">waits on the Shadow Report page for you</text>
+
+      <rect x="460" y="170" width="360" height="70" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="640" y="199" font-weight="700">Rule on ("auto")</text>
+      <text x="640" y="221">the engine carries it out on the next tick</text>
+
+      <polyline points="220,240 220,280 430,280 430,308" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow1)"/>
+      <polyline points="640,240 640,280 430,280" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="120" y="272" fill="#5b6770" font-size="15">you click Approve</text>
+      <text x="740" y="272" fill="#5b6770" font-size="15">nobody clicks anything</text>
+
+      <rect x="320" y="310" width="220" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="430" y="344">Email is moved</text>
+    </g>
+  </svg>
+  <figcaption>A proposal is a decision written down but not acted on, and it turns into a move only when you approve it or when its rule has been switched on.</figcaption>
+</figure>
+
+<h2 id="rules">The old rule and the new rule</h2>
+
+<p><strong>First contact</strong> means the first email ever received from a sender you have never written to, where no rule names that sender.</p>
+
+<p><strong>The old rule, running on the server today:</strong> every first-contact email gets the proposal "move to Quarantine and mark it read". Nobody has switched that rule on, so no email has actually moved. The proposals have simply accumulated, and they include real people writing to you for the first time.</p>
+
+<p><strong>The new rule, being built now:</strong> a first-contact email is sorted into one of two shapes before anything is proposed.</p>
+
+<ul>
+  <li><strong>Human-shaped:</strong> not a bulk or mailing-list email, not from an automated or no-reply sender, the signature on the email matches the sender's own domain, and it is addressed to you directly (in To, not only Cc or Bcc). These <strong>stay in the inbox</strong>. The proposal says "keep in inbox, reason: first contact from a person".</li>
+  <li><strong>Machine-shaped:</strong> everything else. The proposal says "move to Quarantine, mark read", as before.</li>
+</ul>
+
+<p>Then, for <strong>felix@tellmann.co.za only</strong>, the Quarantine half is switched on. Machine-shaped first contacts on that mailbox are moved to Quarantine within 15 minutes of arriving. Nothing is ever deleted; Quarantine is a folder you can open. The other three mailboxes stay proposal-only.</p>
+
+<figure>
+  <svg viewBox="0 0 860 400" role="img" aria-label="Left: under the old rule every first-contact email gets a quarantine proposal, and because nobody switched the rule on nothing moves. Right: under the new rule the email is first tested for being human-shaped. Human-shaped ones get a keep-in-inbox proposal. Machine-shaped ones get a quarantine proposal, and on tellmann only that proposal is carried out on the next tick.">
+    <defs>
+      <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-size="16" font-family="inherit" text-anchor="middle">
+      <text x="200" y="24" font-weight="700" font-size="17">Old rule (running today)</text>
+      <text x="650" y="24" font-weight="700" font-size="17">New rule (being built)</text>
+      <line x1="410" y1="10" x2="410" y2="390" stroke="#d9d4cb" stroke-width="1.5"/>
+
+      <rect x="60" y="50" width="280" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="200" y="84">First-contact email</text>
+      <line x1="200" y1="106" x2="200" y2="148" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <text x="260" y="132" fill="#5b6770" font-size="15">every one of them</text>
+
+      <rect x="60" y="150" width="280" height="64" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="200" y="177">Proposal: Quarantine</text>
+      <text x="200" y="199" fill="#5b6770" font-size="15">and mark it read</text>
+      <line x1="200" y1="214" x2="200" y2="286" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 5" marker-end="url(#arrow2)"/>
+      <text x="200" y="245" fill="#5b6770" font-size="15">nobody switched it on,</text>
+      <text x="200" y="263" fill="#5b6770" font-size="15">so this arrow never fires</text>
+
+      <rect x="60" y="288" width="280" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <text x="200" y="322" fill="#5b6770">Quarantine folder (empty)</text>
+
+      <rect x="530" y="50" width="240" height="56" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="650" y="84">First-contact email</text>
+      <line x1="650" y1="106" x2="650" y2="148" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow2)"/>
+
+      <rect x="530" y="150" width="240" height="56" rx="28" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="650" y="184">Human-shaped?</text>
+
+      <polyline points="590,206 590,230 540,230 540,258" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <polyline points="710,206 710,230 760,230 760,258" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow2)"/>
+      <text x="520" y="248" fill="#5b6770" font-size="15" text-anchor="end">yes</text>
+      <text x="780" y="248" fill="#5b6770" font-size="15" text-anchor="start">no</text>
+
+      <rect x="440" y="260" width="200" height="64" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="540" y="287">Proposal: keep</text>
+      <text x="540" y="309" fill="#5b6770" font-size="15">stays in the inbox</text>
+
+      <rect x="660" y="260" width="200" height="64" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="760" y="287">Proposal: Quarantine</text>
+      <text x="760" y="309" fill="#5b6770" font-size="15">and mark it read</text>
+
+      <line x1="760" y1="324" x2="760" y2="342" stroke="#0b6e6e" stroke-width="2" marker-end="url(#arrow2)"/>
+      <rect x="660" y="344" width="200" height="48" rx="10" fill="#e3f1f0" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="760" y="366" fill="#0b6e6e" font-weight="700" font-size="15">on tellmann: switched on</text>
+      <text x="760" y="383" fill="#0b6e6e" font-size="15">moved on the next tick</text>
+    </g>
+  </svg>
+  <figcaption>The new rule asks one question before proposing anything, and only the Quarantine branch, only on tellmann, is switched on.</figcaption>
+</figure>
+
+<h2 id="old">What happens to the old proposals (three options)</h2>
+
+<p>Here is the open question. The server already holds proposals made under the old rule. Every one of them says "Quarantine", including the ones for real people, because the old rule could not tell the difference. When the tellmann switch goes on, something has to be decided about those old proposals. There are three options. All three are shown against the same four parts: the old proposals, the 15-minute tick, the new tellmann switch, and the Quarantine folder.</p>
+
+<div class="note">
+  <p><strong>One fact that shapes all three:</strong> the old proposals and the new machine-shaped proposals both say "Quarantine", and both come from the first-contact rule. The only thing that separates them is <em>when</em> they were decided. Option A depends on the new switch looking at that date; the other two options remove the old proposals so the date no longer matters.</p>
+</div>
+
+<div class="options">
+
+<div class="option recommended">
+  <span class="label">Option A, recommended</span>
+  <h3>Leave the old proposals alone; the switch only carries out proposals decided after the new rule goes live</h3>
+  <p>The old proposals stay exactly where they are, as suggestions on the Shadow Report page. You can approve any of them by hand, or leave them. Nothing moves that you did not approve. The switch is built to ignore anything decided before the new code was deployed.</p>
+  <p><strong>Downside:</strong> the Shadow Report page keeps the old rows around until you deal with them, and some of those rows are wrong under the new rule (they say Quarantine for people).</p>
+</div>
+
+<div class="option">
+  <span class="label">Option B</span>
+  <h3>Delete the old first-contact proposals; the next tick re-decides those emails under the new rule</h3>
+  <p>A script deletes the old first-contact proposals from the table. You are asked before it runs. Because the engine re-examines any email that has no proposal at all, the next 15-minute tick looks at each of those emails again and decides it under the new rule: human-shaped ones get "keep in inbox", machine-shaped ones get "Quarantine". On tellmann, where the switch is on, the machine-shaped ones are then moved.</p>
+  <p><strong>Downside:</strong> a live delete on the production database; and on tellmann every machine-shaped old email is moved in bulk over the following ticks, not one at a time as they arrive. One more catch: the second look only happens for an email whose only proposal was the old first-contact one. An email that has since picked up another proposal (from the inbox sweeps, or from sitting in Junk) keeps that one and is not re-examined.</p>
+</div>
+
+<div class="option">
+  <span class="label">Option C</span>
+  <h3>Rewrite the old proposals in place using the new rule</h3>
+  <p>A script runs the new rule over each old proposal and changes what the proposal says. Nothing is deleted. Human-shaped ones now say "keep in inbox"; machine-shaped ones still say "Quarantine". On tellmann those are then moved by the switch.</p>
+  <p><strong>Downside:</strong> the journal is history, and this rewrites history: a proposal that said Quarantine last week now says something else with no record of the change. Same bulk-move consequence on tellmann as option B.</p>
+</div>
+
+</div>
+
+<figure>
+  <svg viewBox="0 0 860 250" role="img" aria-label="Option A. Old proposals flow only to the Shadow Report page, where Felix approves by hand or leaves them. A dashed line shows they never reach the switch. New first contacts decided after the deploy flow through the new rule, then the tellmann switch, then the Quarantine folder.">
+    <defs>
+      <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-size="16" font-family="inherit" text-anchor="middle">
+      <text x="20" y="22" font-weight="700" font-size="17" text-anchor="start">Option A: leave them, switch ignores anything decided before the deploy</text>
+
+      <rect x="20" y="40" width="200" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="120" y="65">Old proposals</text>
+      <text x="120" y="85" fill="#5b6770" font-size="15">all say Quarantine</text>
+
+      <line x1="220" y1="70" x2="298" y2="70" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow3)"/>
+      <text x="259" y="60" fill="#5b6770" font-size="15">stay as they are</text>
+
+      <rect x="300" y="40" width="280" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="440" y="65">Shadow Report page</text>
+      <text x="440" y="85" fill="#5b6770" font-size="15">approve by hand, or leave them</text>
+
+      <polyline points="530,100 530,138" fill="none" stroke="#0b6e6e" stroke-width="2" stroke-dasharray="6 5"/>
+      <text x="552" y="118" fill="#0b6e6e" font-size="15" text-anchor="start">never reaches</text>
+      <text x="552" y="136" fill="#0b6e6e" font-size="15" text-anchor="start">the tick</text>
+      <line x1="518" y1="126" x2="542" y2="150" stroke="#0b6e6e" stroke-width="2"/>
+      <line x1="542" y1="126" x2="518" y2="150" stroke="#0b6e6e" stroke-width="2"/>
+
+      <rect x="20" y="170" width="160" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="100" y="195">New first contacts</text>
+      <text x="100" y="215" fill="#5b6770" font-size="15">after the deploy</text>
+      <line x1="180" y1="200" x2="228" y2="200" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+      <rect x="230" y="170" width="160" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="310" y="195">New rule decides</text>
+      <text x="310" y="215" fill="#5b6770" font-size="15">human or machine</text>
+      <line x1="390" y1="200" x2="438" y2="200" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow3)"/>
+      <text x="414" y="190" fill="#5b6770" font-size="15">machine</text>
+
+      <rect x="440" y="170" width="180" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="530" y="195">15-minute tick</text>
+      <text x="530" y="215" fill="#5b6770" font-size="15">picks up new proposals</text>
+      <line x1="620" y1="200" x2="668" y2="200" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+      <rect x="670" y="170" width="170" height="60" rx="10" fill="#e3f1f0" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="755" y="195" fill="#0b6e6e" font-weight="700">Quarantine</text>
+      <text x="755" y="215" fill="#0b6e6e" font-size="15">tellmann, switch on</text>
+    </g>
+  </svg>
+  <figcaption>Option A: the old proposals keep their one existing path, the Shadow Report page, and only proposals decided after the deploy reach the switch.</figcaption>
+</figure>
+
+<figure>
+  <svg viewBox="0 0 860 310" role="img" aria-label="Option B. Old proposals are deleted after asking Felix. The next tick re-decides each affected email. Human-shaped ones get a keep-in-inbox proposal. Machine-shaped ones get a quarantine proposal, which on tellmann the switch carries out as a bulk move into the Quarantine folder.">
+    <defs>
+      <marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-size="16" font-family="inherit" text-anchor="middle">
+      <text x="20" y="22" font-weight="700" font-size="17" text-anchor="start">Option B: delete them, let the next tick decide again</text>
+
+      <rect x="20" y="40" width="200" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="120" y="65">Old proposals</text>
+      <text x="120" y="85" fill="#5b6770" font-size="15">all say Quarantine</text>
+
+      <line x1="220" y1="70" x2="298" y2="70" stroke="#0b6e6e" stroke-width="2" marker-end="url(#arrow4)"/>
+      <text x="259" y="60" fill="#0b6e6e" font-size="15">you say yes first</text>
+
+      <rect x="300" y="40" width="200" height="60" rx="10" fill="none" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="400" y="65" fill="#0b6e6e" font-weight="700">Deleted</text>
+      <text x="400" y="85" fill="#5b6770" font-size="15">a live delete, once</text>
+
+      <polyline points="400,100 400,130 130,130 130,168" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow4)"/>
+      <text x="265" y="122" fill="#5b6770" font-size="15">those emails now have no proposal</text>
+
+      <rect x="20" y="170" width="220" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="130" y="195">Next tick re-decides</text>
+      <text x="130" y="215" fill="#5b6770" font-size="15">under the new rule</text>
+
+      <polyline points="240,200 270,200 270,190 298,190" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow4)"/>
+      <polyline points="240,200 270,200 270,275 298,275" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow4)"/>
+
+      <rect x="300" y="160" width="220" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="410" y="185">Human-shaped</text>
+      <text x="410" y="205" fill="#5b6770" font-size="15">nothing moves</text>
+
+      <rect x="300" y="245" width="220" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="410" y="270">Machine-shaped</text>
+      <text x="410" y="290" fill="#5b6770" font-size="15">proposal: Quarantine</text>
+
+      <line x1="520" y1="275" x2="568" y2="275" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow4)"/>
+
+      <rect x="570" y="245" width="120" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="630" y="270">Switch</text>
+      <text x="630" y="290" fill="#5b6770" font-size="15">tellmann only</text>
+
+      <line x1="690" y1="275" x2="728" y2="275" stroke="#0b6e6e" stroke-width="2" marker-end="url(#arrow4)"/>
+
+      <rect x="730" y="245" width="110" height="60" rx="10" fill="#e3f1f0" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="785" y="270" fill="#0b6e6e" font-weight="700">Quarantine</text>
+      <text x="785" y="290" fill="#0b6e6e" font-size="15">moved in bulk</text>
+    </g>
+  </svg>
+  <figcaption>Option B: the delete gives every old email a second look under the new rule, and on tellmann the machine-shaped ones are then moved in batches until none are left.</figcaption>
+</figure>
+
+<figure>
+  <svg viewBox="0 0 860 310" role="img" aria-label="Option C. A script rewrites each old proposal in place using the new rule. Each old proposal now says either keep in inbox, for human-shaped mail, or quarantine, for machine-shaped mail. On tellmann the switch carries out the quarantine ones as a bulk move into the Quarantine folder. Nothing is deleted but the journal history is changed.">
+    <defs>
+      <marker id="arrow5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-size="16" font-family="inherit" text-anchor="middle">
+      <text x="20" y="22" font-weight="700" font-size="17" text-anchor="start">Option C: rewrite them in place</text>
+
+      <rect x="20" y="40" width="200" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="120" y="65">Old proposals</text>
+      <text x="120" y="85" fill="#5b6770" font-size="15">all say Quarantine</text>
+
+      <line x1="220" y1="70" x2="298" y2="70" stroke="#0b6e6e" stroke-width="2" marker-end="url(#arrow5)"/>
+
+      <rect x="300" y="40" width="240" height="60" rx="10" fill="none" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="420" y="65" fill="#0b6e6e" font-weight="700">Script rewrites each one</text>
+      <text x="420" y="85" fill="#5b6770" font-size="15">history rewritten</text>
+
+      <polyline points="420,100 420,130 130,130 130,168" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow5)"/>
+      <text x="275" y="122" fill="#5b6770" font-size="15">same rows, new words</text>
+
+      <rect x="20" y="170" width="220" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="130" y="195">Each old proposal</text>
+      <text x="130" y="215" fill="#5b6770" font-size="15">now says one of two things</text>
+
+      <polyline points="240,200 270,200 270,190 298,190" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow5)"/>
+      <polyline points="240,200 270,200 270,275 298,275" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow5)"/>
+
+      <rect x="300" y="160" width="220" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="410" y="185">Keep in inbox</text>
+      <text x="410" y="205" fill="#5b6770" font-size="15">human-shaped, nothing moves</text>
+
+      <rect x="300" y="245" width="220" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="410" y="270">Still Quarantine</text>
+      <text x="410" y="290" fill="#5b6770" font-size="15">the machine-shaped ones</text>
+
+      <line x1="520" y1="275" x2="568" y2="275" stroke="currentColor" stroke-width="1.5" marker-end="url(#arrow5)"/>
+
+      <rect x="570" y="245" width="120" height="60" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="630" y="270">Switch</text>
+      <text x="630" y="290" fill="#5b6770" font-size="15">tellmann only</text>
+
+      <line x1="690" y1="275" x2="728" y2="275" stroke="#0b6e6e" stroke-width="2" marker-end="url(#arrow5)"/>
+
+      <rect x="730" y="245" width="110" height="60" rx="10" fill="#e3f1f0" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="785" y="270" fill="#0b6e6e" font-weight="700">Quarantine</text>
+      <text x="785" y="290" fill="#0b6e6e" font-size="15">moved in bulk</text>
+    </g>
+  </svg>
+  <figcaption>Option C: same end state as B for the mail itself, but the proposals are edited rather than replaced, so the journal no longer shows what the old rule actually said.</figcaption>
+</figure>
+
+<h3>Why A is the recommendation</h3>
+<p>A is the only option where nothing moves that you did not personally approve, and the only one that does not touch the database by hand. The cost is tidiness: old rows sit on the Shadow Report page, and some of them are wrong under the new rule. That is a cleanup problem, not a mail problem, and the simpler admin page in the last section is built to make that cleanup a few clicks. B and C both end with a bulk move on tellmann on the first ticks after the switch goes on, and once mail is in Quarantine you have to go looking for it.</p>
+
+<h2 id="backlog">Does switching a rule on also process its backlog?</h2>
+
+<p class="answer">Yes, for sender rules. Switching one on eventually carries out its whole backlog, oldest first, in batches.</p>
+
+<p>Every one of the sender rules (around 113 of them) has been proposal-only for weeks, so the table holds thousands of proposals. It is natural to assume that switching a rule on only affects new mail. That is not what the code does. When a rule is on, each tick asks the table for that rule's proposals that have not been acted on yet, in that mailbox, sorted oldest first, and takes up to 200 of them. There is no date filter. A proposal from three weeks ago is just as eligible as one from three minutes ago; it is simply earlier in the queue.</p>
+
+<p>Two details govern how fast that goes:</p>
+<ul>
+  <li><strong>200 per mailbox per tick</strong>, and that budget is shared across every rule that is on in that mailbox. If three rules are on, they share the 200 between them, in the order the rules happen to be listed.</li>
+  <li><strong>Oldest first.</strong> A rule with 2,000 waiting proposals, alone at auto in its mailbox, clears in about 10 ticks, roughly two and a half hours. At 96 ticks a day one mailbox can work through up to about 19,000 proposals a day.</li>
+</ul>
+
+<figure>
+  <svg viewBox="0 0 860 270" role="img" aria-label="A queue of proposals for one rule, oldest on the left, newest on the right. Each tick takes up to 200 from the oldest end and executes them against the mailbox. The queue shrinks from the left until it is empty, and the 200 budget is shared with any other rule that is on in the same mailbox.">
+    <defs>
+      <marker id="arrow6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+      </marker>
+    </defs>
+    <g font-size="16" font-family="inherit" text-anchor="middle">
+      <text x="20" y="24" text-anchor="start" font-weight="700" font-size="17">One rule's waiting proposals, the moment it is switched on</text>
+      <text x="40" y="56" text-anchor="start" fill="#5b6770" font-size="15">oldest (weeks ago)</text>
+      <text x="820" y="56" text-anchor="end" fill="#5b6770" font-size="15">newest (this tick)</text>
+
+      <rect x="40" y="66" width="195" height="54" rx="6" fill="#e3f1f0" stroke="#0b6e6e" stroke-width="2"/>
+      <rect x="235" y="66" width="195" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <rect x="430" y="66" width="195" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <rect x="625" y="66" width="195" height="54" rx="6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 5"/>
+
+      <text x="137" y="90" fill="#0b6e6e" font-weight="700">tick 1</text>
+      <text x="137" y="110" fill="#0b6e6e" font-size="15">up to 200, oldest first</text>
+      <text x="332" y="90">tick 2</text>
+      <text x="332" y="110" fill="#5b6770" font-size="15">the next 200</text>
+      <text x="527" y="90">tick 3</text>
+      <text x="527" y="110" fill="#5b6770" font-size="15">and so on</text>
+      <text x="722" y="90">...</text>
+      <text x="722" y="110" fill="#5b6770" font-size="15">until the queue is empty</text>
+
+      <line x1="137" y1="120" x2="137" y2="168" stroke="#0b6e6e" stroke-width="2" marker-end="url(#arrow6)"/>
+      <rect x="40" y="170" width="195" height="54" rx="10" fill="none" stroke="#0b6e6e" stroke-width="2"/>
+      <text x="137" y="193" fill="#0b6e6e" font-weight="700">Carried out</text>
+      <text x="137" y="213" fill="#0b6e6e" font-size="15">moved in the mailbox</text>
+
+      <rect x="300" y="170" width="520" height="54" rx="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      <text x="560" y="193">The 200 is one budget for the whole mailbox</text>
+      <text x="560" y="213" fill="#5b6770" font-size="15">shared by every rule that is on; nothing is skipped</text>
+
+      <text x="430" y="256" fill="#5b6770" font-size="15">New proposals join at the right and are reached only after everything older has gone.</text>
+    </g>
+  </svg>
+  <figcaption>Switching a sender rule on drains its queue from the oldest end, 200 per mailbox per tick, until nothing is left; there is no "only from now on".</figcaption>
+</figure>
+
+<div class="note">
+  <p><strong>The first-contact rule is different, and that is why option A is even possible.</strong> The switch described above only works on <em>sender rules</em>, the ones that name an address or a domain. A first-contact proposal has no sender rule behind it (by definition, no rule names that sender), so today's switch cannot see first-contact proposals at all. The tellmann-only switch in this phase has to be built as its own small piece of machinery. Because it is new, it can be built to look at the decision date and ignore the old rows, which is what option A asks for. If it were built to behave exactly like the sender-rule switch, it would drain the old first-contact backlog too, oldest first, and that would move the old real-people emails into Quarantine on tellmann.</p>
+</div>
+
+<p>So the practical reading is: <strong>whenever you switch a sender rule on from the admin, expect its whole history of proposals to be carried out over the following hours</strong>, not just what arrives next. If that is not what you want for a given rule, the old proposals need dealing with first, using one of the same three shapes as above (leave and filter by date, delete and re-decide, or rewrite).</p>
+
+<h2 id="ui">A simpler admin UI (proposal) <span class="tag">proposal, not built</span></h2>
+
+<p>Today the admin is eight separate pages, and getting one rule from "proposal" to "on" means visiting three of them. The sketch below folds the routine work into one page called <strong>Inbox review</strong>. It is a wireframe: boxes and labels only, no styling decisions.</p>
+
+<p>Pages it would fold together:</p>
+<ul class="folded">
+  <li>Needs Action</li>
+  <li>Senders (the rules list)</li>
+  <li>Mailboxes</li>
+  <li>Turn rules on (noisy, shows every rule with samples)</li>
+  <li>Stop mail arriving (read-only unsubscribe links)</li>
+  <li>Shadow Report (proposals to approve)</li>
+  <li>Action Journal</li>
+  <li>Filing Queue</li>
+</ul>
+<p>The detail pages (Senders, Mailboxes, Journal, Filing Queue) would stay reachable for the rare deep dive. The point is that the Monday-morning pass never needs them.</p>
+
+<div class="wire" aria-label="Wireframe of the proposed Inbox review page">
+  <div class="wire-title">
+    <strong>Inbox review</strong>
+    <span>mailbox: [ tellmann.co.za v ] &nbsp; last tick: 4 min ago</span>
+  </div>
+
+  <div class="panel">
+    <h4><span>1. Rules waiting to be switched on</span><small>top 10 by impact, proposals waiting in this mailbox</small></h4>
+    <div class="row"><span>logalert.app &rarr; Notifications, mark read</span><span class="count">312 waiting</span><span class="btn primary">Switch on</span></div>
+    <div class="row"><span>github.com &rarr; Notifications, mark read</span><span class="count">204 waiting</span><span class="btn primary">Switch on</span></div>
+    <div class="row"><span>booking.com &rarr; Travel</span><span class="count">58 waiting</span><span class="btn primary">Switch on</span></div>
+    <div class="row"><span>fnb.co.za &rarr; Finances</span><span class="count">41 waiting</span><span class="btn primary">Switch on</span></div>
+    <div class="row"><span>... six more rows ...</span><span class="count"></span><span></span></div>
+    <div class="row"><span style="color:#5b6770;font-size:14px">Each row says what switching on will do to its backlog: "312 waiting will be moved over the next 2 ticks".</span><span></span><span class="btn">Show all rules</span></div>
+  </div>
+
+  <div class="panel">
+    <h4><span>2. Proposals waiting for your approval</span><small>grouped by rule, newest group first</small></h4>
+    <div class="group">
+      <div class="group-head"><strong>First contact, machine-shaped &rarr; Quarantine</strong><span class="actions"><span class="count">37</span><span class="btn primary">Approve all</span><span class="btn">Dismiss</span></span></div>
+      <ul><li>noreply@some-saas.com "Your account is ready"</li><li>hello@newsletter.example "Welcome aboard"</li><li>... 35 more, expand to see each with its own Approve</li></ul>
+    </div>
+    <div class="group">
+      <div class="group-head"><strong>First contact, human-shaped &rarr; keep in inbox</strong><span class="actions"><span class="count">6</span><span class="btn primary">Approve all</span><span class="btn">Dismiss</span></span></div>
+      <ul><li>jane@clientdomain.co.za "Quick question about the quote"</li><li>... 5 more</li></ul>
+    </div>
+    <div class="group">
+      <div class="group-head"><strong>Old first-contact proposals (before the new rule)</strong><span class="actions"><span class="count">412</span><span class="btn">Review</span><span class="btn">Dismiss all</span></span></div>
+      <ul><li>the option A leftovers live here, in one collapsed group, until you deal with them</li></ul>
+    </div>
+    <div class="group">
+      <div class="group-head"><strong>Settled in inbox &rarr; Archive</strong><span class="actions"><span class="count">88</span><span class="btn primary">Approve all</span><span class="btn">Dismiss</span></span></div>
+      <ul><li>... expand</li></ul>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h4><span>3. When the system last saw you reading mail</span><small>attention sessions, last 14 days</small></h4>
+    <div class="strip">
+      <i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i>
+    </div>
+    <div class="strip-legend"><span>14 days ago</span><span>last session: today 08:12, 22 min</span><span>today</span></div>
+    <p style="margin:8px 0 0;color:#5b6770;font-size:14px">Why it is here: the "settled" and "declined" sweeps only count an email as ignored if you had a session after it arrived. If this strip is empty for a week, those proposals are not meaningful yet.</p>
+  </div>
+
+  <div class="panel">
+    <h4><span>4. Senders to unsubscribe from</span><small>unopened for 30 days, by volume</small></h4>
+    <div class="row"><span><span class="check"></span>deals@bigretailer.com</span><span class="count">64 in 30 days, one-click</span><span></span></div>
+    <div class="row"><span><span class="check"></span>news@somepublication.com</span><span class="count">31 in 30 days, one-click</span><span></span></div>
+    <div class="row"><span><span class="check"></span>updates@toolvendor.io</span><span class="count">18 in 30 days, mail-to only</span><span></span></div>
+    <div class="row"><span>... more rows ...</span><span></span><span></span></div>
+    <div class="row"><span><span class="btn">Select all one-click</span></span><span></span><span class="btn primary">Unsubscribe selected</span></div>
+  </div>
+
+  <p style="margin:8px 0 0;color:#5b6770;font-size:14px">Not on this page: rule editing, mailbox settings, the journal, the filing queue. Each panel has a "see all" link to the existing page for those.</p>
+</div>
+
+<p>Two things this sketch deliberately builds in, both coming straight from the sections above:</p>
+<ol>
+  <li>The <strong>Switch on</strong> button in panel 1 shows the backlog count next to it, because switching on <em>is</em> a decision about the backlog, not just about new mail.</li>
+  <li>The option A leftovers get their own collapsed group in panel 2 with a one-click <strong>Dismiss all</strong>, so "the shadow page keeps old rows around" stops being a downside of any size.</li>
+</ol>
+
+<footer>
+  <p>Facts about how the engine behaves today were read from the server code on 6 September 2026. The new rule, the tellmann switch and the admin page are proposals and may change before they are built.</p>
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,5 @@
+**2026-09-06** — the bulk unsubscribe button does three things per ticked sender: sends the unsubscribe (one-click POST, or the mailto, always from felix@tellmann.co.za) and records the outcome; creates an archive rule for the sender at `auto`; archives the sender's inbox mail at once, marked read. The Monday digest goes out at 07:00 Africa/Johannesburg. Its File link creates a watch-only archive rule; its Unsubscribe link does what the button does.
+
+**Lost:** record the outcome only; a watch-only rule after the button; an immediate archive from the digest's File link; sending a mailto unsubscribe only from the mailbox that received the newsletter.
+
+**Why:** pressing the button on a checked list is the operator's approval, the same act as approving proposals on the shadow page, so a shadow cycle after it would be ceremony. A one-tap File link in an email is a weaker signal than a checked list, so it stays watch-only. One sending account is what the sending decision settled; a list that ignores a request from the wrong address is still hidden by the rule.
