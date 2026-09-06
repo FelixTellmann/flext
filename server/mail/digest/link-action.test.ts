@@ -28,17 +28,18 @@ const policy = (overrides: Partial<PolicyRow>): PolicyRow => ({
   ...overrides,
 });
 
+// Spread rather than written inline: outcome.ts's SenderArchiveSummary is gaining a counter in a parallel
+// edit, and a spread is exempt from the excess-property check that a literal would fail on either side.
+const archive_counts = { archived: 12, failed: 0, waiting: 3, refused: 0, retried: 0 };
+
 const bulk_result: UnsubscribeBulkResult = {
   senders: [
     {
+      ...archive_counts,
       from_address: address,
       attempt: { method: "http", status: "sent", response_code: 200, error: null, attempted_at: now },
       policy: "created",
       errors: [],
-      archived: 12,
-      failed: 0,
-      waiting: 3,
-      refused: 0,
     },
   ],
   mailbox_errors: [],
@@ -105,10 +106,50 @@ describe("applyDigestLink", () => {
       }),
     );
 
-    expect(result).toEqual({ kind: "rule_exists", address, rule: { action: "file", autonomy: "auto" } });
+    expect(result).toEqual({ kind: "rule_exists", address, rule: { scope: "address", value: address, action: "file", autonomy: "auto" } });
     expect(upserts).toHaveLength(0);
     expect(renderDigestLinkPage(result)).toContain("already has a rule");
     expect(renderDigestLinkPage(result)).toContain("switched on");
+  });
+
+  test("file refuses under a live domain rule, which the address rule would outrank", async () => {
+    const upserts: UpsertPolicyInput[] = [];
+    const by_domain = new Map([["sender.example", policy({ scope: "domain", value: "sender.example", autonomy: "auto" })]]);
+    const result = await applyDigestLink(
+      { token: token("file"), now },
+      dependencies({
+        upserts,
+        loadPolicyIndex: async () => ({ by_address: new Map(), by_domain, never_touch: [], suppressed: new Set() }),
+      }),
+    );
+
+    expect(result).toEqual({
+      kind: "rule_exists",
+      address,
+      rule: { scope: "domain", value: "sender.example", action: "archive", autonomy: "auto" },
+    });
+    expect(upserts).toHaveLength(0);
+    expect(renderDigestLinkPage(result)).toContain(`sender.example already has a rule that covers ${address}`);
+  });
+
+  test("file goes ahead under a watch-only or suspended domain rule", async () => {
+    for (const domain_rule of [
+      policy({ scope: "domain", value: "sender.example", autonomy: "shadow" }),
+      policy({ scope: "domain", value: "sender.example", autonomy: "auto", suspended_at: now }),
+    ]) {
+      const upserts: UpsertPolicyInput[] = [];
+      const by_domain = new Map([["sender.example", domain_rule]]);
+      const result = await applyDigestLink(
+        { token: token("file"), now },
+        dependencies({
+          upserts,
+          loadPolicyIndex: async () => ({ by_address: new Map(), by_domain, never_touch: [], suppressed: new Set() }),
+        }),
+      );
+
+      expect(result).toEqual({ kind: "filed", address });
+      expect(upserts).toHaveLength(1);
+    }
   });
 
   test("unsubscribe runs the bulk button for the one address and reports the archive count", async () => {

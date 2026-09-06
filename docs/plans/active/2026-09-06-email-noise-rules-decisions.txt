@@ -870,3 +870,15 @@ A: nothing, and it counts none of them. A pending row belongs to the press that 
    landed. Undone and superseded rows are not reopened — only failed ones are, as the review asked — so
    a re-press on a message an undo put back in the inbox archives nothing until a later pass re-decides it
 why: reopening more than the failed set widens the retry past what was asked for; noted as a known gap
+
+[2026-09-06 22:47] phase 7b — the File link under a domain rule
+Q: the address guard stops a File tap demoting an address rule; what about a domain rule at auto?
+A: refused the same way: classify/rules.ts matches the address rule first whatever its autonomy (§5.2),
+   so a watch-only address rule created in front of a live domain rule would switch that rule off for
+   the address. A watch-only or suspended domain rule does not block, both already leave the mail in the
+   inbox. The page names the domain: "sender.example already has a rule that covers news@sender.example"
+   not: refuse on any domain rule — a shadow address rule under a shadow domain rule changes nothing
+why: the same one-tap hazard, one level up
+compile-forced: link-action.test.ts's UnsubscribeBulkResult fixture spreads its counts because
+   outcome.ts's SenderArchiveSummary gains `retried` in a parallel uncommitted edit; a literal fails
+   the excess-property check on one side or the other

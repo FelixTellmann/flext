@@ -26,7 +26,7 @@ export type DigestLinkResult =
   | { kind: "expired" }
   | { kind: "invalid" }
   | { kind: "filed"; address: string }
-  | { kind: "rule_exists"; address: string; rule: { action: string; autonomy: string } }
+  | { kind: "rule_exists"; address: string; rule: { scope: "address" | "domain"; value: string; action: string; autonomy: string } }
   | { kind: "unsubscribed"; address: string; result: UnsubscribeBulkResult }
   | { kind: "unsubscribing"; address: string }
   | { kind: "failed"; address: string; error: string };
@@ -55,12 +55,30 @@ function describeError(error: unknown): string {
 
 // upsertPolicy writes autonomy "shadow" on every call (query/policies.ts, demotion-on-edit), and a link
 // stays valid for 14 days during which the button or the unsubscribe link may have promoted the same
-// sender. So an existing rule of any shape is left exactly as it is, and the page says so.
+// sender. So an existing address rule of any shape is left exactly as it is, and the page says so.
+//
+// A live domain rule is refused for the same reason one level up: classify/rules.ts matches the address
+// rule first whatever its autonomy, so a watch-only address rule in front of a domain rule at auto would
+// switch that rule off for this address.
 async function fileSender(address: string, dependencies: DigestLinkDependencies): Promise<DigestLinkResult> {
   const index = await dependencies.loadPolicyIndex();
   const existing = index.by_address.get(address.toLowerCase());
   if (existing !== undefined) {
-    return { kind: "rule_exists", address, rule: { action: existing.action, autonomy: existing.autonomy } };
+    return {
+      kind: "rule_exists",
+      address,
+      rule: { scope: "address", value: existing.value, action: existing.action, autonomy: existing.autonomy },
+    };
+  }
+
+  const domain = address.slice(address.lastIndexOf("@") + 1).toLowerCase();
+  const domain_rule = index.by_domain.get(domain);
+  if (domain_rule !== undefined && domain_rule.autonomy === "auto" && domain_rule.suspended_at === null) {
+    return {
+      kind: "rule_exists",
+      address,
+      rule: { scope: "domain", value: domain_rule.value, action: domain_rule.action, autonomy: "auto" },
+    };
   }
 
   await dependencies.upsertPolicy({ scope: "address", value: address, action: "archive", mark_read: true, source: DIGEST_POLICY_SOURCE });
@@ -139,7 +157,10 @@ export function describeDigestLinkResult(result: DigestLinkResult): { title: str
       };
     case "rule_exists":
       return {
-        title: `${result.address} already has a rule`,
+        title:
+          result.rule.scope === "address"
+            ? `${result.address} already has a rule`
+            : `${result.rule.value} already has a rule that covers ${result.address}`,
         detail: `It is a ${result.rule.action} rule, ${result.rule.autonomy === "auto" ? "switched on" : "watch-only"}. Nothing was changed; manage it at ${ADMIN_SENDERS_URL}.`,
       };
     case "unsubscribing":
