@@ -407,7 +407,7 @@ const RowActions: FC<{ busy_key: string | null; onApprove: () => void; onUndo: (
   if (row.known_status === "dismissed") {
     return (
       <span className="block max-w-48 text-gray-500 text-xs dark:text-dark-text">
-        Declined on the review page. Not approvable; a fresh shadow pass proposes it again if the rule still applies.
+        Declined on the review page. Not approvable; an operator Run-pass may propose it again under a new run.
       </span>
     );
   }

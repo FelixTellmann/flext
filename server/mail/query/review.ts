@@ -3,6 +3,7 @@ import { action, mailbox, message, senderPolicy } from "@server/db/schema";
 import type { ActionJournal } from "@server/mail/actions/executor";
 import { EXECUTABLE_ACTION_KINDS, QUARANTINE_LOGICAL_PATH } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
+import { DESTRUCTIVE_KINDS } from "@server/mail/query/shadow";
 import type { SQL } from "drizzle-orm";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
@@ -57,8 +58,6 @@ const source_rule_label: Record<string, string> = {
   derived: "No rule, derived default",
   fallback: "No rule matched",
 };
-
-const DESTRUCTIVE_KINDS: readonly string[] = ["auto_trash", "purge"];
 
 function describeActionKind(kind: string, target_path: string | null): string {
   if (kind === "archive") {
@@ -159,7 +158,7 @@ export async function listProposalGroups(input: { limit: number }): Promise<Prop
         rule_label: rule.by === "policy" ? (row.policy_value ?? rule.policy_id) : (source_rule_label[rule.source] ?? rule.source),
         rule_note: rule.by === "policy" ? (row.policy_scope === "domain" ? "whole domain" : "this address") : "scheduled, no rule",
         action_label: describeActionKind(row.kind, row.target_path),
-        destructive: DESTRUCTIVE_KINDS.includes(row.kind),
+        destructive: (DESTRUCTIVE_KINDS as readonly string[]).includes(row.kind),
         count: Number(row.count),
         sample_subjects: subjects.map((entry) => entry.subject ?? "").filter((subject) => subject.length > 0),
       };

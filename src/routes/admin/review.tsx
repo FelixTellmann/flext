@@ -50,7 +50,12 @@ function describeAction(policy_action: string): string {
 
 // One row per rule, one button each. The tick is the same reviewed_shadow_record assertion the promote
 // page and the per-policy control require: the button does nothing until the row says it has been read.
-const RuleRow: FC<{ busy: boolean; candidate: Candidate; onSwitchOn: () => void }> = ({ busy, candidate, onSwitchOn }) => {
+const RuleRow: FC<{ busy: boolean; candidate: Candidate; disabled: boolean; onSwitchOn: () => void }> = ({
+  busy,
+  candidate,
+  disabled,
+  onSwitchOn,
+}) => {
   const [read, setRead] = useState(false);
 
   return (
@@ -83,13 +88,13 @@ const RuleRow: FC<{ busy: boolean; candidate: Candidate; onSwitchOn: () => void 
         <input
           checked={read}
           className={checkbox_input}
-          disabled={busy}
+          disabled={disabled}
           onChange={(event) => setRead(event.target.checked)}
           type="checkbox"
         />
         I've read this one
       </label>
-      <ActionButton busy={busy} disabled={busy || !read} label="Switch on" onClick={onSwitchOn} variant={accent_button_focus} />
+      <ActionButton busy={busy} disabled={disabled || !read} label="Switch on" onClick={onSwitchOn} variant={accent_button_focus} />
     </li>
   );
 };
@@ -133,7 +138,13 @@ const RulesWaiting: FC<{ candidates: Candidate[] }> = ({ candidates }) => {
       {movers.length === 0 && <p className="text-sm text-zinc-600 dark:text-dark-text">Nothing waiting to be switched on.</p>}
       <ul className="flex flex-col">
         {visible.map((candidate) => (
-          <RuleRow busy={busy_id !== null} candidate={candidate} key={candidate.policy_id} onSwitchOn={() => void switchOn(candidate)} />
+          <RuleRow
+            busy={busy_id === candidate.policy_id}
+            candidate={candidate}
+            disabled={busy_id !== null}
+            key={candidate.policy_id}
+            onSwitchOn={() => void switchOn(candidate)}
+          />
         ))}
       </ul>
       {hidden > 0 && (
@@ -149,11 +160,12 @@ type GroupOutcome = { banner: OutcomeBanner; done: boolean };
 
 const ProposalGroupRow: FC<{
   busy: boolean;
+  disabled: boolean;
   group: ProposalGroup;
   onApprove: () => void;
   onDismiss: () => void;
   outcome: GroupOutcome | undefined;
-}> = ({ busy, group, onApprove, onDismiss, outcome }) => (
+}> = ({ busy, disabled, group, onApprove, onDismiss, outcome }) => (
   <li className="border-zinc-100 border-b py-3 last:border-0 dark:border-dark-border">
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span className="min-w-0 flex-1">
@@ -172,7 +184,7 @@ const ProposalGroupRow: FC<{
       ) : (
         <ActionButton
           busy={busy}
-          disabled={busy || outcome?.done === true}
+          disabled={disabled || outcome?.done === true}
           label="Approve all"
           onClick={onApprove}
           variant={accent_button_focus}
@@ -180,7 +192,7 @@ const ProposalGroupRow: FC<{
       )}
       <ActionButton
         busy={busy}
-        disabled={busy || outcome?.done === true}
+        disabled={disabled || outcome?.done === true}
         label="Dismiss"
         onClick={onDismiss}
         variant={secondary_button_focus}
@@ -254,6 +266,7 @@ const ProposalGroups: FC<{ report: ProposalReport }> = ({ report }) => {
         {visible.map((group) => (
           <ProposalGroupRow
             busy={busy_key === groupKeyString(group.key)}
+            disabled={busy_key !== null}
             group={group}
             key={groupKeyString(group.key)}
             onApprove={() => void runGroup(group, "approve")}
