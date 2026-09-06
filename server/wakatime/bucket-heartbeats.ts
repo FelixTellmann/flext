@@ -19,7 +19,7 @@ const PROJECT_ALIASES: Record<string, string> = {
   "doveras-donor-parser": "doveras",
 };
 
-const UNKNOWN_PROJECT = "unknown";
+export const UNKNOWN_PROJECT = "unknown";
 
 export const normaliseProjectName = (raw: string | null): string => {
   if (raw === null) {

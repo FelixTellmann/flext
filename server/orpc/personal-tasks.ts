@@ -12,8 +12,8 @@ import { DAY_MS, isoWeekOf, operatorDayStart, operatorDayStartOf, operatorWeekRa
 import { readSetting } from "@server/personal-settings";
 import { resolveStreams } from "@server/personal-streams";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
-import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or, sql } from "drizzle-orm";
+import { normaliseProjectName, UNKNOWN_PROJECT } from "@server/wakatime/bucket-heartbeats";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, ne, or, sql } from "drizzle-orm";
 import { slugify } from "utils/slugify";
 import { z } from "zod";
 import { authed } from "./base";
@@ -534,7 +534,9 @@ export const personalTaskProcedures = {
   }),
 
   // palette_slot is unique among unarchived projects by contract (spec §3), not by index — an archived
-  // project keeps its slot in history. The Areas screen is where a clash is prevented.
+  // project keeps its slot in history, which a unique index could not allow. Assigning a slot another live
+  // project holds moves it: one slot, one colour, one project, and the select that serves this is a
+  // reassignment by nature. `cleared_from` names the project that lost it.
   updateProject: authed
     .input(
       id_schema.extend({
@@ -547,13 +549,31 @@ export const personalTaskProcedures = {
     )
     .handler(async ({ input }) => {
       const { id, ...fields } = input;
+      const now = new Date();
+      let cleared_from: string | null = null;
+
+      if (fields.palette_slot !== undefined && fields.palette_slot !== null) {
+        const holders = await db
+          .select({ id: personalProject.id })
+          .from(personalProject)
+          .where(
+            and(eq(personalProject.palette_slot, fields.palette_slot), isNull(personalProject.archived_at), ne(personalProject.id, id)),
+          );
+
+        if (holders.length > 0) {
+          const holder_ids = holders.map((holder) => holder.id);
+
+          await db.update(personalProject).set({ palette_slot: null, updatedAt: now }).where(inArray(personalProject.id, holder_ids));
+          cleared_from = holder_ids[0] ?? null;
+        }
+      }
 
       await db
         .update(personalProject)
-        .set({ ...fields, updatedAt: new Date() })
+        .set({ ...fields, updatedAt: now })
         .where(eq(personalProject.id, id));
 
-      return { id };
+      return { id, cleared_from };
     }),
 
   archiveProject: authed.input(id_schema).handler(async ({ input }) => {
@@ -565,7 +585,8 @@ export const personalTaskProcedures = {
   }),
 
   // Every name the tracker has reported lately that resolves to no live project. Bucket names are already
-  // normalised, so this is the exact set the ledger will render as its own streams.
+  // normalised, so this is the exact set the ledger will render as its own streams — minus the `unknown`
+  // bucket, which is where heartbeats with no project at all land and is not a name anyone could assign.
   listUnmappedWakaNames: authed.handler(async () => {
     const since = new Date(operatorDayStart().getTime() - UNMAPPED_LOOKBACK_DAYS * DAY_MS);
 
@@ -580,7 +601,7 @@ export const personalTaskProcedures = {
 
     return (
       rows
-        .filter((row) => !by_waka_name.has(row.project))
+        .filter((row) => row.project !== UNKNOWN_PROJECT && !by_waka_name.has(row.project))
         // mysql2 returns SUM as a string; Number() at the mapping boundary, as everywhere else.
         .map((row) => ({ waka_name: row.project, total_seconds: Number(row.seconds) }))
         .sort((left, right) => right.total_seconds - left.total_seconds)

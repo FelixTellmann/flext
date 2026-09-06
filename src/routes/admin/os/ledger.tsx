@@ -1,14 +1,16 @@
 import { operatorWeekRange } from "@server/operator-day";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import clsx from "clsx";
 import type { FC } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
 import { formatColon, formatLong, formatShort, formatWeekday } from "./-format";
+import { paletteClassOf } from "./-palette";
 import { OsPanel } from "./-task-row";
 
 type LedgerRange = Awaited<ReturnType<typeof orpc.personalLedger.listRange>>;
 type LedgerStream = LedgerRange["streams"][number];
+type Series = Pick<LedgerStream, "label" | "mapped" | "palette_slot">;
 
 // One scale for the whole screen, gridlines included. An earlier draft drew bars at 30px/h against
 // gridlines at 25 and 20, which made the axis decorative — a column could look taller than a column that
@@ -18,19 +20,10 @@ const GRIDLINE_HOURS = 4;
 const MIN_CHART_HOURS = 8;
 const SEGMENT_GAP_PX = 2;
 
-// The validated four, and they are named rather than assigned by rank so a stream keeps its colour from
-// week to week. Slate and teal failed the validator; do not substitute. A fifth stream folds into Other
-// rather than being given a generated hue nobody checked.
-const SERIES: Record<string, { bar: string; label: string; swatch: string }> = {
-  listify: { bar: "bg-primary-500 dark:bg-primary-600", label: "Listify", swatch: "bg-primary-500 dark:bg-primary-600" },
-  platter: { bar: "bg-violet-500", label: "Platter", swatch: "bg-violet-500" },
-  kidsliving: { bar: "bg-emerald-600", label: "KidsLiving", swatch: "bg-emerald-600" },
-  doveras: { bar: "bg-rose-500", label: "Doveras", swatch: "bg-rose-500" },
-};
-
-const OTHER_SERIES = { bar: "bg-gray-400", label: "Other", swatch: "bg-gray-400" };
-
-const seriesOf = (project: string) => SERIES[project] ?? { ...OTHER_SERIES, label: project === "unknown" ? "Unattributed" : project };
+// Colour comes from the project's palette slot, so a stream without one — a fifth project, a Wakapi name
+// nobody has assigned — draws in the Other grey rather than a generated hue nobody checked, while keeping
+// its own row and label beneath. The `unknown` bucket is heartbeats that named no project at all.
+const labelOf = (stream: Series): string => (!stream.mapped && stream.label === "unknown" ? "Unattributed" : stream.label);
 
 const ledger_search_schema = z.object({ from: z.string().optional(), to: z.string().optional() });
 
@@ -58,9 +51,7 @@ const DayColumn: FC<{ chart_px: number; index: number; streams: LedgerStream[]; 
   streams,
   total,
 }) => {
-  const segments = streams
-    .map((stream) => ({ project: stream.project, seconds: stream.per_day[index] ?? 0 }))
-    .filter((segment) => segment.seconds > 0);
+  const segments = streams.map((stream) => ({ stream, seconds: stream.per_day[index] ?? 0 })).filter((segment) => segment.seconds > 0);
 
   if (total === 0) {
     return (
@@ -81,10 +72,10 @@ const DayColumn: FC<{ chart_px: number; index: number; streams: LedgerStream[]; 
       <div className="flex flex-col gap-[2px]">
         {segments.map((segment, segment_index) => (
           <div
-            className={clsx(seriesOf(segment.project).bar, segment_index === 0 && "rounded-t")}
-            key={segment.project}
+            className={clsx(paletteClassOf(segment.stream.palette_slot), segment_index === 0 && "rounded-t")}
+            key={segment.stream.key}
             style={{ height: (segment.seconds / total) * usable_px }}
-            title={`${seriesOf(segment.project).label} — ${formatLong(segment.seconds)}`}
+            title={`${labelOf(segment.stream)} — ${formatLong(segment.seconds)}`}
           />
         ))}
       </div>
@@ -115,9 +106,9 @@ function PersonalOsLedgerPage() {
       <OsPanel title="The shape of the week, day by day">
         <div className="mb-3.5 flex flex-wrap gap-3">
           {ledger.streams.map((stream) => (
-            <span className="flex items-center gap-1.5 text-[13px] text-gray-600 dark:text-dark-text" key={stream.project}>
-              <span className={clsx("h-2.5 w-2.5 rounded-sm", seriesOf(stream.project).swatch)} />
-              {seriesOf(stream.project).label}
+            <span className="flex items-center gap-1.5 text-[13px] text-gray-600 dark:text-dark-text" key={stream.key}>
+              <span className={clsx("h-2.5 w-2.5 rounded-sm", paletteClassOf(stream.palette_slot))} />
+              {labelOf(stream)}
             </span>
           ))}
         </div>
@@ -167,7 +158,7 @@ function PersonalOsLedgerPage() {
         <p className="mt-3 border-gray-200 border-t pt-3 text-[13px] text-gray-600 dark:border-dark-border dark:text-dark-text">
           Column height is hours &times; {PX_PER_HOUR}px, gaps included, and the gridlines use the same scale.
           {under_floor.length > 0 &&
-            ` ${under_floor.map((stream) => `${seriesOf(stream.project).label} ${formatColon(stream.total_seconds)} of a ${stream.floor_hours}h floor`).join("; ")}.`}
+            ` ${under_floor.map((stream) => `${labelOf(stream)} ${formatColon(stream.total_seconds)} of a ${stream.floor_hours}h floor`).join("; ")}.`}
         </p>
       </OsPanel>
 
@@ -188,10 +179,10 @@ function PersonalOsLedgerPage() {
             </thead>
             <tbody>
               {ledger.streams.map((stream) => (
-                <tr className="border-gray-200 border-b border-dotted dark:border-dark-border" key={stream.project}>
+                <tr className="border-gray-200 border-b border-dotted dark:border-dark-border" key={stream.key}>
                   <td className="flex items-center gap-2 py-1.5 text-gray-900 dark:text-dark-headings">
-                    <span className={clsx("h-2.5 w-2.5 flex-shrink-0 rounded-sm", seriesOf(stream.project).swatch)} />
-                    {seriesOf(stream.project).label}
+                    <span className={clsx("h-2.5 w-2.5 flex-shrink-0 rounded-sm", paletteClassOf(stream.palette_slot))} />
+                    {labelOf(stream)}
                   </td>
                   {stream.per_day.map((seconds, index) => (
                     <td
@@ -214,7 +205,7 @@ function PersonalOsLedgerPage() {
               {ledger.streams.length === 0 && (
                 <tr>
                   <td className="py-3 text-gray-500 text-sm dark:text-dark-text" colSpan={ledger.dates.length + 3}>
-                    Nothing recorded for this range. The ingest writes buckets hourly once it is scheduled.
+                    Nothing recorded for this range.
                   </td>
                 </tr>
               )}
@@ -225,6 +216,21 @@ function PersonalOsLedgerPage() {
           A floor is surfaced, never enforced. Missing one is shown beside what consumed the hours instead, because the useful question is
           what the time went to, not whether a number was hit.
         </p>
+        <p className="mt-1.5 text-[13px] text-gray-600 dark:text-dark-text">
+          {ledger.unmapped_count === 0 && "Every Wakapi name in this range is mapped to a project."}
+          {ledger.unmapped_count > 0 && (
+            <>
+              {ledger.unmapped_count} Wakapi {ledger.unmapped_count === 1 ? "name" : "names"} unmapped &mdash;{" "}
+              <Link
+                className="underline hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info dark:hover:text-dark-headings"
+                to="/admin/os/areas"
+              >
+                assign them on Areas
+              </Link>
+              .
+            </>
+          )}
+        </p>
       </OsPanel>
 
       <OsPanel title={`The US overlap window — ${overlap.window.start_hour}:00 to ${overlap.window.end_hour}:00`}>
@@ -233,12 +239,9 @@ function PersonalOsLedgerPage() {
             <li className="text-gray-500 text-sm dark:text-dark-text">No tracked work fell in the window.</li>
           )}
           {overlap.streams.map((stream) => (
-            <li
-              className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1 dark:border-dark-border"
-              key={stream.project}
-            >
-              <span className={clsx("h-2.5 w-2.5 flex-shrink-0 rounded-sm", seriesOf(stream.project).swatch)} />
-              <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">{seriesOf(stream.project).label}</span>
+            <li className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1 dark:border-dark-border" key={stream.key}>
+              <span className={clsx("h-2.5 w-2.5 flex-shrink-0 rounded-sm", paletteClassOf(stream.palette_slot))} />
+              <span className="flex-grow text-gray-900 text-sm dark:text-dark-headings">{labelOf(stream)}</span>
               <span className="text-gray-600 text-sm tabular-nums dark:text-dark-text">{formatColon(stream.seconds)}</span>
             </li>
           ))}

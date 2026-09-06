@@ -2,7 +2,7 @@ import { db } from "@server/db/drizzle";
 import { activityBucket } from "@server/db/schema";
 import { DAY_MS, OPERATOR_UTC_OFFSET_MINUTES, operatorDayStartOf } from "@server/operator-day";
 import { resolveStreams, type Stream } from "@server/personal-streams";
-import { normaliseProjectName } from "@server/wakatime/bucket-heartbeats";
+import { normaliseProjectName, UNKNOWN_PROJECT } from "@server/wakatime/bucket-heartbeats";
 import { and, gte, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
@@ -38,12 +38,14 @@ type StreamKey = { key: string; project: string; label: string; palette_slot: nu
 
 // A stream is a project. Every bucket name mapped to one folds into a single row, so a project answering to
 // two upstream names is charged its floor once rather than once per name. A name with no live project is
-// its own stream, labelled by the name. `project` keeps the normalised name the screen keys on.
+// its own stream, labelled by the name. `key` is stable across renames — the project id, or `waka:<name>`
+// for a name with no project — and is what the screens key on; `project` still carries the normalised name
+// for the review screen until it moves over.
 const streamOf = (bucket_name: string, by_waka_name: Map<string, Stream>): StreamKey => {
   const stream = by_waka_name.get(bucket_name);
 
   if (stream === undefined) {
-    return { key: bucket_name, project: bucket_name, label: bucket_name, palette_slot: null, mapped: false, floor_hours: null };
+    return { key: `waka:${bucket_name}`, project: bucket_name, label: bucket_name, palette_slot: null, mapped: false, floor_hours: null };
   }
 
   return {
@@ -89,6 +91,7 @@ export const personalLedgerProcedures = {
         const total_seconds = [...per_day.values()].reduce((sum, seconds) => sum + seconds, 0);
 
         return {
+          key: stream.key,
           project: stream.project,
           label: stream.label,
           palette_slot: stream.palette_slot,
@@ -107,7 +110,9 @@ export const personalLedgerProcedures = {
       dates,
       streams,
       total_seconds: streams.reduce((sum, stream) => sum + stream.total_seconds, 0),
-      unmapped_count: streams.filter((stream) => !stream.mapped).length,
+      // The `unknown` bucket holds heartbeats that named no project at all; nothing on the Areas screen can
+      // assign it, so counting it would promise a fix the screen cannot deliver.
+      unmapped_count: streams.filter((stream) => !stream.mapped && stream.project !== UNKNOWN_PROJECT).length,
     };
   }),
 
@@ -144,6 +149,7 @@ export const personalLedgerProcedures = {
 
     const streams = [...by_stream.values()]
       .map(({ stream, seconds }) => ({
+        key: stream.key,
         project: stream.project,
         label: stream.label,
         palette_slot: stream.palette_slot,
