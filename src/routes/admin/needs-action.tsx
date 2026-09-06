@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { type FC, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import { ApplyPendingPanel, loadPendingCounts } from "./-apply-pending";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 const age_window_schema = z.union([z.literal(7), z.literal(30), z.literal(90), z.literal(365), z.literal("all")]);
@@ -40,7 +41,8 @@ export const Route = createFileRoute("/admin/needs-action")({
       orpc.mail.listNeedsAction(toListNeedsActionInput(deps)),
       orpc.mail.listNeedsAction({ mailbox_id: deps.mailbox_id ?? null, max_age_days: null, limit: 1, offset: 0 }),
     ]);
-    return { summary, queue, unfiltered_total: unfiltered.total };
+    const pending_counts = await loadPendingCounts(summary.mailboxes);
+    return { summary, queue, unfiltered_total: unfiltered.total, pending_counts };
   },
   component: AdminNeedsActionPage,
 });
@@ -171,7 +173,7 @@ const RowActions: FC<{
 };
 
 function AdminNeedsActionPage() {
-  const { summary, queue, unfiltered_total } = Route.useLoaderData();
+  const { summary, queue, unfiltered_total, pending_counts } = Route.useLoaderData();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -295,6 +297,8 @@ function AdminNeedsActionPage() {
           </select>
         </label>
       </Panel>
+
+      <ApplyPendingPanel counts={pending_counts} mailboxes={summary.mailboxes} onApplied={() => router.invalidate()} />
 
       <Panel title={`Queue (${queue.total.toLocaleString()})`}>
         {action_status !== null && <p className="mb-3 rounded border border-info/40 bg-info/10 p-2 text-sm">{action_status}</p>}

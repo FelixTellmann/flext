@@ -10,7 +10,9 @@ const base_signals: MessageSignals = {
   addressed_to_me: true,
   cc_me: false,
   sender_known: false,
+  is_first_contact: false,
   dkim_aligned: true,
+  is_calendar: null,
   volume_bucket: "low",
   age_days: 5,
 };
@@ -29,6 +31,9 @@ const base_input: DecisionInput = {
   last_in_thread_is_mine: false,
   sender_suppressed: false,
   policies: [],
+  settled_sweep_candidate: false,
+  declined_exposures: null,
+  declined_threshold: 3,
 };
 
 const suspended_on = new Date("2026-08-01T00:00:00Z");
@@ -623,5 +628,426 @@ describe("a policy can never name purge", () => {
       policy_id: "policy-address-archive",
       suppressed_by: null,
     });
+  });
+});
+
+describe("first contact", () => {
+  const first_contact: DecisionInput = { ...base_input, signals: { ...base_signals, is_first_contact: true } };
+
+  test("a first contact with no policy is quarantined", () => {
+    const decision = decide(first_contact);
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
+    expect(decision.policy_id).toBeNull();
+    expect(decision.suppressed_by).toBeNull();
+  });
+
+  // The precedence in decide() is what enforces the spec's third condition: reaching the quarantine
+  // branch already proves no policy matched. This asserts it end to end rather than trusting the reading.
+  test("any policy naming the sender wins, whatever it says", () => {
+    for (const policy of [address_archive, address_trash]) {
+      const decision = decide({ ...first_contact, policies: [policy] });
+      expect(decision.action).not.toBe("quarantine");
+      expect(decision.policy_id).toBe(policy.id);
+    }
+  });
+
+  test("a sender with history is not a first contact and is not quarantined", () => {
+    const decision = decide({ ...first_contact, signals: { ...base_signals, is_first_contact: false } });
+    expect(decision.action).not.toBe("quarantine");
+  });
+
+  // An absolute guard outranks everything, so this never even reaches the branch — but a starred first
+  // contact being quarantined would be exactly the "it hid something I marked" failure the guards exist
+  // to prevent, so it is asserted rather than assumed.
+  test("a starred first contact is never quarantined", () => {
+    const decision = decide({ ...first_contact, is_starred: true });
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("guard");
+  });
+
+  test("a never_touch rule protects a first contact", () => {
+    const decision = decide({ ...first_contact, never_touch_rules: [{ kind: "domain", value: "example.com" }] });
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("never_touch");
+  });
+
+  test("a snoozed thread suppresses quarantine like every other action", () => {
+    const decision = decide({ ...first_contact, thread_state: "snoozed" satisfies ThreadStateValue });
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("thread_state");
+  });
+
+  // Quarantine sits ABOVE derived, so a first contact that also looks like unsolicited bulk is
+  // quarantined rather than archived. Both hide it; only quarantine puts it somewhere meant to be read.
+  test("quarantine outranks the derived rule", () => {
+    const decision = decide({
+      ...first_contact,
+      signals: { ...base_signals, is_first_contact: true, is_bulk: true, age_days: 400 },
+    });
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
+  });
+});
+
+// Inbox-dwell 1.8. Every step of the ladder beats a sweep, and the bare fallback does not — a suite that
+// only proved the sweep fires would have passed against the first draft of this design, which deferred to
+// the ladder's verdict and therefore archived nothing at all.
+describe("the settled sweep, at step 6.5", () => {
+  const settled: DecisionInput = { ...base_input, settled_sweep_candidate: true };
+
+  test("fires where nothing else has an opinion — the case the whole feature exists for", () => {
+    // A human sender, already replied to, so no derived rule claims it and it lands on the fallback.
+    const decision = decide({
+      ...settled,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_settled");
+    expect(decision.policy_id).toBeNull();
+  });
+
+  test("does nothing at all when the message is not a candidate", () => {
+    const decision = decide({
+      ...base_input,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+
+  test("step 1 beats it: a flagged message is the operator's hold and is untouchable", () => {
+    const decision = decide({ ...settled, is_flagged: true });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("guard");
+    expect(decision.suppressed_by).toBe("flagged");
+  });
+
+  test("step 1 beats it: a never_touch rule is a direct standing instruction", () => {
+    const decision = decide({
+      ...settled,
+      never_touch_rules: [{ kind: "address", value: "person@example.com" }],
+    });
+
+    expect(decision.source).toBe("guard");
+    expect(decision.suppressed_by).toBe("never_touch");
+  });
+
+  test("step 1 beats it: mail under 24 hours old has not been seen by a human yet", () => {
+    const decision = decide({ ...settled, signals: { ...base_signals, age_days: 0 } });
+
+    expect(decision.source).toBe("guard");
+    expect(decision.suppressed_by).toBe("too_recent");
+  });
+
+  test("step 2 beats it: a snoozed thread means bring this back later", () => {
+    const decision = decide({ ...settled, thread_state: "snoozed" });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("thread_state");
+  });
+
+  test("step 2 beats it: a done thread too", () => {
+    const decision = decide({ ...settled, thread_state: "done" });
+
+    expect(decision.source).toBe("thread_state");
+  });
+
+  test("step 3 beats it — and an explicit keep_inbox policy is therefore the permanent pin", () => {
+    const decision = decide({
+      ...settled,
+      policies: [{ id: "policy-1", scope: "address", value: "person@example.com", action: "keep_inbox", suspended_at: null }],
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("address_policy");
+    expect(decision.policy_id).toBe("policy-1");
+  });
+
+  test("step 4 beats it: a domain policy still outranks a sweep", () => {
+    const decision = decide({
+      ...settled,
+      policies: [{ id: "policy-2", scope: "domain", value: "example.com", action: "file", suspended_at: null }],
+    });
+
+    expect(decision.action).toBe("file");
+    expect(decision.source).toBe("domain_policy");
+  });
+
+  test("step 5 beats it: a first contact is quarantined, not archived", () => {
+    const decision = decide({ ...settled, signals: { ...base_signals, is_first_contact: true } });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
+  });
+
+  test("step 6 beats it when derived names an action", () => {
+    const decision = decide({
+      ...settled,
+      signals: { ...base_signals, is_bulk: true, sender_known: false, age_days: 45 },
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("derived");
+  });
+
+  test("step 6 beats it for needs_action — which is what protects the Needs Action queue", () => {
+    // No special case anywhere: derived names needs_action for direct human mail, and naming an action
+    // is what wins. Branch A gets that protection for free.
+    const decision = decide(settled);
+
+    expect(decision.action).toBe("needs_action");
+    expect(decision.source).toBe("derived");
+  });
+
+  test("a derived keep_inbox YIELDS — evidence still accruing is not an opinion worth defending", () => {
+    // Bulk mail inside the 30-day window. The derived rule declines to act rather than claiming the
+    // message, so a week of sitting read outranks it.
+    const decision = decide({
+      ...settled,
+      signals: { ...base_signals, is_bulk: true, sender_known: false, age_days: 10 },
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_settled");
+  });
+
+  test("replied_in_thread does NOT block it — 1.10's deliberate exemption", () => {
+    const decision = decide({
+      ...settled,
+      replied_in_thread: true,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_settled");
+  });
+
+  test("the exemption is narrow: replied_in_thread still blocks a derived archive", () => {
+    const decision = decide({
+      ...base_input,
+      replied_in_thread: true,
+      signals: { ...base_signals, is_bulk: true, sender_known: false, age_days: 45 },
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("replied_in_thread");
+  });
+
+  test("a human_attachment guard blocks only destruction, so it does not stop the sweep archiving", () => {
+    const decision = decide({
+      ...settled,
+      has_attachment: true,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_settled");
+  });
+});
+
+// 1.10's floor, measured on 2026-08-26. decide() sees only the boolean; the age comparison that produces
+// it lives in shadow/run.ts's buildDecisionInput, because which dwell applies depends on a per-thread fact
+// no column holds. These cases pin the rung's behaviour on either side of that boolean.
+describe("the exemption's age floor", () => {
+  const settled: DecisionInput = { ...base_input, settled_sweep_candidate: true };
+
+  test("a replied-to thread that HAS cleared its longer dwell is swept", () => {
+    const decision = decide({
+      ...settled,
+      replied_in_thread: true,
+      signals: { ...base_signals, sender_known: true, age_days: 874 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_settled");
+  });
+
+  test("a replied-to thread still inside its dwell is never a candidate, so nothing fires", () => {
+    // The 8-day VitaminShoppe case. buildDecisionInput leaves settled_sweep_candidate false, so the rung
+    // is not reached at all and the message falls through to whatever the ladder would otherwise say.
+    const decision = decide({
+      ...base_input,
+      settled_sweep_candidate: false,
+      replied_in_thread: true,
+      signals: { ...base_signals, sender_known: true, age_days: 8 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+});
+
+// The calendar-detection spec's 1.6. ~263 meeting invitations from colleagues were the largest block of
+// unsorted mail in the estate, and no policy could name them: resolution is by sender, and those senders
+// send real mail too.
+describe("calendar messages, in the derived rung", () => {
+  const colleague = { ...base_signals, sender_known: true, is_calendar: true, age_days: 30 };
+
+  test("meeting churn from someone you write to is archived", () => {
+    const decision = decide({ ...base_input, signals: colleague, last_in_thread_is_mine: true });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("derived");
+    expect(decision.reasons.join(" ")).toContain("MIME structure rather than its subject line");
+  });
+
+  test("the same colleague's ORDINARY email is untouched — the point of the whole exercise", () => {
+    // A sender policy could not express this. One on jess@platter.com would archive her calendar churn
+    // and her actual correspondence with equal enthusiasm.
+    const decision = decide({
+      ...base_input,
+      signals: { ...colleague, is_calendar: false },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).not.toBe("archive");
+  });
+
+  test("null is not false: a message whose structure was never observed is left alone", () => {
+    // ~50,000 rows carry null until a reclassify pass runs. Archiving on "not definitely false" would
+    // sweep every one of them.
+    const decision = decide({
+      ...base_input,
+      signals: { ...colleague, is_calendar: null },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).not.toBe("archive");
+  });
+
+  test("an invitation from a stranger is not archived — it is a first contact", () => {
+    const decision = decide({ ...base_input, signals: { ...colleague, sender_known: false, is_first_contact: true } });
+
+    expect(decision.action).toBe("quarantine");
+    expect(decision.source).toBe("first_contact");
+  });
+
+  test("a recent invitation is left alone until the dwell passes", () => {
+    const decision = decide({ ...base_input, signals: { ...colleague, age_days: 3 }, last_in_thread_is_mine: true });
+
+    expect(decision.action).not.toBe("archive");
+  });
+
+  test("a flagged invitation is still untouchable", () => {
+    const decision = decide({ ...base_input, signals: colleague, is_flagged: true, last_in_thread_is_mine: true });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("flagged");
+  });
+
+  test("an explicit policy on the sender still wins", () => {
+    const decision = decide({
+      ...base_input,
+      signals: colleague,
+      last_in_thread_is_mine: true,
+      policies: [{ id: "policy-1", scope: "address", value: "person@example.com", action: "keep_inbox", suspended_at: null }],
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("address_policy");
+  });
+});
+
+// Inbox-dwell 1.1/1.9, the unread half. The clock counts triage sessions survived rather than days
+// elapsed, and these cases pin why that choice was made rather than merely that it was.
+describe("the declined sweep, at step 6.4", () => {
+  const declined: DecisionInput = { ...base_input, declined_exposures: 3, declined_threshold: 3 };
+
+  test("archives mail offered and declined enough times", () => {
+    const decision = decide({ ...declined, signals: { ...base_signals, sender_known: true }, last_in_thread_is_mine: true });
+
+    expect(decision.action).toBe("archive");
+    expect(decision.source).toBe("sweep_declined");
+    expect(decision.reasons.join(" ")).toContain("3 triage sessions");
+  });
+
+  test("below the threshold it does nothing", () => {
+    const decision = decide({
+      ...declined,
+      declined_exposures: 2,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+
+  test("AN ABSENCE CHANGES NOTHING - the reason this design beat a wall clock", () => {
+    // Five days away, no triage sessions, so the counter never advanced. Under wall-clock dwell this
+    // message would have been swept on day two while the operator was on a plane. Here it is untouched,
+    // and that is a property of the mechanism rather than a special case bolted onto it.
+    const decision = decide({
+      ...declined,
+      declined_exposures: 0,
+      signals: { ...base_signals, sender_known: true, age_days: 5 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("fallback");
+  });
+
+  test("null exposures means not a candidate, and is not treated as zero-and-eligible", () => {
+    const decision = decide({ ...declined, declined_exposures: null, signals: { ...base_signals, sender_known: true } });
+
+    expect(decision.source).not.toBe("sweep_declined");
+  });
+
+  test("mail somebody is waiting on gets a longer rope", () => {
+    // 1.9's double threshold. Six declines is roughly two full days of seeing that person's email and
+    // choosing not to open it, against three for a newsletter.
+    const waiting = { ...declined, declined_threshold: 6, declined_exposures: 4 };
+
+    expect(decide(waiting).source).not.toBe("sweep_declined");
+    expect(decide({ ...waiting, declined_exposures: 6 }).action).toBe("archive");
+  });
+
+  test("a flagged message is still untouchable", () => {
+    const decision = decide({ ...declined, is_flagged: true, signals: { ...base_signals, sender_known: true } });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.suppressed_by).toBe("flagged");
+  });
+
+  test("an explicit policy still wins", () => {
+    const decision = decide({
+      ...declined,
+      signals: { ...base_signals, sender_known: true },
+      last_in_thread_is_mine: true,
+      policies: [{ id: "policy-1", scope: "address", value: "person@example.com", action: "keep_inbox", suspended_at: null }],
+    });
+
+    expect(decision.action).toBe("keep_inbox");
+    expect(decision.source).toBe("address_policy");
+  });
+
+  test("a snoozed thread still wins", () => {
+    const decision = decide({ ...declined, thread_state: "snoozed", signals: { ...base_signals, sender_known: true } });
+
+    expect(decision.source).toBe("thread_state");
+  });
+
+  test("mail under 24 hours old is still protected, however many sessions passed", () => {
+    // Someone checking mail four times in an afternoon must not sweep something that arrived that morning.
+    const decision = decide({
+      ...declined,
+      declined_exposures: 9,
+      signals: { ...base_signals, sender_known: true, age_days: 0 },
+      last_in_thread_is_mine: true,
+    });
+
+    expect(decision.source).toBe("guard");
+    expect(decision.suppressed_by).toBe("too_recent");
   });
 });

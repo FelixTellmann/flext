@@ -1,0 +1,1 @@
+ALTER TABLE `Mailbox` ADD `trashRetentionConfirmedAt` datetime(3);

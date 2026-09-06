@@ -132,15 +132,46 @@ const BUSINESS_OPERATIONS: readonly string[] = [
   "dailyclaims@discovery.co.za",
 ];
 
-// Group G — leave alone. `alerts@logalert.app` is deliberately excluded: the operator has not decided
-// whether error alerts belong in the inbox, so no policy is seeded for it. `no-reply@lunalemon.dev` is
-// also excluded — the triage document's own correction says it "should probably stay in the inbox
-// while tickets are live", which is a tentative lean, not a decision either.
+// Group G — leave alone. Every address here needs an explicit `keep_inbox` policy rather than no policy
+// at all: shadow run 1 (2026-08-19) showed that leaving a no-reply sender unseeded does not leave it
+// untouched, it hands it to §5.4's derived default, which archives any automated sender never replied to
+// past DERIVED_ARCHIVE_AGE_DAYS. Unseeded, lunalemon archived 114 messages and github 96. `keep_inbox`
+// is also what takes alerts@logalert.app out of the needs-action queue, where it produced 438 decisions
+// — 11% of the whole queue — without moving a single message.
 const LEAVE_ALONE: readonly string[] = [
   "no-reply@accounts.google.com",
   "no-reply@squarespace.com",
   "no-reply-aws@amazon.com",
   "firebase-noreply@google.com",
+  "no-reply@lunalemon.dev",
+  "noreply@github.com",
+  "alerts@logalert.app",
+];
+
+// Group H — tax, banking and legal records that shadow run 1 caught falling to a derived archive. The
+// Group E rule applies unchanged: a tax and accounting trail is filed, never archived. These are here
+// rather than in Group E only because the hand triage covered senders by volume and never reached them.
+const TAX_BANKING_AND_LEGAL_RECORDS: readonly string[] = [
+  "noreply@sars.gov.za",
+  "noreply@wise.com",
+  "no-reply@carta.com",
+  "no-reply@deel.support",
+  "noreply@dkb.de",
+  "donotreply@usvisa-info.com",
+];
+
+// Group I — travel documents: bookings, tickets and itineraries. Filed for the same reason as Group E.
+// A booking confirmation is worth nothing in the inbox and everything when a trip is being reconstructed
+// for an expense claim, which is a search against a folder, not against archived mail.
+const TRAVEL_AND_TICKET_RECORDS: readonly string[] = [
+  "noreply@booking.com",
+  "noreply@uber.com",
+  "noreply@deutschebahn.com",
+  "noreply@oebb.at",
+  "donotreply@easyjet.com",
+  "no-reply@flyairlink.com",
+  "noreply@doc.mail.amadeus.com",
+  "no-reply@webtickets.co.za",
 ];
 
 const SEED_POLICIES: readonly SeedPolicy[] = [
@@ -151,6 +182,8 @@ const SEED_POLICIES: readonly SeedPolicy[] = [
   ...FINANCIAL_RECORDS.map((value) => ({ scope: "address" as const, value, action: "file" as const })),
   ...FINANCIAL_RECORDS_DOMAINS.map((value) => ({ scope: "domain" as const, value, action: "file" as const })),
   ...BUSINESS_OPERATIONS.map((value) => ({ scope: "address" as const, value, action: "file" as const })),
+  ...TAX_BANKING_AND_LEGAL_RECORDS.map((value) => ({ scope: "address" as const, value, action: "file" as const })),
+  ...TRAVEL_AND_TICKET_RECORDS.map((value) => ({ scope: "address" as const, value, action: "file" as const })),
   ...LEAVE_ALONE.map((value) => ({ scope: "address" as const, value, action: "keep_inbox" as const })),
 ];
 

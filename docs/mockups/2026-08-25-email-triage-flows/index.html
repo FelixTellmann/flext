@@ -1,0 +1,1009 @@
+<title>Inbox Dwell Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper: #F2F5F5;
+    --surface: #FBFCFC;
+    --surface-sunk: #E7ECEC;
+    --line: #CBD5D5;
+    --line-soft: #DEE5E5;
+    --text: #14201F;
+    --text-dim: #5A6B6A;
+    --text-faint: #869695;
+    --signal: #0E6E6B;
+    --signal-soft: #DCEDEC;
+    --guard: #9A5A0C;
+    --guard-soft: #F6E9D8;
+    --danger: #9B2A24;
+    --danger-soft: #F7E1DF;
+    --calm: #3B566B;
+    --calm-soft: #E2E9EF;
+    --shadow: 0 1px 2px rgba(20, 32, 31, .05), 0 6px 18px -10px rgba(20, 32, 31, .18);
+
+    --f-display: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #101817;
+      --surface: #16211F;
+      --surface-sunk: #0C1413;
+      --line: #2E403E;
+      --line-soft: #223230;
+      --text: #E4EDEC;
+      --text-dim: #9DB0AE;
+      --text-faint: #6E8281;
+      --signal: #4FC5BF;
+      --signal-soft: #14322F;
+      --guard: #D99B4A;
+      --guard-soft: #33240F;
+      --danger: #E27A72;
+      --danger-soft: #351815;
+      --calm: #8FB0C6;
+      --calm-soft: #16242E;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 22px -12px rgba(0, 0, 0, .6);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #101817;
+    --surface: #16211F;
+    --surface-sunk: #0C1413;
+    --line: #2E403E;
+    --line-soft: #223230;
+    --text: #E4EDEC;
+    --text-dim: #9DB0AE;
+    --text-faint: #6E8281;
+    --signal: #4FC5BF;
+    --signal-soft: #14322F;
+    --guard: #D99B4A;
+    --guard-soft: #33240F;
+    --danger: #E27A72;
+    --danger-soft: #351815;
+    --calm: #8FB0C6;
+    --calm-soft: #16242E;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 22px -12px rgba(0, 0, 0, .6);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--f-body);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px 120px;
+  }
+
+  .col {
+    max-width: 68ch;
+  }
+
+  /* ── masthead ─────────────────────────────────────────── */
+  .masthead {
+    border-bottom: 2px solid var(--text);
+    padding: 64px 0 26px;
+    margin-bottom: 44px;
+  }
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--signal);
+    margin: 0 0 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(34px, 5.4vw, 56px);
+    line-height: 1.06;
+    letter-spacing: -.015em;
+    margin: 0 0 20px;
+    text-wrap: balance;
+    max-width: 20ch;
+  }
+  .standfirst {
+    font-size: 19px;
+    line-height: 1.55;
+    color: var(--text-dim);
+    max-width: 62ch;
+    margin: 0;
+  }
+  .standfirst strong { color: var(--text); font-weight: 600; }
+
+  /* ── status strip ─────────────────────────────────────── */
+  .strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 0 0 64px;
+  }
+  .strip div {
+    background: var(--surface);
+    padding: 18px 20px 20px;
+  }
+  .strip dt {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 0 0 10px;
+  }
+  .strip dd {
+    margin: 0;
+    font-family: var(--f-display);
+    font-size: 27px;
+    font-weight: 600;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+  .strip dd span {
+    display: block;
+    font-family: var(--f-body);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-dim);
+    line-height: 1.4;
+    margin-top: 6px;
+  }
+  .strip .neg dd { color: var(--danger); }
+  .strip .pos dd { color: var(--signal); }
+
+  /* ── sections ─────────────────────────────────────────── */
+  section { margin: 0 0 84px; scroll-margin-top: 20px; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    margin-bottom: 26px;
+  }
+  .sec-num {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--signal);
+    letter-spacing: .06em;
+    flex: none;
+    padding-top: 6px;
+  }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 600;
+    font-size: clamp(24px, 3vw, 33px);
+    line-height: 1.18;
+    letter-spacing: -.012em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--f-body);
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -.005em;
+    margin: 38px 0 12px;
+  }
+  p { margin: 0 0 17px; }
+  .col > p:last-child { margin-bottom: 0; }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: .875em;
+    background: var(--surface-sunk);
+    padding: .1em .4em;
+    border-radius: 2px;
+    color: var(--text);
+  }
+  a { color: var(--signal); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, .navlink:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+
+  /* ── figures ──────────────────────────────────────────── */
+  figure {
+    margin: 34px 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+  .fig-scroll { overflow-x: auto; padding: 26px 26px 6px; }
+  figure svg { display: block; max-width: 100%; height: auto; min-width: 620px; margin: 0 auto; }
+  figcaption {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--text-dim);
+    padding: 14px 26px 20px;
+    border-top: 1px solid var(--line-soft);
+    margin-top: 20px;
+  }
+  figcaption b { color: var(--text); font-weight: 600; }
+
+  /* ── tables ───────────────────────────────────────────── */
+  .table-scroll { overflow-x: auto; margin: 26px 0; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 600px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+    background: var(--surface-sunk);
+    border-bottom: 1px solid var(--line);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono, th.mono { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+
+  .pill {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .04em;
+    padding: 2px 8px;
+    border-radius: 100px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .pill.abs { background: var(--danger-soft); color: var(--danger); border-color: currentColor; }
+  .pill.scoped { background: var(--guard-soft); color: var(--guard); border-color: currentColor; }
+  .pill.ok { background: var(--signal-soft); color: var(--signal); border-color: currentColor; }
+  .pill.inert { background: var(--calm-soft); color: var(--calm); border-color: currentColor; }
+
+  /* ── callouts ─────────────────────────────────────────── */
+  .note {
+    border-left: 3px solid var(--signal);
+    background: var(--signal-soft);
+    padding: 18px 22px;
+    margin: 28px 0;
+    font-size: 15px;
+  }
+  .note.warn { border-left-color: var(--guard); background: var(--guard-soft); }
+  .note.stop { border-left-color: var(--danger); background: var(--danger-soft); }
+  .note p:last-child { margin-bottom: 0; }
+  .note .label {
+    display: block;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-bottom: 7px;
+    opacity: .85;
+  }
+
+  ul.tight { margin: 0 0 18px; padding-left: 20px; }
+  ul.tight li { margin-bottom: 8px; }
+
+  .gap-list { list-style: none; padding: 0; margin: 26px 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .gap-list li { background: var(--surface); padding: 16px 20px; display: grid; grid-template-columns: 30px 1fr; gap: 14px; align-items: start; }
+  .gap-list .g-num { font-family: var(--f-mono); font-size: 12px; color: var(--danger); padding-top: 3px; }
+  .gap-list b { display: block; font-weight: 600; margin-bottom: 3px; }
+  .gap-list span.d { color: var(--text-dim); font-size: 14.5px; line-height: 1.5; }
+
+  /* ── nav ──────────────────────────────────────────────── */
+  nav.toc {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    margin: 0 -28px 44px;
+    padding: 0 28px;
+    overflow-x: auto;
+  }
+  nav.toc ol { list-style: none; display: flex; gap: 22px; margin: 0; padding: 11px 0; white-space: nowrap; }
+  .navlink {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    color: var(--text-dim);
+    text-decoration: none;
+  }
+  .navlink:hover { color: var(--signal); }
+
+  footer {
+    border-top: 2px solid var(--text);
+    padding-top: 20px;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    color: var(--text-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 26px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 18px 80px; }
+    nav.toc { margin-left: -18px; margin-right: -18px; padding: 0 18px; }
+    .fig-scroll { padding: 18px 18px 4px; }
+    figcaption { padding: 14px 18px 18px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow"><span>flext / email suite</span><span>review draft</span><span>26 Aug 2026</span></p>
+    <h1>What actually runs on your mail, and what a dwell clock would change</h1>
+    <p class="standfirst">Six phases shipped, and then <strong>nobody switched any of it on.</strong> All 113 rules are still only watching. This is the machine as built, drawn — and the four things a day of measuring against real mail turned up, including a diagnosis that turned out to be wrong.</p>
+  </header>
+
+  <nav class="toc" aria-label="Sections">
+    <ol>
+      <li><a class="navlink" href="#pipeline">01 · Sync pipeline</a></li>
+      <li><a class="navlink" href="#ladder">02 · Decision ladder</a></li>
+      <li><a class="navlink" href="#guards">03 · Guards</a></li>
+      <li><a class="navlink" href="#autonomy">04 · Autonomy &amp; rescue</a></li>
+      <li><a class="navlink" href="#ai">05 · Where the AI is</a></li>
+      <li><a class="navlink" href="#gaps">06 · What's missing</a></li>
+      <li><a class="navlink" href="#proposal">07 · The dwell proposal</a></li>
+      <li><a class="navlink" href="#found">08 · What measuring changed</a></li>
+    </ol>
+  </nav>
+
+  <dl class="strip">
+    <div class="neg"><dt>Rules ever switched on</dt><dd>0<span>all 113 still only watching</span></dd></div>
+    <div class="neg"><dt>Mailboxes offline</dt><dd>1<span>certificate rotated, silently, for 2 days</span></dd></div>
+    <div class="neg"><dt>Dead suggestions</dt><dd>29,375<span>can never be acted on</span></dd></div>
+    <div class="pos"><dt>The dwell sweep's real yield</dt><dd>118<span>not the 1,968 first reported</span></dd></div>
+    <div><dt>Model calls in the path</dt><dd>0<span>Phase 7 never shipped</span></dd></div>
+  </dl>
+
+  <!-- ═══════════════ 01 ═══════════════ -->
+  <section id="pipeline">
+    <div class="sec-head"><span class="sec-num">01</span><h2>One sync run, start to finish</h2></div>
+
+    <div class="col">
+      <p>A cron POST to <code>/api/mail-sync</code> runs <code>runSyncForAllMailboxes</code>. Each mailbox is isolated — a dead connection fails that mailbox and leaves the other five untouched. Inside a mailbox the five stages run in a fixed order, and the order is load-bearing in two places.</p>
+    </div>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1120 330" role="img" aria-label="Five sequential stages of one incremental sync run: fetch and flags, rescue detection, sent folder scan, classification, then promote and execute.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="ah-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0E6E6B"/>
+            </marker>
+          </defs>
+
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".55" letter-spacing=".08em">
+            <text x="12" y="26">IMAP  ·  CONDSTORE</text>
+            <text x="1108" y="26" text-anchor="end">MYSQL  ·  MAILBOX</text>
+          </g>
+          <line x1="12" y1="36" x2="1108" y2="36" stroke="currentColor" opacity=".18"/>
+
+          <!-- stage boxes -->
+          <g>
+            <rect x="12"  y="66" width="196" height="84" fill="none" stroke="currentColor" opacity=".45"/>
+            <rect x="240" y="66" width="196" height="84" fill="none" stroke="currentColor" opacity=".45"/>
+            <rect x="468" y="66" width="164" height="84" fill="none" stroke="currentColor" opacity=".45"/>
+            <rect x="664" y="66" width="196" height="84" fill="none" stroke="currentColor" opacity=".45"/>
+            <rect x="892" y="66" width="216" height="84" fill="#0E6E6B" fill-opacity=".08" stroke="#0E6E6B" stroke-width="1.5"/>
+          </g>
+
+          <g font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".5">
+            <text x="24" y="86">STAGE 1</text>
+            <text x="252" y="86">STAGE 2</text>
+            <text x="480" y="86">STAGE 3</text>
+            <text x="676" y="86">STAGE 4</text>
+            <text x="904" y="86" fill="#0E6E6B" opacity="1">STAGE 5 · MUTATES</text>
+          </g>
+
+          <g font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="currentColor">
+            <text x="24" y="110">Fetch new UIDs</text>
+            <text x="24" y="128">+ flag changes</text>
+            <text x="252" y="110">Rescue detection</text>
+            <text x="480" y="110">Sent-folder scan</text>
+            <text x="676" y="110">Classify</text>
+            <text x="676" y="128">(shadow journal)</text>
+            <text x="904" y="110" fill="#0E6E6B">Promote + execute</text>
+          </g>
+
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".6">
+            <text x="252" y="128">suspend bad policies</text>
+            <text x="480" y="128">reply counts</text>
+            <text x="904" y="128" fill="#0E6E6B" opacity=".85">MOVE / STORE labels</text>
+          </g>
+
+          <!-- arrows between -->
+          <g stroke="currentColor" opacity=".55" stroke-width="1.4" marker-end="url(#ah)" fill="none">
+            <line x1="210" y1="108" x2="236" y2="108"/>
+            <line x1="438" y1="108" x2="464" y2="108"/>
+            <line x1="634" y1="108" x2="660" y2="108"/>
+          </g>
+          <g stroke="#0E6E6B" stroke-width="1.8" marker-end="url(#ah-sig)" fill="none">
+            <line x1="862" y1="108" x2="888" y2="108"/>
+          </g>
+
+          <!-- writes row -->
+          <line x1="12" y1="184" x2="1108" y2="184" stroke="currentColor" opacity=".14"/>
+          <text x="12" y="206" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".45" letter-spacing=".1em">WRITES</text>
+
+          <g font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".78">
+            <text x="24" y="230">Message rows</text>
+            <text x="24" y="248">isSeen, isFlagged</text>
+            <text x="24" y="266" fill="#0E6E6B" opacity="1">openedAt  ← the only</text>
+            <text x="24" y="282" fill="#0E6E6B" opacity="1">read-timestamp in</text>
+            <text x="24" y="298" fill="#0E6E6B" opacity="1">the whole system</text>
+
+            <text x="252" y="230">SenderPolicy</text>
+            <text x="252" y="248">.suspendedAt</text>
+
+            <text x="480" y="230">Sender</text>
+            <text x="480" y="248">.myReplyCount</text>
+
+            <text x="676" y="230">Action rows,</text>
+            <text x="676" y="248">status = shadow</text>
+
+            <text x="904" y="230">Action rows →</text>
+            <text x="904" y="248">pending → applied</text>
+          </g>
+
+          <!-- ordering constraints -->
+          <path d="M 110 66 C 110 46, 340 46, 340 66" fill="none" stroke="currentColor" opacity=".35" stroke-dasharray="3 3" marker-end="url(#ah)"/>
+          <text x="225" y="42" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".6">must be fresh</text>
+
+          <path d="M 552 66 C 552 52, 762 52, 762 66" fill="none" stroke="currentColor" opacity=".35" stroke-dasharray="3 3" marker-end="url(#ah)"/>
+          <text x="657" y="46" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".6">replies visible first</text>
+        </svg>
+      </div>
+      <figcaption><b>The order is not cosmetic.</b> Rescue detection must read <code>openedAt</code> values that stage 1 has just refreshed — running it earlier silently under-reports, which for a safety net is worse than an error. Classification runs after the Sent scan so a message that arrived and was replied to between two syncs is judged with the reply already visible. Stage 5 is the only stage that touches a mailbox.</figcaption>
+    </figure>
+
+    <div class="col">
+      <div class="note warn">
+        <span class="label">Scoping</span>
+        <p>Stage 4 only ever looks at messages that have <em>never been classified</em> — no <code>Action</code> row of any kind. New mail is the only input a scheduled run can have seen change, so re-deciding the rest buys nothing. <strong>This is the single biggest structural obstacle to a dwell clock:</strong> a message classified once on arrival is never reconsidered, no matter how long it sits.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 02 ═══════════════ -->
+  <section id="ladder">
+    <div class="sec-head"><span class="sec-num">02</span><h2>The decision ladder</h2></div>
+
+    <div class="col">
+      <p>Everything narrows to one pure function, <code>decide()</code>. It takes headers, the sender graph, thread state and the policy table, and returns exactly one outcome. It performs no IO and knows nothing about a mail server, which is why the whole thing is testable from fixtures.</p>
+      <p>Resolution runs top to bottom and stops at the first rung that answers. The last rung is the safety spine.</p>
+    </div>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1060 700" role="img" aria-label="The six-rung resolution ladder inside decide(): absolute guards, thread state, address policy, domain policy, first contact, derived defaults, then the keep-inbox fallback.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="ah2-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0E6E6B"/>
+            </marker>
+            <marker id="ah2-cal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3B566B"/>
+            </marker>
+          </defs>
+
+          <!-- column headings -->
+          <g font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".45" letter-spacing=".11em">
+            <text x="16" y="20">RUNG</text>
+            <text x="120" y="20">TEST</text>
+            <text x="700" y="20">EXIT</text>
+          </g>
+          <line x1="16" y1="30" x2="1044" y2="30" stroke="currentColor" opacity=".18"/>
+
+          <!-- spine -->
+          <line x1="66" y1="46" x2="66" y2="628" stroke="currentColor" opacity=".3" stroke-width="1.4"/>
+
+          <!-- rung 1 -->
+          <circle cx="66" cy="70" r="13" fill="none" stroke="#9B2A24" stroke-width="1.6"/>
+          <text x="66" y="74" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9B2A24">1</text>
+          <text x="120" y="66" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">Absolute guards</text>
+          <text x="120" y="86" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="#9B2A24">flagged / starred  ·  age &lt; 24h  ·  never_touch rule</text>
+          <line x1="620" y1="72" x2="694" y2="72" stroke="#9B2A24" stroke-width="1.5" marker-end="url(#ah2)" opacity=".9"/>
+          <rect x="700" y="56" width="176" height="32" fill="#9B2A24" fill-opacity=".1" stroke="#9B2A24"/>
+          <text x="712" y="77" font-family="IBM Plex Mono, monospace" font-size="12" fill="#9B2A24">keep_inbox · frozen</text>
+
+          <!-- rung 2 -->
+          <circle cx="66" cy="152" r="13" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".6"/>
+          <text x="66" y="156" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".7">2</text>
+          <text x="120" y="148" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">Thread state</text>
+          <text x="120" y="168" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">snoozed  ·  done</text>
+          <line x1="620" y1="154" x2="694" y2="154" stroke="#3B566B" stroke-width="1.4" marker-end="url(#ah2-cal)"/>
+          <rect x="700" y="138" width="176" height="32" fill="#3B566B" fill-opacity=".1" stroke="#3B566B"/>
+          <text x="712" y="159" font-family="IBM Plex Mono, monospace" font-size="12" fill="#3B566B">keep_inbox</text>
+
+          <!-- rung 3 -->
+          <circle cx="66" cy="234" r="13" fill="#0E6E6B" fill-opacity=".14" stroke="#0E6E6B" stroke-width="1.6"/>
+          <text x="66" y="238" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#0E6E6B">3</text>
+          <text x="120" y="230" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">Address policy</text>
+          <text x="120" y="250" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">exact sender address — outranks scoped guards</text>
+          <line x1="620" y1="236" x2="694" y2="236" stroke="#0E6E6B" stroke-width="1.6" marker-end="url(#ah2-sig)"/>
+          <rect x="700" y="220" width="330" height="32" fill="#0E6E6B" fill-opacity=".1" stroke="#0E6E6B"/>
+          <text x="712" y="241" font-family="IBM Plex Mono, monospace" font-size="12" fill="#0E6E6B">archive · file · auto_trash · keep_inbox</text>
+
+          <!-- rung 4 -->
+          <circle cx="66" cy="316" r="13" fill="#0E6E6B" fill-opacity=".14" stroke="#0E6E6B" stroke-width="1.6"/>
+          <text x="66" y="320" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#0E6E6B">4</text>
+          <text x="120" y="312" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">Domain policy</text>
+          <text x="120" y="332" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">sender domain — scoped guards still apply</text>
+          <line x1="620" y1="318" x2="694" y2="318" stroke="#0E6E6B" stroke-width="1.6" marker-end="url(#ah2-sig)"/>
+          <rect x="700" y="302" width="330" height="32" fill="#0E6E6B" fill-opacity=".1" stroke="#0E6E6B"/>
+          <text x="712" y="323" font-family="IBM Plex Mono, monospace" font-size="12" fill="#0E6E6B">same four, unless a guard suppresses it</text>
+
+          <!-- rung 5 -->
+          <circle cx="66" cy="398" r="13" fill="none" stroke="#9A5A0C" stroke-width="1.6"/>
+          <text x="66" y="402" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9A5A0C">5</text>
+          <text x="120" y="394" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">First contact</text>
+          <text x="120" y="414" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">never written before · never replied to · no policy</text>
+          <line x1="620" y1="400" x2="694" y2="400" stroke="#9A5A0C" stroke-width="1.5" marker-end="url(#ah2)" opacity=".9"/>
+          <rect x="700" y="384" width="176" height="32" fill="#9A5A0C" fill-opacity=".12" stroke="#9A5A0C"/>
+          <text x="712" y="405" font-family="IBM Plex Mono, monospace" font-size="12" fill="#9A5A0C">quarantine</text>
+
+          <!-- rung 6 -->
+          <circle cx="66" cy="480" r="13" fill="none" stroke="currentColor" stroke-width="1.4" opacity=".6"/>
+          <text x="66" y="484" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".7">6</text>
+          <text x="120" y="476" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">Derived default</text>
+          <text x="120" y="496" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">bulk/automated · never replied · older than 30 days</text>
+          <text x="120" y="514" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">— or the needs-action signal set</text>
+          <line x1="620" y1="482" x2="694" y2="482" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah2)" opacity=".7"/>
+          <rect x="700" y="452" width="300" height="60" fill="none" stroke="currentColor" opacity=".5"/>
+          <text x="712" y="474" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor" opacity=".85">archive  (never trash — that needs</text>
+          <text x="712" y="492" font-family="IBM Plex Mono, monospace" font-size="12" fill="currentColor" opacity=".85">a policy a human created)</text>
+          <text x="712" y="506" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".6">or  needs_action  ·  or  keep_inbox</text>
+
+          <!-- rung 7 fallback -->
+          <circle cx="66" cy="592" r="13" fill="#3B566B" fill-opacity=".14" stroke="#3B566B" stroke-width="1.6"/>
+          <text x="66" y="596" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" fill="#3B566B">7</text>
+          <text x="120" y="588" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="#3B566B">Fallback — the safety spine</text>
+          <text x="120" y="608" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="currentColor" opacity=".65">nothing above matched</text>
+          <line x1="620" y1="594" x2="694" y2="594" stroke="#3B566B" stroke-width="1.8" marker-end="url(#ah2-cal)"/>
+          <rect x="700" y="576" width="330" height="36" fill="#3B566B" fill-opacity=".14" stroke="#3B566B" stroke-width="1.6"/>
+          <text x="712" y="599" font-family="IBM Plex Mono, monospace" font-size="12.5" fill="#3B566B">keep_inbox — left exactly where it is</text>
+
+          <line x1="16" y1="646" x2="1044" y2="646" stroke="currentColor" opacity=".18"/>
+          <text x="16" y="670" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-style="italic" fill="currentColor" opacity=".72">The system acts only where a rule explicitly says to. Silence is always the safe outcome — and today, most of your inbox lands on rung 7.</text>
+        </svg>
+      </div>
+      <figcaption><b>Rungs 3 and 4 are where the value is</b> — an explicit sender policy is the only thing that reliably moves mail. Rung 6 is deliberately timid: it can propose <code>archive</code> and nothing more destructive, and only after 30 days. Everything with no policy and no bulk headers falls to rung 7 and stays put forever.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════════ 03 ═══════════════ -->
+  <section id="guards">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Guards: three that stop everything, three that only stop destruction</h2></div>
+
+    <div class="col">
+      <p>An earlier draft made every guard absolute. That was fatally wrong: two of the guards are <em>"I have replied in this thread"</em> and <em>"I have written to this sender"</em> — and client correspondence is by definition mail you reply to. Absolute guards would have made automatic filing unreachable and quietly deleted the record-keeping half of the product.</p>
+      <p>So guards are scoped per action class. The three that protect against <em>destruction</em> never block <em>organisation</em>.</p>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Guard</th><th>Blocks</th><th class="mono">Kind</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">flagged</td><td>everything</td><td><span class="pill abs">absolute</span></td><td>An explicit human signal. This is your existing "important to me" lever.</td></tr>
+          <tr><td class="mono">too_recent</td><td>everything</td><td><span class="pill abs">absolute</span></td><td>Under 24 hours old. A human sees mail before the machine touches it.</td></tr>
+          <tr><td class="mono">never_touch</td><td>everything</td><td><span class="pill abs">absolute</span></td><td>A direct standing instruction — address, domain or subject pattern.</td></tr>
+          <tr><td class="mono">replied_in_thread</td><td>archive · quarantine · auto_trash · purge</td><td><span class="pill scoped">scoped</span></td><td>Never blocks <code>file</code>. Filing an active client thread is the point.</td></tr>
+          <tr><td class="mono">derived_allowlist</td><td>auto_trash · purge</td><td><span class="pill scoped">scoped</span></td><td>You have written to this sender at least once.</td></tr>
+          <tr><td class="mono">human_attachment</td><td>auto_trash · purge</td><td><span class="pill scoped">scoped</span></td><td>An attachment from a non-bulk, non-automated sender.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <span class="label">Override rule</span>
+        <p>An <strong>address-scoped policy you created by hand outranks all three scoped guards</strong> — but never the absolute ones. Otherwise a policy you deliberately made would sit in the dashboard as silent dead code. Where a scoped guard does suppress a policy, the Sender Policy screen renders <code>suppressed by guard: &lt;name&gt;</code> on that row, so an inert policy is never indistinguishable from an active one.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 04 ═══════════════ -->
+  <section id="autonomy">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Autonomy is per policy, and it can revoke itself</h2></div>
+
+    <div class="col">
+      <p>No policy is ever born trusted. Every one enters at <code>shadow</code>, where the decision is computed and journaled and the mailbox is untouched. Promotion is per policy, after you read its shadow record — so "LinkedIn notifications: auto" and "Acme filing: still proposing" coexist naturally.</p>
+      <p>The interesting edge is the one going backwards.</p>
+    </div>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1060 430" role="img" aria-label="The autonomy ladder from shadow to propose to auto, with a rescue-detection feedback edge that suspends a policy when a message it acted on is later opened or replied to.">
+          <defs>
+            <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="ah3-dan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#9B2A24"/>
+            </marker>
+            <marker id="ah3-sig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0E6E6B"/>
+            </marker>
+          </defs>
+
+          <!-- ladder -->
+          <rect x="30" y="96" width="184" height="70" fill="none" stroke="currentColor" opacity=".5"/>
+          <text x="46" y="122" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">shadow</text>
+          <text x="46" y="144" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".62">journal only</text>
+          <text x="46" y="158" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".62">mailbox untouched</text>
+
+          <rect x="286" y="96" width="184" height="70" fill="none" stroke="currentColor" opacity=".5"/>
+          <text x="302" y="122" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="currentColor">propose</text>
+          <text x="302" y="144" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".62">queued as pending,</text>
+          <text x="302" y="158" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".62">waits for a click</text>
+
+          <rect x="542" y="96" width="184" height="70" fill="#0E6E6B" fill-opacity=".1" stroke="#0E6E6B" stroke-width="1.6"/>
+          <text x="558" y="122" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="#0E6E6B">auto</text>
+          <text x="558" y="144" font-family="IBM Plex Mono, monospace" font-size="11" fill="#0E6E6B" opacity=".8">executes on the</text>
+          <text x="558" y="158" font-family="IBM Plex Mono, monospace" font-size="11" fill="#0E6E6B" opacity=".8">next sync run</text>
+
+          <rect x="798" y="96" width="232" height="70" fill="#9B2A24" fill-opacity=".08" stroke="#9B2A24" stroke-width="1.5" stroke-dasharray="5 3"/>
+          <text x="814" y="122" font-family="IBM Plex Sans, sans-serif" font-size="15" font-weight="600" fill="#9B2A24">suspended</text>
+          <text x="814" y="144" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9B2A24" opacity=".85">stops resolution dead —</text>
+          <text x="814" y="158" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9B2A24" opacity=".85">no broader rule applies</text>
+
+          <!-- forward arrows -->
+          <line x1="216" y1="131" x2="282" y2="131" stroke="currentColor" stroke-width="1.5" marker-end="url(#ah3)" opacity=".7"/>
+          <text x="249" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".65">you review</text>
+
+          <line x1="472" y1="131" x2="538" y2="131" stroke="#0E6E6B" stroke-width="1.7" marker-end="url(#ah3-sig)"/>
+          <text x="505" y="122" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#0E6E6B">you promote</text>
+
+          <!-- gate labels -->
+          <text x="30" y="66" font-family="IBM Plex Mono, monospace" font-size="10" fill="currentColor" opacity=".45" letter-spacing=".11em">EVERY POLICY IS BORN HERE</text>
+          <line x1="30" y1="76" x2="214" y2="76" stroke="currentColor" opacity=".3"/>
+
+          <!-- execution -->
+          <line x1="634" y1="168" x2="634" y2="222" stroke="#0E6E6B" stroke-width="1.7" marker-end="url(#ah3-sig)"/>
+          <rect x="500" y="226" width="268" height="52" fill="none" stroke="#0E6E6B" stroke-width="1.4"/>
+          <text x="516" y="248" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="#0E6E6B">Executor mutates the mailbox</text>
+          <text x="516" y="266" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#0E6E6B" opacity=".8">journal pre-state → MOVE → record COPYUID</text>
+
+          <!-- rescue trigger -->
+          <line x1="634" y1="280" x2="634" y2="326" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah3)" opacity=".6"/>
+          <rect x="470" y="330" width="328" height="54" fill="#9B2A24" fill-opacity=".08" stroke="#9B2A24" stroke-width="1.5"/>
+          <text x="486" y="352" font-family="IBM Plex Sans, sans-serif" font-size="13.5" font-weight="600" fill="#9B2A24">You open or reply to it afterwards</text>
+          <text x="486" y="370" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#9B2A24" opacity=".9">openedAt  &gt;  appliedAt   (strictly later)</text>
+
+          <!-- feedback edge -->
+          <path d="M 798 357 L 914 357 L 914 170" fill="none" stroke="#9B2A24" stroke-width="1.8" marker-end="url(#ah3-dan)"/>
+          <text x="924" y="270" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9B2A24">auto-suspends</text>
+          <text x="924" y="286" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9B2A24">the responsible</text>
+          <text x="924" y="302" font-family="IBM Plex Mono, monospace" font-size="11" fill="#9B2A24">policy</text>
+
+          <!-- caveat band -->
+          <line x1="30" y1="404" x2="1030" y2="404" stroke="currentColor" opacity=".16"/>
+          <text x="30" y="424" font-family="IBM Plex Sans, sans-serif" font-size="13" fill="#9A5A0C">Blind spot: openedAt is stamped only on an unseen→seen transition the sync actually witnessed. On felix@tellmann.co.za, 4 of 4,719 applied messages carry one.</text>
+        </svg>
+      </div>
+      <figcaption><b>The system detects its own mistakes from ordinary behaviour</b> — no bug report required. Rescue detection covers every applied action, not only automatic ones, because the first real use of this system was a manually approved bulk apply and that is what most needed watching. The <code>starred</code> signal is deferred: <code>isFlagged</code> records <em>that</em> a message is starred, never <em>when</em>.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════════ 05 ═══════════════ -->
+  <section id="ai">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Where the AI is: nowhere</h2></div>
+
+    <div class="col">
+      <p>You asked how AI really scans your mail for what's valuable. The honest answer is that it does not, and that this was deliberate twice over — then a third time by accident.</p>
+
+      <p><strong>By design, no model is ever in the execution path.</strong> Classification is a pure function over headers and stored sender policy. The unit of classification is the <em>sender</em>, not the message: a few hundred senders account for the overwhelming majority of six mailboxes' traffic, so AI's intended job was to help build the sender-policy table <em>once</em>, after which rules execute it indefinitely, deterministically, at zero marginal cost — and reproducibly after the fact.</p>
+
+      <p><strong>By design, the AI boundary cannot mutate a mailbox.</strong> Email subjects are attacker-controlled text, and indirect prompt injection against AI mail assistants is a demonstrated, CVE-bearing attack class. So the planned MCP server has exactly one write — <code>propose_policy</code>, which inserts a row awaiting your approval. A fully hijacked session can create a bad <em>proposal</em>. That is the entire blast radius.</p>
+
+      <p><strong>And by accident: it was never built.</strong> Phase 7 is the MCP surface, and it has not shipped. There is no MCP server in the repo, no <code>Proposal</code> table in the schema, no proposals inbox. Phase 8, the irreversible purge sweep, is likewise unbuilt — <code>purge</code> is refused at four separate layers.</p>
+    </div>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1000 300" role="img" aria-label="The intended AI boundary: Claude Code reads sanitized aggregates over stdio and may only write policy proposals, which require operator approval before entering the rules engine. The whole path is unbuilt.">
+          <defs>
+            <marker id="ah4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- unbuilt band -->
+          <rect x="16" y="40" width="620" height="212" fill="currentColor" fill-opacity=".035" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="6 4"/>
+          <text x="30" y="62" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#9B2A24" letter-spacing=".11em">PHASE 7 — NOT BUILT</text>
+
+          <rect x="44" y="88" width="176" height="66" fill="none" stroke="currentColor" opacity=".45"/>
+          <text x="60" y="114" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="currentColor" opacity=".8">Claude Code</text>
+          <text x="60" y="134" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".55">stdio, inside the</text>
+          <text x="60" y="147" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".55">container, over SSH</text>
+
+          <rect x="288" y="88" width="176" height="66" fill="none" stroke="currentColor" opacity=".45"/>
+          <text x="304" y="114" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="currentColor" opacity=".8">MCP server</text>
+          <text x="304" y="134" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".55">no listening port,</text>
+          <text x="304" y="147" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".55">nothing exposed</text>
+
+          <line x1="222" y1="112" x2="284" y2="112" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah4)" opacity=".6"/>
+          <text x="253" y="104" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="currentColor" opacity=".6">reads</text>
+          <path d="M 284 140 L 222 140" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah4)" opacity=".6"/>
+
+          <text x="44" y="188" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".62">sanitized aggregates + up to 20 subject samples;</text>
+          <text x="44" y="204" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".62">URLs stripped to bare domain, bidi controls removed,</text>
+          <text x="44" y="220" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".62">wrapped in untrusted-data delimiters. No bodies exist.</text>
+
+          <!-- the one write -->
+          <line x1="466" y1="121" x2="556" y2="121" stroke="#9A5A0C" stroke-width="1.8" marker-end="url(#ah4)"/>
+          <text x="511" y="112" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" fill="#9A5A0C">the ONE write</text>
+          <rect x="560" y="94" width="150" height="54" fill="#9A5A0C" fill-opacity=".12" stroke="#9A5A0C" stroke-width="1.5"/>
+          <text x="574" y="116" font-family="IBM Plex Mono, monospace" font-size="12" fill="#9A5A0C">propose_policy</text>
+          <text x="574" y="136" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#9A5A0C" opacity=".85">→ status: pending</text>
+
+          <!-- approval gate -->
+          <line x1="712" y1="121" x2="778" y2="121" stroke="currentColor" stroke-width="1.4" marker-end="url(#ah4)" opacity=".7"/>
+          <rect x="782" y="88" width="200" height="66" fill="#0E6E6B" fill-opacity=".1" stroke="#0E6E6B" stroke-width="1.6"/>
+          <text x="798" y="114" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="#0E6E6B">You approve it</text>
+          <text x="798" y="134" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#0E6E6B" opacity=".85">enters at shadow —</text>
+          <text x="798" y="147" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#0E6E6B" opacity=".85">never higher</text>
+
+          <line x1="882" y1="156" x2="882" y2="204" stroke="#0E6E6B" stroke-width="1.6" marker-end="url(#ah4)"/>
+          <rect x="782" y="208" width="200" height="44" fill="none" stroke="#0E6E6B" stroke-width="1.4"/>
+          <text x="798" y="236" font-family="IBM Plex Mono, monospace" font-size="12" fill="#0E6E6B">rules engine</text>
+
+          <text x="16" y="284" font-family="IBM Plex Sans, sans-serif" font-size="13" font-style="italic" fill="currentColor" opacity=".7">No MCP tool can label, move, archive, trash or delete anything. Ever. That is an architectural boundary, not a prompt-level guardrail.</text>
+        </svg>
+      </div>
+      <figcaption><b>What "AI-assisted" was always meant to mean here:</b> a model helping you author a few hundred sender policies from aggregates, in a session you are watching, with every suggestion gated behind your click and entering at the lowest autonomy rung. Not a model reading your mail.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ═══════════════ 06 ═══════════════ -->
+  <section id="gaps">
+    <div class="sec-head"><span class="sec-num">06</span><h2>Why your inbox still has unread mail in it</h2></div>
+
+    <div class="col">
+      <p>Nothing above is broken. The system is doing exactly what it was designed to do — and what it was designed to do does not include the thing you now want. Five concrete gaps sit between here and a dwell clock.</p>
+    </div>
+
+    <ol class="gap-list">
+      <li><span class="g-num">01</span><span class="d"><b>Read-state never reaches the classifier.</b> <code>is_seen</code> exists on every message row, but <code>decide()</code> does not take it as an input. It is read in exactly two places, both cosmetic: unread counts on the Senders screen, and a reason string on Needs Action.</span></li>
+      <li><span class="g-num">02</span><span class="d"><b>A message is classified once, on arrival, and never revisited.</b> The scheduled pass filters to rows with no <code>Action</code> row of any kind. Dwell is by definition a decision that changes as time passes — so it needs a second pass with the opposite scoping.</span></li>
+      <li><span class="g-num">03</span><span class="d"><b>Age is measured from the send date, not from when it landed in front of you.</b> <code>age_days</code> comes off <code>internalDate</code>. There is no "how long has this sat in my inbox" and no "how long since I last touched it".</span></li>
+      <li><span class="g-num">04</span><span class="d"><b>The system cannot mark anything read.</b> The provider exposes exactly three mutating methods — <code>moveMessages</code>, <code>setLabels</code>, <code>createFolder</code>. Writing <code>\Seen</code> is a fourth mutating verb that does not exist, and it needs its own inverse for undo. This is why quarantined first contacts still sit unread in <code>Quarantine/</code>.</span></li>
+      <li><span class="g-num">05</span><span class="d"><b>There is no destination for the unclassified middle.</b> Mail with no policy, no client, no bulk headers and a known sender falls to rung 7. Sweeping it somewhere means naming a folder the system currently has no concept of.</span></li>
+    </ol>
+
+    <div class="col">
+      <div class="note stop">
+        <span class="label">The real objection</span>
+        <p>Every one of the five is buildable. The one that deserves an argument is different: your proposal <strong>inverts the invariant the whole system rests on</strong>. Today, "no rule matched" means "leave it alone" — silence is safe. Under a dwell clock, "no rule matched, and two days passed" means "move it". The default flips from inaction to action, and every safety property in sections 02–04 was designed around the old default.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════ 07 ═══════════════ -->
+  <section id="proposal">
+    <div class="sec-head"><span class="sec-num">07</span><h2>The change, and the one substitution that makes it safe</h2></div>
+
+    <div class="col">
+      <p>Your rules were: read mail stays 7 days; unread mail gets filed and marked read after 2; flags freeze anything. Your own stated risk was the right one — <em>"if I don't check email for more than 2 days, I'd miss something"</em> — and you then answered it yourself in the next paragraph, without quite noticing.</p>
+
+      <h3>Wall-clock dwell is the wrong clock</h3>
+      <p>"Unread for 2 days" conflates two completely different states. A message you <strong>saw in the list and scrolled past</strong> has been offered and declined — that is real evidence. A message that arrived while you were on a plane has no evidence attached to it at all. Wall-clock time cannot tell them apart, which is exactly why the away-for-three-days case is dangerous.</p>
+
+      <p>So replace the clock with a counter: <strong>how many times have you opened your inbox while this message sat unread in it?</strong> If a triage session is detectable, then "declined in 3 sessions" is a far stronger signal than "unread for 2 days", and it degrades correctly — go away for a week, no sessions happen, nothing ages out, nothing is missed. The safety property you were worried about becomes structural instead of a gamble.</p>
+    </div>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1060 400" role="img" aria-label="Comparison of wall-clock dwell against exposure counting over a five-day absence: the wall clock sweeps unseen mail while the exposure counter does not.">
+          <defs>
+            <marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <text x="16" y="22" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".45" letter-spacing=".11em">SAME FIVE DAYS · YOU ARE AWAY FROM DAY 1 TO DAY 4</text>
+          <line x1="16" y1="32" x2="1044" y2="32" stroke="currentColor" opacity=".18"/>
+
+          <!-- timeline axis -->
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".55">
+            <text x="200" y="58">DAY 0</text><text x="360" y="58">DAY 1</text><text x="520" y="58">DAY 2</text><text x="680" y="58">DAY 3</text><text x="840" y="58">DAY 4</text>
+          </g>
+          <g stroke="currentColor" opacity=".16">
+            <line x1="212" y1="64" x2="212" y2="352"/><line x1="372" y1="64" x2="372" y2="352"/>
+            <line x1="532" y1="64" x2="532" y2="352"/><line x1="692" y1="64" x2="692" y2="352"/>
+            <line x1="852" y1="64" x2="852" y2="352"/>
+          </g>
+
+          <!-- inbox opens -->
+          <text x="16" y="88" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".5">YOU OPEN</text>
+          <text x="16" y="102" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".5">THE INBOX</text>
+          <g fill="#0E6E6B">
+            <circle cx="212" cy="94" r="6"/><circle cx="244" cy="94" r="6"/>
+            <circle cx="852" cy="94" r="6"/><circle cx="884" cy="94" r="6"/><circle cx="916" cy="94" r="6"/>
+          </g>
+          <path d="M 380 94 L 844 94" stroke="currentColor" stroke-opacity=".3" stroke-dasharray="4 4"/>
+          <text x="612" y="88" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".6">— no sessions —</text>
+
+          <!-- message arrives -->
+          <line x1="452" y1="120" x2="452" y2="150" stroke="#9A5A0C" stroke-width="1.5" marker-end="url(#ah5)"/>
+          <text x="462" y="134" font-family="IBM Plex Sans, sans-serif" font-size="13" font-weight="600" fill="#9A5A0C">A message you needed arrives, day 1½</text>
+
+          <!-- lane A -->
+          <line x1="16" y1="170" x2="1044" y2="170" stroke="currentColor" opacity=".14"/>
+          <text x="16" y="196" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="#9B2A24">A · Wall-clock dwell</text>
+          <text x="16" y="214" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".6">"unread 2 days → file it"</text>
+
+          <rect x="452" y="182" width="320" height="34" fill="none" stroke="currentColor" opacity=".4"/>
+          <text x="466" y="204" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" opacity=".7">clock runs regardless of you</text>
+
+          <rect x="776" y="182" width="184" height="34" fill="#9B2A24" fill-opacity=".12" stroke="#9B2A24" stroke-width="1.6"/>
+          <text x="790" y="204" font-family="IBM Plex Mono, monospace" font-size="11.5" fill="#9B2A24">FILED + MARKED READ</text>
+          <text x="776" y="234" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="#9B2A24">You return on day 4 and never see it.</text>
+
+          <!-- lane B -->
+          <line x1="16" y1="256" x2="1044" y2="256" stroke="currentColor" opacity=".14"/>
+          <text x="16" y="282" font-family="IBM Plex Sans, sans-serif" font-size="14" font-weight="600" fill="#0E6E6B">B · Exposure counting</text>
+          <text x="16" y="300" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".6">"declined in 3 sessions → file it"</text>
+
+          <rect x="452" y="268" width="508" height="34" fill="#0E6E6B" fill-opacity=".08" stroke="#0E6E6B" stroke-width="1.4"/>
+          <text x="466" y="290" font-family="IBM Plex Mono, monospace" font-size="11" fill="#0E6E6B">exposures = 0 — the counter simply does not advance</text>
+
+          <text x="452" y="330" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="#0E6E6B">You return on day 4, it is still at the top of the inbox, unread.</text>
+          <text x="452" y="348" font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor" opacity=".7">It then needs three more declines before anything happens to it.</text>
+
+          <line x1="16" y1="368" x2="1044" y2="368" stroke="currentColor" opacity=".18"/>
+          <text x="16" y="390" font-family="IBM Plex Sans, sans-serif" font-size="13" font-style="italic" fill="currentColor" opacity=".72">Same rule, same aggressiveness, same zero-unread outcome when you are actually reading mail. The difference is entirely in the failure mode.</text>
+        </svg>
+      </div>
+      <figcaption><b>An exposure counter is self-pausing.</b> Wall-clock dwell needs a bolt-on "was he away?" heuristic to be safe, and that heuristic is the part most likely to be wrong at the worst moment. Counting exposures makes the pause a property of the mechanism rather than a special case bolted onto it.</figcaption>
+    </figure>
+
+    <div class="col">
+      <h3>Can a triage session actually be detected?</h3>
+      <p>Yes, and your instinct about the shape of the evidence was right — <em>"I've read 2 emails and ignored 10 would be a good sign that I've checked my inbox."</em> IMAP gives no login timestamp, but the sync already witnesses every flag transition through CONDSTORE. Any of these, observed in one sync window, is evidence that a human was in the mailbox: an unseen→seen transition, a flag being set or cleared, a message moved by hand, or a new message in the Sent folder.</p>
+      <p>One caveat, and it is a real one. <code>openedAt</code> is stamped only on transitions the sync <em>witnesses</em>. Mail that was already read when it was backfilled carries no timestamp at all, and on the largest mailbox that is 4,715 of 4,719 messages. Historically the system is close to blind here. <strong>Going forward it is not</strong> — every transition from now on is observable — but that means a session detector has no history to calibrate against and has to accrue its own from the day it ships.</p>
+
+      <h3>The three rules that would actually need writing</h3>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Rule</th><th class="mono">Trigger</th><th>Outcome</th><th>Risk</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>Settled</b><br><span style="color:var(--text-dim);font-size:13.5px">the read sweep</span></td>
+            <td class="mono">seen<br>+ 7 days</td>
+            <td><code>archive</code> — exempt from the replied-in-thread guard</td>
+            <td><span class="pill ok">low</span> — you have demonstrably seen it</td>
+          </tr>
+          <tr>
+            <td><b>Declined</b><br><span style="color:var(--text-dim);font-size:13.5px">the unread sweep</span></td>
+            <td class="mono">unread<br>+ 3 declines</td>
+            <td>The sender's policy if one exists, else <code>archive</code>; sets <code>\Seen</code></td>
+            <td><span class="pill scoped">medium</span> — rests on session detection</td>
+          </tr>
+          <tr>
+            <td><b>Declined</b><br><span style="color:var(--text-dim);font-size:13.5px">someone waiting on you</span></td>
+            <td class="mono">unread<br>+ 6 declines</td>
+            <td><code>Followup/</code>; sets <code>\Seen</code>. Stays listed on Needs Action — that query has no folder filter</td>
+            <td><span class="pill scoped">medium</span> — double threshold, own folder</td>
+          </tr>
+          <tr>
+            <td><b>Quarantined</b><br><span style="color:var(--text-dim);font-size:13.5px">first contacts</span></td>
+            <td class="mono">on the move<br>itself</td>
+            <td>Set <code>\Seen</code> in the same batch as the move</td>
+            <td><span class="pill ok">low</span> — it is leaving the inbox regardless</td>
+          </tr>
+          <tr>
+            <td><b>Held</b><br><span style="color:var(--text-dim);font-size:13.5px">the flag lever</span></td>
+            <td class="mono">isFlagged</td>
+            <td>Nothing, ever — already an absolute guard</td>
+            <td><span class="pill inert">none</span> — but see below</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <span class="label">Quarantine should mark read on the way out</span>
+        <p>Today a first contact is moved to <code>Quarantine/</code> and left unread, so the unread badge follows it into the folder and you carry the count around without ever seeing the mail. Marking it <code>\Seen</code> in the same batch as the move is the cheapest possible version of this change and the least contentious: the message is being hidden from the inbox either way, and its unread state is a claim about <em>your inbox</em> that stops being true the moment it leaves. It is also the natural first customer for the new <code>setFlags</code> verb &mdash; a single, narrow, easily-undone use to prove the mutation and its inverse before the dwell sweeps depend on it.</p>
+      </div>
+
+      <p><strong>Settled is the rule that actually empties your inbox</strong>, and it is also the safest of the three — a message you have read and left alone for a week is the clearest possible statement that it needs no further inbox presence. It is worth noticing that this one needs no session detector at all and could ship on its own, first, as a much smaller change than the rest.</p>
+
+      <div class="note warn">
+        <span class="label">The flag trap — decided, and accepted</span>
+        <p>Flagging freezes a message <em>permanently</em>, so once sweeps exist the flagged set only ever grows and reconstitutes the same clutter with stars on it. Put with two alternatives — a 30-day expiry, or release via the thread <code>done</code> state — and <strong>deliberately accepted as-is</strong>: no new habit, no schema change, and flags here are applied sparingly enough to grow slowly. Recorded as a decision rather than an oversight, with a falsifiable trigger: if the held count passes 200, or grows by 50 in a month, it failed in the predicted way and expiry gets built.</p>
+      </div>
+
+      <div class="note">
+        <span class="label">What has to change in the rescue loop</span>
+        <p>Rescue detection responds to a mistake by suspending the <em>policy</em> that caused it. A dwell sweep has no policy — so an over-eager sweep has nothing to suspend and would keep firing forever. The dwell rules need their own feedback: a rescue on a swept message should lengthen that mailbox's dwell threshold, or pause sweeping outright, rather than being silently discarded because there was no policy id to blame.</p>
+      </div>
+    </div>
+    <div class="col">
+      <h3>Five branches, grilled and closed</h3>
+      <p>The design above was interrogated decision by decision on 25 August. Three of the holes were mine.</p>
+    </div>
+
+    <ol class="gap-list">
+      <li><span class="g-num" style="color:var(--signal)">01</span><span class="d"><b>The sweep sits second-to-last in the ladder.</b> As first written it &quot;honoured the ladder&#39;s verdict&quot; — which for nearly every candidate is <code>keep_inbox</code> from the fallback, so it would have archived nothing, ever. It now fires only where steps 1–6 had no opinion. Side effect worth having: an explicit <code>keep_inbox</code> policy becomes the permanent pin for a sender.</span></li>
+      <li><span class="g-num" style="color:var(--signal)">02</span><span class="d"><b>Sessions are global, not per mailbox.</b> Per-mailbox counting assumed you visit mailboxes one at a time. You read one unified list, so five of six mailboxes would have recorded no session and never swept — and those are exactly the ones filling with noise. Safe direction, wrong outcome.</span></li>
+      <li><span class="g-num" style="color:var(--signal)">03</span><span class="d"><b>Needs Action mail sweeps at six declines, into <code>Followup/</code>.</b> <code>buildWhere</code> in the Needs Action query has no folder predicate, so a swept message stays on that screen. It leaves the inbox and the unread count, not the surface built to catch it.</span></li>
+      <li><span class="g-num" style="color:var(--signal)">04</span><span class="d"><b>The 7-day sweep ignores the replied-in-thread guard.</b> That guard stops <em>sender rules</em> archiving live client mail. A thread you answered and haven&#39;t touched in a week is the textbook settled thread — and on Gmail archive is a label removal that restores in one click.</span></li>
+      <li><span class="g-num" style="color:var(--signal)">05</span><span class="d"><b>Flags stay permanent.</b> Decided, not defaulted — see the note above.</span></li>
+    </ol>
+
+    <div class="col">
+      <div class="note">
+        <span class="label">One idea rejected, and what it improved anyway</span>
+        <p>Stamping system-written read timestamps with a fixed millisecond suffix, so system stamps stay recognisable, was proposed and turned down: it writes a false fact and then marks it false, and the marker is destroyed by any <code>fsp</code> change on restore, by driver truncation, or by the re-key path — each of which fails <em>open</em>, reading as a genuine human open. One real read in a thousand also collides with the sentinel and is silently discarded, which for a safety net is the worst available direction. But the worry underneath was right, and it produced a rule the design was missing: the session detector must count seen <em>transitions</em> through the stored-state guard, never raw CONDSTORE reports — otherwise the sweeps manufacture their own triage sessions and accelerate their own clock.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="found">
+    <div class="sec-head"><span class="sec-num">08</span><h2>What a day of measuring changed</h2></div>
+
+    <div class="col">
+      <p>Everything above describes the machine as designed. Running it against real mail on 26 August changed four things, and the first is the one that matters.</p>
+    </div>
+
+    <ol class="gap-list">
+      <li><span class="g-num">01</span><span class="d"><b>The diagnosis in §06 was wrong.</b> This page said the inbox stays full because no rule names most of it. Measured: of 3,529 settled candidates, <strong>2,405 already have a sender policy</strong> and 907 have a derived rule. They sit in the inbox because <strong>not one policy has ever been promoted</strong> — every one of the 113 is still at <code>shadow</code>. The lever was built in Phase 6 and never pulled.</span></li>
+      <li><span class="g-num">02</span><span class="d"><b>A mailbox had been offline for two days and nothing said so.</b> <code>felix@tellmann.co.za</code> failed an SPKI check when its host rotated a Let's Encrypt certificate — a routine 90-day renewal, correctly refused. It holds <strong>8,864 of the 8,961 executable decisions</strong> in the estate. The re-pin control updated the key and left the mailbox disabled, and <code>/api/mail-sync</code> answered 200 regardless. Both fixed; the pin will break again around 22 November, because xneelo issues a fresh key each renewal against §1.2's assumption that an SPKI survives ACME.</span></li>
+      <li><span class="g-num">03</span><span class="d"><b>Two-thirds of the suggestion backlog can never execute.</b> 29,375 rows carry <code>mailboxId = NULL</code>, all written on one day, all still <code>shadow</code>, and <code>loadPendingActions</code> filters <code>WHERE mailboxId = ?</code>. Every one covers a message a newer row already covers — 14,689 of 14,689 — so deleting them loses nothing and halves the table.</span></li>
+      <li><span class="g-num">04</span><span class="d"><b>The largest unsorted block is meeting invitations.</b> ~263 of them from colleagues, and no policy can name them: resolution is by sender, and those senders send real mail too. Now detected by MIME structure rather than subject text, which is neither translated nor written by the sender.</span></li>
+    </ol>
+
+    <div class="col">
+      <div class="note warn">
+        <span class="label">Two bugs the measurement caught in its own instruments</span>
+        <p>The first report said the sweep would archive <strong>1,968</strong>. It mixed the sweep's own decisions with ones the classify pass had already made — the real figure is <strong>118</strong>. The sweep was also about to journal a duplicate row for all 1,561 messages another rule had already claimed.</p>
+        <p>And twice, a correlated subquery reported a backlog of <strong>zero for every policy</strong>. Drizzle interpolates a column reference without a table name, so a bare <code>id</code> inside the subquery bound to <code>Action</code>'s own id column: the correlation silently became <code>a.senderPolicyId = a.id</code>, false for every row. Both call sites now qualify it, with a comment saying why.</p>
+      </div>
+
+      <div class="note">
+        <span class="label">Archive is not the only destination</span>
+        <p>Reviewing what the sweep would touch surfaced a distinction the design had collapsed: a conversation can be <em>finished</em> and still be <em>material you need again</em>. Tenancy terms, a Wohnungsgeberbestätigung, rent receipts. Archive is the "I won't need this again" pile; those want a <code>file</code> policy with a topic, which wins at step 3/4 so the sweep never sees them. Same shape for client work — vitaminshoppe.com writes from ten people, all DKIM-aligned, and had no rule at all.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>flext · email suite</span>
+    <span>Phases 0–6 shipped · 7 &amp; 8 unbuilt</span>
+    <span>Drawn from server/mail, updated at 49b5295</span>
+    <span>Updated 26 Aug 2026</span>
+  </footer>
+
+</div>

@@ -4,6 +4,9 @@ import clsx from "clsx";
 import { type FC, useRef, useState } from "react";
 import { z } from "zod";
 import { orpc } from "~/integrations/orpc";
+import { ApplyPendingPanel, loadPendingCounts } from "./-apply-pending";
+import type { OutcomeBanner } from "./-outcome-banner";
+import { Banner, toFailureBanner } from "./-outcome-banner";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
 
 const senders_search_schema = z.object({
@@ -23,6 +26,7 @@ type SenderRow = Awaited<ReturnType<typeof orpc.mail.listSenders>>["rows"][numbe
 type SenderProfile = Awaited<ReturnType<typeof orpc.mail.getSenderProfile>>;
 type PolicyRow = Awaited<ReturnType<typeof orpc.mail.listPolicies>>[number];
 type NeverTouchRow = Awaited<ReturnType<typeof orpc.mail.listNeverTouchRules>>[number];
+type PromoteResult = Awaited<ReturnType<typeof orpc.mail.promotePolicyAutonomy>>;
 
 // Mirrors POLICY_ACTIONS in server/mail/classify/rules.ts (an admin route can't import a server value
 // without pulling the classify module into the client bundle). A value here that drifted from that
@@ -36,6 +40,23 @@ const policy_action_label: Record<PolicyActionValue, string> = {
   file: "File",
   auto_trash: "Auto-trash",
 };
+
+// Mirrors PromotionGate in server/mail/actions/autonomy.ts (an admin route can't import it without
+// pulling that module, and the db handle behind it, into the client bundle — same reasoning
+// journal_status_filters carries in journal.tsx). Each label is only the headline; the server's own
+// `detail` sentence (rendered alongside it — see PolicyAutonomyControls) is what names the gate's actual
+// condition, so a drifted label here would misname a gate but never hide what it takes to pass it.
+const promotion_gate_label: Record<string, string> = {
+  missing: "Policy not found",
+  purge_not_allowed: "Purge can't run unattended",
+  shadow_review: "Needs a reviewed shadow record",
+  shadow_cycle: "Needs a completed shadow cycle",
+  trash_retention: "Needs trash retention configured",
+};
+
+function gateLabel(gate: string): string {
+  return promotion_gate_label[gate] ?? gate;
+}
 
 function toListSendersInput(search: SendersSearch) {
   return {
@@ -61,7 +82,8 @@ export const Route = createFileRoute("/admin/senders")({
       orpc.mail.listPolicies({ scope: "all", suspended: "all", search: null }),
       orpc.mail.listNeverTouchRules(),
     ]);
-    return { summary, senders, policies, never_touch_rules };
+    const pending_counts = await loadPendingCounts(summary.mailboxes);
+    return { summary, senders, policies, never_touch_rules, pending_counts };
   },
   component: AdminSendersPage,
 });
@@ -254,44 +276,259 @@ const AssignmentCell: FC<{
 }> = ({ address, address_policy, busy_key, draft_action, onAssign, onDraftChange, onRemove }) => {
   const any_busy = busy_key !== null;
   return (
-    <div className="flex items-center gap-1">
-      <label className="flex flex-col gap-0.5">
-        <span className="sr-only">Policy action for {address}</span>
-        <select
-          className={clsx(field, focus_ring, "text-xs")}
-          disabled={any_busy}
-          onChange={(event) => onDraftChange(event.target.value as PolicyActionValue)}
-          value={draft_action}
-        >
-          {policy_action_options.map((option) => (
-            <option key={option} value={option}>
-              {policy_action_label[option]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <ActionButton
-        busy={busy_key === `assign:${address}`}
-        disabled={any_busy}
-        label="Assign"
-        onClick={onAssign}
-        variant={accent_button_focus}
-      />
-      {address_policy !== null && (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-1">
+        <label className="flex flex-col gap-0.5">
+          <span className="sr-only">Policy action for {address}</span>
+          <select
+            className={clsx(field, focus_ring, "text-xs")}
+            disabled={any_busy}
+            onChange={(event) => onDraftChange(event.target.value as PolicyActionValue)}
+            value={draft_action}
+          >
+            {policy_action_options.map((option) => (
+              <option key={option} value={option}>
+                {policy_action_label[option]}
+              </option>
+            ))}
+          </select>
+        </label>
         <ActionButton
-          busy={busy_key === `remove:${address}`}
+          busy={busy_key === `assign:${address}`}
           disabled={any_busy}
-          label="Remove"
-          onClick={onRemove}
-          variant={secondary_button_focus}
+          label="Assign"
+          onClick={onAssign}
+          variant={accent_button_focus}
         />
+        {address_policy !== null && (
+          <ActionButton
+            busy={busy_key === `remove:${address}`}
+            disabled={any_busy}
+            label="Remove"
+            onClick={onRemove}
+            variant={secondary_button_focus}
+          />
+        )}
+      </div>
+      {/* upsertPolicy always writes autonomy "shadow" — an edit here demotes a promoted policy back to
+          shadow, deliberately (§8): the shadow record a promotion rests on no longer describes a rule that
+          was just changed. See the Policies panel below to re-promote. */}
+      {address_policy?.autonomy === "auto" && (
+        <span className="max-w-40 text-warning text-xs">Promoted to auto — assigning here demotes it to shadow.</span>
       )}
     </div>
   );
 };
 
+// Promote is always offered on a shadow policy — never collapsed into one disabled button — because a
+// refusal is informative (see gateLabel + the server's own `detail` in PoliciesPanel below) and a
+// disabled control cannot show why. Demote, by contrast, is offered whenever autonomy is `auto`
+// regardless of suspension: §8 Task 8 makes it unconditional and always-available on purpose — an
+// operator who cannot cheaply stop a rule will not trust starting one.
+const PolicyAutonomyControls: FC<{
+  busy_key: string | null;
+  onDemote: () => void;
+  onPromote: (reviewed_shadow_record: boolean) => void;
+  policy: PolicyRow;
+}> = ({ busy_key, onDemote, onPromote, policy }) => {
+  const [reviewed, setReviewed] = useState(false);
+  const any_busy = busy_key !== null;
+
+  if (policy.autonomy === "auto") {
+    return (
+      <ActionButton
+        busy={busy_key === `demote:${policy.id}`}
+        disabled={any_busy}
+        label="Demote to shadow"
+        onClick={onDemote}
+        variant={secondary_button_focus}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <a
+        className={clsx("w-fit rounded text-info text-xs underline", focus_ring)}
+        href={`/admin/shadow?policy_id=${policy.id}`}
+        rel="noopener noreferrer"
+        target="_blank"
+      >
+        View shadow record
+      </a>
+      <label className="flex items-center gap-1.5 text-gray-600 text-xs dark:text-dark-text">
+        <input
+          checked={reviewed}
+          className={checkbox_input}
+          disabled={any_busy}
+          onChange={(event) => setReviewed(event.target.checked)}
+          type="checkbox"
+        />
+        I've reviewed its shadow record
+      </label>
+      <ActionButton
+        busy={busy_key === `promote:${policy.id}`}
+        disabled={any_busy}
+        label="Promote to auto"
+        onClick={() => onPromote(reviewed)}
+        variant={accent_button_focus}
+      />
+    </div>
+  );
+};
+
+// §9: the surface that answers "what has the system stopped doing on my behalf, and why" — distinct from
+// the journal, which answers "what happened to my mail" (journal.tsx's rescuedAt badge). A rescue
+// suspends the policy here with a reason naming the message and the signal (rescueSuspensionReason in
+// server/mail/rescue/detect.ts); clearing it is the one control below that is always available even
+// while autonomy is `auto`, because §3.4 makes clearing a suspension a deliberate operator act separate
+// from demoting autonomy — the two controls do not imply each other.
+const PoliciesPanel: FC<{ onDone: () => Promise<void>; policies: PolicyRow[] }> = ({ onDone, policies }) => {
+  const [busy_key, setBusyKey] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Record<string, OutcomeBanner>>({});
+
+  const promote = async (policy: PolicyRow, reviewed_shadow_record: boolean) => {
+    const key = `promote:${policy.id}`;
+    setBusyKey(key);
+    setMessages((prev) => ({ ...prev, [policy.id]: { text: "Checking eligibility…", tone: "info" } }));
+    try {
+      const result: PromoteResult = await orpc.mail.promotePolicyAutonomy({ sender_policy_id: policy.id, reviewed_shadow_record });
+      setMessages((prev) => ({
+        ...prev,
+        [policy.id]:
+          result.outcome === "promoted"
+            ? { text: "Promoted to auto — this policy now acts on the mailbox unattended.", tone: "success" }
+            : { text: `${gateLabel(result.gate)}: ${result.detail}`, tone: "warning" },
+      }));
+      await onDone();
+    } catch (error) {
+      setMessages((prev) => ({ ...prev, [policy.id]: toFailureBanner("Promote failed", error) }));
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const demote = async (policy: PolicyRow) => {
+    const key = `demote:${policy.id}`;
+    setBusyKey(key);
+    setMessages((prev) => ({ ...prev, [policy.id]: { text: "Demoting…", tone: "info" } }));
+    try {
+      await orpc.mail.demotePolicyAutonomy({ sender_policy_id: policy.id });
+      setMessages((prev) => ({ ...prev, [policy.id]: { text: "Demoted to shadow.", tone: "success" } }));
+      await onDone();
+    } catch (error) {
+      setMessages((prev) => ({ ...prev, [policy.id]: toFailureBanner("Demote failed", error) }));
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const clearSuspension = async (policy: PolicyRow) => {
+    const key = `clear:${policy.id}`;
+    setBusyKey(key);
+    setMessages((prev) => ({ ...prev, [policy.id]: { text: "Clearing…", tone: "info" } }));
+    try {
+      await orpc.mail.clearPolicySuspension({ sender_policy_id: policy.id });
+      setMessages((prev) => ({ ...prev, [policy.id]: { text: "Suspension cleared — this rule can run again.", tone: "success" } }));
+      await onDone();
+    } catch (error) {
+      setMessages((prev) => ({ ...prev, [policy.id]: toFailureBanner("Clear suspension failed", error) }));
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  return (
+    <Panel title={`Policies (${policies.length.toLocaleString()})`}>
+      <p className="mb-3 text-gray-600 text-sm dark:text-dark-text">
+        What the system has stopped doing on your behalf, and why. A rescue — you opening or answering a message a rule already acted on —
+        suspends the policy behind it; the journal shows which action triggered it. Promoting a policy to auto lets it act on the mailbox
+        unattended, gated per action (§8); demoting is always available and can never fail.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-gray-200 border-b text-gray-500 dark:border-dark-border dark:text-dark-text">
+              <th className="py-2 pr-3">Policy</th>
+              <th className="py-2 pr-3">Action</th>
+              <th className="py-2 pr-3">Autonomy</th>
+              <th className="py-2 pr-3">Suspension</th>
+              <th className="py-2 pr-3">Controls</th>
+            </tr>
+          </thead>
+          <tbody>
+            {policies.map((policy) => {
+              const row_message = messages[policy.id] ?? null;
+              return (
+                <tr className="border-gray-100 border-b align-top dark:border-dark-border" key={policy.id}>
+                  <td className="max-w-56 truncate py-2 pr-3">
+                    <span className="block truncate font-medium text-gray-900 dark:text-dark-headings">{policy.value}</span>
+                    <span className="block text-gray-500 text-xs dark:text-dark-text">{policy.scope}</span>
+                  </td>
+                  <td className="py-2 pr-3 text-gray-600 dark:text-dark-text">{policy_action_label[policy.action] ?? policy.action}</td>
+                  <td className="py-2 pr-3">
+                    <span
+                      className={clsx(
+                        "block w-fit rounded px-1.5 py-0.5 text-xs",
+                        policy.autonomy === "auto"
+                          ? "bg-success/10 text-success"
+                          : "bg-gray-100 text-gray-700 dark:bg-dark-bg dark:text-dark-text",
+                      )}
+                    >
+                      {policy.autonomy}
+                    </span>
+                  </td>
+                  <td className="max-w-64 py-2 pr-3">
+                    {policy.suspended_at === null ? (
+                      <span className="text-gray-400 text-xs dark:text-dark-border">not suspended</span>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="block w-fit rounded bg-warning/10 px-1.5 py-0.5 text-warning text-xs">
+                            Suspended {policy.suspended_at.toISOString().slice(0, 10)}
+                          </span>
+                          <ActionButton
+                            busy={busy_key === `clear:${policy.id}`}
+                            disabled={busy_key !== null}
+                            label="Clear suspension"
+                            onClick={() => void clearSuspension(policy)}
+                            variant={secondary_button_focus}
+                          />
+                        </div>
+                        <span className="break-words text-gray-600 text-xs dark:text-dark-text">
+                          {policy.suspension_reason ?? "(no reason recorded)"}
+                        </span>
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    <PolicyAutonomyControls
+                      busy_key={busy_key}
+                      onDemote={() => void demote(policy)}
+                      onPromote={(reviewed) => void promote(policy, reviewed)}
+                      policy={policy}
+                    />
+                    {row_message !== null && <Banner banner={row_message} className="mt-1.5 max-w-64" />}
+                  </td>
+                </tr>
+              );
+            })}
+            {policies.length === 0 && (
+              <tr>
+                <td className="py-4 text-center text-gray-500 dark:text-dark-text" colSpan={5}>
+                  No policies yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+};
+
 function AdminSendersPage() {
-  const { summary, senders, policies, never_touch_rules } = Route.useLoaderData();
+  const { summary, senders, policies, never_touch_rules, pending_counts } = Route.useLoaderData();
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
   const router = useRouter();
@@ -446,6 +683,10 @@ function AdminSendersPage() {
         </dl>
         <MailboxHealth mailboxes={summary.mailboxes} />
       </Panel>
+
+      <ApplyPendingPanel counts={pending_counts} mailboxes={summary.mailboxes} onApplied={() => router.invalidate()} />
+
+      <PoliciesPanel onDone={() => router.invalidate()} policies={policies} />
 
       <Panel title="Filters">
         <div className="flex flex-wrap items-end gap-3">

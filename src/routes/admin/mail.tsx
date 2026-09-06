@@ -376,6 +376,7 @@ function AdminMailPage() {
             <li key={run.id}>
               {run.started_at} · {run.kind} · {run.status} · +{run.messages_new} new · {run.messages_vanished} vanished
               {run.error_message === null ? "" : ` · ${run.error_message}`}
+              {run.note === null ? "" : ` · ${run.note}`}
             </li>
           ))}
         </ul>

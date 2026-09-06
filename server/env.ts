@@ -10,6 +10,11 @@ const server_env_schema = z.object({
   // deploy that forgot it takes down every other serverEnv() caller — sign-in included. The route answers
   // 503 instead, which fails the cron loudly without touching anything else.
   SCRIPT_SECRET: z.string().min(16).optional(),
+  // Optional for the same reason as SCRIPT_SECRET, and against the plan's own snippet, which had both
+  // required: only the heartbeat ingest reads them, and a deploy that forgets one would otherwise break
+  // every unrelated serverEnv() caller. server/wakatime/client.ts throws WakaConfigError instead.
+  WAKAPI_API_URL: z.string().url().optional(),
+  WAKAPI_API_KEY: z.string().min(1).optional(),
 });
 
 export type ServerEnv = z.infer<typeof server_env_schema>;

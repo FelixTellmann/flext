@@ -1,0 +1,44 @@
+# Wakapi — self-hosted, WakaTime-compatible time tracking. Deployed as a Coolify "Docker Compose"
+# resource from this file; every ${VAR} below is set in Coolify, never in the repo. See README.md.
+services:
+  wakapi:
+    # Pinned, never :latest — 2.17.6 fixed a critical authentication bypass (shared cache-key
+    # namespace). Bump deliberately, after reading the release notes.
+    image: ghcr.io/muety/wakapi:2.17.6
+    restart: unless-stopped
+    # expose, not ports: Coolify's proxy terminates TLS for wakapi.flext.dev and forwards to 3000
+    # on the internal network. A published host port would serve plain HTTP off the box directly.
+    expose:
+      - "3000"
+    environment:
+      WAKAPI_DB_TYPE: mysql
+      WAKAPI_DB_HOST: ${WAKAPI_DB_HOST}
+      WAKAPI_DB_PORT: "3306"
+      WAKAPI_DB_NAME: ${WAKAPI_DB_NAME}
+      WAKAPI_DB_USER: ${WAKAPI_DB_USER}
+      WAKAPI_DB_PASSWORD: ${WAKAPI_DB_PASSWORD}
+      WAKAPI_PASSWORD_SALT: ${WAKAPI_PASSWORD_SALT}
+      WAKAPI_PUBLIC_URL: ${WAKAPI_PUBLIC_URL}
+      # true for the single boot that creates the one account, then false forever.
+      WAKAPI_ALLOW_SIGNUP: ${WAKAPI_ALLOW_SIGNUP:-false}
+      # Wakapi defaults this to true; behind HTTPS it must be false or session cookies leak over http.
+      WAKAPI_INSECURE_COOKIES: "false"
+      WAKAPI_DISABLE_FRONTPAGE: "true"
+      # Single user: a public leaderboard is pointless, and its default schedule wakes the box
+      # twice a day (06:00 and 18:00) to recalculate it.
+      WAKAPI_LEADERBOARD_ENABLED: "false"
+      # Monthly OPTIMIZE TABLE. On InnoDB this REBUILDS the heartbeats table, and mysqld is shared
+      # with the other apps on this box — so it runs at 04:00 on the 1st, not Wakapi's 08:00 default.
+      WAKAPI_OPTIMIZE_DATABASE_TIME: "0 0 4 1 * *"
+      # Hours before another import is allowed. Wakapi records "success" the moment the import
+      # STARTS — before a single heartbeat lands — so a run that dies mid-flight still arms this
+      # and blocks the retry for a day. Override to 0 in Coolify to re-run, then set it back.
+      WAKAPI_IMPORT_MAX_RATE: ${WAKAPI_IMPORT_MAX_RATE:-24}
+    # A ceiling, not a reservation — Wakapi idles in the tens of MB. It is this high only because
+    # the WakaTime importer decodes the ENTIRE history dump into memory before writing any of it,
+    # so the import peak is orders of magnitude above steady state. Still a cap, so a runaway
+    # cannot take the box down with it.
+    deploy:
+      resources:
+        limits:
+          memory: 2G

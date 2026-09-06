@@ -10,6 +10,7 @@ const base = {
   to_me: true,
   cc_me: false,
   dkim_aligned: true,
+  is_calendar: null,
   internal_date: new Date("2026-08-01T00:00:00Z"),
   sender_message_count: 1,
   my_reply_count: 0,

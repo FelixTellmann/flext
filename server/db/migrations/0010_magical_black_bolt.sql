@@ -1,0 +1,1 @@
+ALTER TABLE `Mailbox` ADD `dwellRepliedDays` int DEFAULT 30 NOT NULL;

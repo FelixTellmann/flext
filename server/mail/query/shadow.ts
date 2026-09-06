@@ -1,19 +1,39 @@
 import { db } from "@server/db/drizzle";
 import { action, mailbox, message } from "@server/db/schema";
+import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { DecisionSource } from "@server/mail/classify/rules";
 import { toDecisionSource } from "@server/mail/classify/rules";
 import type { MessageLocation } from "@server/mail/query/deep-link";
 import { buildMessageLocation } from "@server/mail/query/deep-link";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 const SAMPLE_LIMIT = 20;
+
+// The run id every SCHEDULED new-mail classification writes under (server/mail/sync/run.ts), instead of a
+// fresh UUID per sweep. Two things depend on it being a constant, and the constant living in the same
+// module as the `ne()` filter below is what stops them drifting apart:
+//
+//  1. latestRunId() must never return it. §4.2's promotion gate makes the operator read a policy's shadow
+//     record before promoting; that record is the operator's own full sweep from /admin/shadow. The
+//     scheduled pass decides only mail that arrived in the last fifteen minutes, so a run id that could
+//     win "newest decided row" would collapse the report to that handful — usually to nothing at all for
+//     any given policy — and the gate would be satisfiable by reviewing an empty page.
+//  2. Action's unique key is (messageId, kind, runId), so a constant id makes the scheduled pass's
+//     re-classification UPSERT the same row instead of minting a new one every fifteen minutes.
+//
+// Do NOT "simplify" the exclusion away: without it the summary at /admin/shadow stops describing the
+// sweep the operator ran and starts describing the last quarter hour of new mail.
+export const SCHEDULED_RUN_ID = "scheduled-sync" as const;
 
 // §8's promotion gates ask "what would this rule have destroyed?", not merely "how many rows matched" —
 // auto_trash is the one PolicyAction that destroys, so it alone carries the destructive weight. purge is
 // listed for completeness even though decide() (rules.ts) can never emit it.
-const DESTRUCTIVE_KINDS = ["auto_trash", "purge"] as const;
-const ORGANISATIONAL_KINDS = ["archive", "file"] as const;
+// Exported so src/routes/admin/-shadow-kinds.test.ts can pin the admin routes' copy against them. The
+// routes cannot import this module itself — it holds the db handle — and their copy decides how much
+// ceremony an approval demands, so a kind added here and missed there would under-gate a deletion.
+export const DESTRUCTIVE_KINDS = ["auto_trash", "purge"] as const;
+export const ORGANISATIONAL_KINDS = ["archive", "file"] as const;
 
 type ShadowCountRow = { kind: string; source: string; count: number };
 
@@ -57,7 +77,7 @@ async function latestRunId(): Promise<string | null> {
   const [row] = await db
     .select({ run_id: action.run_id })
     .from(action)
-    .where(eq(action.status, "shadow"))
+    .where(and(eq(action.status, SHADOW_STATUS), ne(action.run_id, SCHEDULED_RUN_ID)))
     .orderBy(desc(action.decided_at), desc(action.id))
     .limit(1);
   return row?.run_id ?? null;

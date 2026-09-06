@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, datetime, float, index, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
+import { boolean, datetime, decimal, float, index, int, mysqlTable, primaryKey, text, uniqueIndex, varchar } from "drizzle-orm/mysql-core";
 
 // ─── Account ─────────────────────────────────────────────────────────────────
 // Prisma @map directives rename DB columns: e.g. refresh_token → "refreshToken" in DB
@@ -115,6 +115,31 @@ export const mailbox = mysqlTable(
     canonical_folder: varchar("canonicalFolder", { length: 191 }),
     sent_folders: text("sentFolders"),
     trash_retention_days: int("trashRetentionDays"),
+    // When the operator actually checked what this server does with Trash. §1.7 allows two answers: a
+    // retention value, OR an explicitly accepted null meaning Trash simply accumulates — which is itself
+    // safe, just untidy. The column alone cannot tell those apart from "nobody has looked yet", and the
+    // auto_trash gate reads a bare null as UNKNOWN, so without this the honest answer "xneelo never
+    // purges" is unrecordable and the gate stays shut on a question that has been answered.
+    trash_retention_confirmed_at: datetime("trashRetentionConfirmedAt", { fsp: 3 }),
+    // Inbox-dwell 1.9: how long a READ message may sit in the inbox before the settled sweep archives it.
+    // Per mailbox rather than global so one can be tuned or effectively disabled without a deploy.
+    dwell_settled_days: int("dwellSettledDays").default(7).notNull(),
+    // The same dwell for a thread the operator REPLIED IN, which needs longer. Measured on 2026-08-26:
+    // of 66 archives the 1.10 exemption made reachable, every one past ~40 days read as finished (a
+    // 874-day trial thread, 265-day partnership, 211-day support tickets) while the two youngest did not
+    // — an 8-day live client thread whose subject said "continuation of last week's". Age is what
+    // separates finished from merely quiet, so the exemption gets a floor rather than being reversed.
+    dwell_replied_days: int("dwellRepliedDays").default(30).notNull(),
+    // 1.9's two decline thresholds. Ordinary unread mail leaves after three triage sessions it survived
+    // untouched; mail somebody is waiting on gets six, which at two or three checks a day is two full
+    // days of seeing that person's email and choosing not to open it.
+    dwell_decline_count: int("dwellDeclineCount").default(3).notNull(),
+    dwell_needs_action_decline_count: int("dwellNeedsActionDeclineCount").default(6).notNull(),
+    // 1.11: SenderPolicy.suspendedAt's sibling. A sweep action carries no senderPolicyId, so rescue
+    // detection has nothing to suspend and would discard every rescue against the newest, least-proven
+    // rule in the system for want of an id to blame. Suspension is per mailbox because the sweep is.
+    dwell_suspended_at: datetime("dwellSuspendedAt", { fsp: 3 }),
+    dwell_suspension_reason: text("dwellSuspensionReason"),
     enabled: boolean("enabled").default(true).notNull(),
     backfilled_at: datetime("backfilledAt", { fsp: 3 }),
     last_error: text("lastError"),
@@ -172,6 +197,10 @@ export const message = mysqlTable(
     internal_date: datetime("internalDate", { fsp: 3 }).notNull(),
     size: int("size"),
     has_attachment: boolean("hasAttachment").default(false).notNull(),
+    // Tri-state for the same reason dkimAligned is: null means the MIME structure was never observed —
+    // the row predates this column, or the server returned none — and must never be read as "definitely
+    // not calendar mail". ~50,000 rows are in exactly that position until a reclassify pass runs.
+    is_calendar: boolean("isCalendar"),
     list_id: varchar("listId", { length: 320 }),
     list_unsubscribe: text("listUnsubscribe"),
     precedence: varchar("precedence", { length: 191 }),
@@ -197,6 +226,42 @@ export const message = mysqlTable(
     senderIndex: index("Message_senderId_idx").on(table.sender_id),
     fromAddressIndex: index("Message_fromAddress_idx").on(table.from_address),
     internalDateIndex: index("Message_internalDate_idx").on(table.internal_date),
+  }),
+);
+
+// ─── AttentionSession ────────────────────────────────────────────────────────
+// A stretch of time the operator was demonstrably reading mail.
+//
+// GLOBAL, not per mailbox, and that is the load-bearing decision (inbox-dwell §1.3). He reads one unified
+// all-inboxes list, so a check that produces two \Seen transitions in Gmail is a check during which the
+// other five mailboxes' mail was also in front of him. Scoping sessions per mailbox would record no
+// session for those five and their unread mail would never age — and those are precisely the quiet
+// mailboxes that fill with noise. It fails safe (nothing is swept) and fails at the job.
+//
+// Valid only while every mailbox is in that unified view. If one ever leaves it, this must gain a
+// per-mailbox `in_unified_view` flag, or the counter credits declines he never had the chance to make.
+export const attentionSession = mysqlTable(
+  "AttentionSession",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    started_at: datetime("startedAt", { fsp: 3 }).notNull(),
+    // Moves as consecutive qualifying sync windows collapse into one sitting. Only startedAt is read by
+    // the exposure count; endedAt exists so the Sessions strip can show how long a session ran.
+    ended_at: datetime("endedAt", { fsp: 3 }).notNull(),
+    // The evidence, kept rather than reduced to a boolean, so §1.4's threshold can be corrected from what
+    // actually happened instead of only being guessed at up front.
+    seen_transitions: int("seenTransitions").default(0).notNull(),
+    flag_changes: int("flagChanges").default(0).notNull(),
+    replies_sent: int("repliesSent").default(0).notNull(),
+    // Which mailboxes supplied the evidence. Not used by the counter — a session counts everywhere — but
+    // the Sessions strip is uninterpretable without it.
+    evidence_mailbox_ids: text("evidenceMailboxIds"),
+  },
+  (table) => ({
+    // §1.2's count is a range scan on exactly this column, once per candidate batch.
+    startedAtIndex: index("AttentionSession_startedAt_idx").on(table.started_at),
   }),
 );
 
@@ -261,6 +326,14 @@ export const syncRun = mysqlTable(
     messages_updated: int("messagesUpdated").default(0).notNull(),
     messages_vanished: int("messagesVanished").default(0).notNull(),
     error_message: text("errorMessage"),
+    // Non-failure detail from a run that still finished `ok` — most importantly the notes the three
+    // stages added by Phase 6 (rescue detection, the new-mail shadow pass, promotion + execution) emit
+    // when they catch. Those stages deliberately swallow their own failures so a broken classifier cannot
+    // cost the operator their mail, which without somewhere durable to land means an unmigrated column or
+    // a tripped loop-breaker fails silently on every run while the sync keeps reporting healthy. This
+    // column is where the failure becomes visible in the sync-run list; `errorMessage` stays reserved for
+    // a run whose status is `failed`.
+    note: text("note"),
   },
   (table) => ({
     mailboxStartedIndex: index("SyncRun_mailboxId_startedAt_idx").on(table.mailbox_id, table.started_at),
@@ -282,6 +355,10 @@ export const senderPolicy = mysqlTable(
     client: varchar("client", { length: 191 }),
     topic: varchar("topic", { length: 191 }),
     autonomy: varchar("autonomy", { length: 191 }).default("shadow").notNull(),
+    // When the operator promoted this policy to autonomy "auto". §8's auto_trash gate measures "a full
+    // shadow cycle" from here, so it must be the promotion moment and not createdAt — a policy that sat
+    // in shadow for a year has not thereby earned anything.
+    autonomy_promoted_at: datetime("autonomyPromotedAt", { fsp: 3 }),
     source: varchar("source", { length: 191 }).notNull(),
     suspended_at: datetime("suspendedAt", { fsp: 3 }),
     suspension_reason: text("suspensionReason"),
@@ -339,6 +416,10 @@ export const action = mysqlTable(
     // Carried on every row, including shadow-only ones written by Phase 3, so that §7's bulk-undo-by-rule
     // and §10's get_shadow_report(policy_id) can be built later without a backfill.
     sender_policy_id: varchar("senderPolicyId", { length: 191 }),
+    // Nullable: rows written by Phase 3's shadow runner predate this column, and a NOT NULL add would
+    // fail or backfill ~29k rows with a meaningless value. Needed so undo reaches the same server it
+    // mutated and §7.3's batching by (mailbox, folder, target) can be built later.
+    mailbox_id: varchar("mailboxId", { length: 191 }),
     kind: varchar("kind", { length: 191 }).notNull(),
     // Decision.source (rules.ts): without it, a policy that fired, one an absolute guard overrode, one a
     // scoped guard suppressed, and a suspended policy are all indistinguishable rows sharing `kind` and
@@ -350,14 +431,230 @@ export const action = mysqlTable(
     // restore it exactly rather than reconstruct it from later, possibly-incomplete sync data.
     from_state_json: text("fromStateJson"),
     to_state_json: text("toStateJson"),
+    // The logical path §6 chose for a `file` action — "Clients/KidsLiving", never a server-native folder
+    // name. Written by the shadow runner as the proposal and by filing-queue resolution as the operator's
+    // confirmation; server/mail/filing/render.ts is the only thing that turns it into a real folder.
+    // Nullable for the same reason mailboxId is: 29,375 rows predate it, and it is meaningless on the
+    // archive and trash kinds.
+    target_path: varchar("targetPath", { length: 191 }),
+    // When a human confirmed `targetPath` from the filing queue, and null on every row that reached its
+    // destination automatically. §6's DKIM gate is a proxy for "did a person vouch for this destination?",
+    // so the confirmation supersedes it — without this column the gate re-reads the same policy scope and
+    // DKIM state on the next run and re-queues the row the operator just resolved, forever.
+    filing_confirmed_at: datetime("filingConfirmedAt", { fsp: 3 }),
     run_id: varchar("runId", { length: 191 }).notNull(),
     decided_at: datetime("decidedAt", { fsp: 3 }),
     applied_at: datetime("appliedAt", { fsp: 3 }),
     error: text("error"),
+    // When a rescue was detected against this action. Makes detection idempotent — a rescue already
+    // recorded must not re-suspend a policy the operator has since deliberately cleared — and lets the
+    // journal show WHICH action was rescued rather than only that some policy is suspended.
+    rescued_at: datetime("rescuedAt", { fsp: 3 }),
   },
   (table) => ({
     statusDecidedAtIndex: index("Action_status_decidedAt_idx").on(table.status, table.decided_at),
     senderPolicyIdIndex: index("Action_senderPolicyId_idx").on(table.sender_policy_id),
+    mailboxIdStatusIndex: index("Action_mailboxId_status_idx").on(table.mailbox_id, table.status),
+    // The rescue detector's candidate query: (mailboxId, status) equality then ORDER BY appliedAt with a
+    // LIMIT. Without appliedAt in the index MySQL filesorts every applied row of the mailbox on every
+    // sync just to return the oldest few — ~7,900 rows sorted to read 500.
+    mailboxIdStatusAppliedAtIndex: index("Action_mailboxId_status_appliedAt_idx").on(table.mailbox_id, table.status, table.applied_at),
     messageIdKindRunIdUnique: uniqueIndex("Action_messageId_kind_runId_key").on(table.message_id, table.kind, table.run_id),
+  }),
+);
+
+// ─── FilingBinding ───────────────────────────────────────────────────────────
+// One mailbox's answer to "where does this logical path actually live?". §6 says filing paths are
+// logical; this is what makes that true across servers that disagree about names. felix@tellmann.co.za
+// carries thirteen hand-built folders flat under INBOX ("INBOX.KidsLiving", "INBOX.Finances - Ref") and
+// the three Gmail mailboxes carry no user labels at all, so the same logical path has to reach an
+// existing folder on one server and a folder created on first use on another.
+//
+// A logical path with no binding is not an error: render.ts derives a folder from its segments and the
+// resolver creates it. A binding exists to override that, which is why `folder` is stored verbatim,
+// delimiter already applied, and never re-rendered.
+export const filingBinding = mysqlTable(
+  "FilingBinding",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    mailbox_id: varchar("mailboxId", { length: 191 }).notNull(),
+    // 191 to match the `client` and `topic` columns a path is derived from.
+    logical_path: varchar("logicalPath", { length: 191 }).notNull(),
+    // 191 because Message.folder is 191: a bound folder is one a message will actually be stored under,
+    // so a binding this column could hold and that one could not would fail at the next sync rather than
+    // here. A server-native path, delimiter already applied.
+    folder: varchar("folder", { length: 191 }).notNull(),
+  },
+  (table) => ({
+    mailboxLogicalPathUnique: uniqueIndex("FilingBinding_mailboxId_logicalPath_key").on(table.mailbox_id, table.logical_path),
+  }),
+);
+
+// ─── PersonalArea ────────────────────────────────────────────────────────────
+// The personal OS lives behind the same ADMIN_EMAIL gate as everything else under /admin.
+export const personalArea = mysqlTable("PersonalArea", {
+  id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+  createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+  updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  // dormant | maintenance | sprint | always_on — validated at the zod layer, never a DB enum
+  mode: varchar("mode", { length: 191 }).default("always_on").notNull(),
+  soft_floor_hours: int("softFloorHours"),
+  sort_order: int("sortOrder").default(0).notNull(),
+  archived_at: datetime("archivedAt", { fsp: 3 }),
+});
+
+// ─── PersonalProject ─────────────────────────────────────────────────────────
+export const personalProject = mysqlTable(
+  "PersonalProject",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }).notNull(),
+    name: varchar("name", { length: 191 }).notNull(),
+    // The Wakapi project name, when this project maps to tracked coding work. One project can
+    // answer to several names upstream (doveras / doveras-donor-parser), so the ledger phase
+    // normalises rather than trusting this to be one-to-one.
+    waka_project: varchar("wakaProject", { length: 191 }),
+    sort_order: int("sortOrder").default(0).notNull(),
+    archived_at: datetime("archivedAt", { fsp: 3 }),
+  },
+  (table) => ({
+    areaIndex: index("PersonalProject_areaId_idx").on(table.area_id),
+  }),
+);
+
+// ─── PersonalTask ────────────────────────────────────────────────────────────
+export const personalTask = mysqlTable(
+  "PersonalTask",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }),
+    project_id: varchar("projectId", { length: 191 }),
+    title: varchar("title", { length: 512 }).notNull(),
+    notes: text("notes"),
+    // inbox | open | someday | completed | cancelled
+    state: varchar("state", { length: 191 }).default("inbox").notNull(),
+    // Hides the task until this date. A visibility control, never a commitment.
+    when_date: datetime("whenDate", { fsp: 3 }),
+    // Externally imposed. Hides nothing and schedules nothing.
+    deadline: datetime("deadline", { fsp: 3 }),
+    // ISO week, e.g. "2026-W35". Membership of the week pool; carries no date.
+    plan_week: varchar("planWeek", { length: 16 }),
+    pool_order: int("poolOrder").default(0).notNull(),
+    // Incremented ONLY when a task committed to today is pushed out.
+    deferral_count: int("deferralCount").default(0).notNull(),
+    estimate_minutes: int("estimateMinutes"),
+    focus: boolean("focus").default(false).notNull(),
+    completed_at: datetime("completedAt", { fsp: 3 }),
+    cancelled_at: datetime("cancelledAt", { fsp: 3 }),
+  },
+  (table) => ({
+    stateWhenIndex: index("PersonalTask_state_whenDate_idx").on(table.state, table.when_date),
+    planWeekIndex: index("PersonalTask_planWeek_poolOrder_idx").on(table.plan_week, table.pool_order),
+  }),
+);
+
+// ─── WakaHeartbeat ───────────────────────────────────────────────────────────
+// The raw signal, stored exactly as the tracker reported it. Wakapi's own duration figures are
+// conservative by construction — heartbeatPadding = 0 in its services/duration.go credits nothing to a
+// session's final beat, which measured ~78–81% of WakaTime's hours on dense days and worse on fragmented
+// ones. Keeping the heartbeats means the ledger computes its own totals and inherits none of that.
+export const wakaHeartbeat = mysqlTable(
+  "WakaHeartbeat",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    // Wakapi's own heartbeat id. The unique index on it is what makes a re-ingest idempotent, which
+    // matters because the scheduled job deliberately overlaps its own windows.
+    source_id: varchar("sourceId", { length: 191 }).notNull(),
+    // The project name exactly as it arrived, never normalised. One project answers to several names
+    // upstream (doveras / doveras-donor-parser; listify / listify-2 / a Windows path), so normalisation
+    // belongs to bucketing where it can be corrected — rewriting it here would destroy the evidence.
+    project: varchar("project", { length: 191 }),
+    language: varchar("language", { length: 191 }),
+    entity: text("entity"),
+    is_write: boolean("isWrite").default(false).notNull(),
+    occurred_at: datetime("occurredAt", { fsp: 3 }).notNull(),
+  },
+  (table) => ({
+    sourceUnique: uniqueIndex("WakaHeartbeat_sourceId_key").on(table.source_id),
+    occurredIndex: index("WakaHeartbeat_occurredAt_idx").on(table.occurred_at),
+  }),
+);
+
+// ─── ActivityBucket ──────────────────────────────────────────────────────────
+// Derived from the heartbeats above and safe to rebuild from them at any time.
+export const activityBucket = mysqlTable(
+  "ActivityBucket",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    // Start of a 15-minute bucket. The scheduler's grid and the ledger's grain are the same.
+    bucket_start: datetime("bucketStart", { fsp: 3 }).notNull(),
+    // The NORMALISED project name, unlike WakaHeartbeat.project above.
+    project: varchar("project", { length: 191 }).notNull(),
+    // Fraction of the bucket attributed to this project, 0–1, summing to 1 per bucket. That constraint is
+    // the reason a day's totals can never exceed wall-clock time however many editors were open.
+    //
+    // The only decimal column in this database, and mysql2 hands decimals back as STRINGS — every read of
+    // this column must go through Number() at the row-mapping boundary, the way the mail queries already
+    // treat COUNT and SUM. `seconds` beside it is an int and needs no such care.
+    share: decimal("share", { precision: 5, scale: 4 }).notNull(),
+    seconds: int("seconds").notNull(),
+  },
+  (table) => ({
+    bucketProjectUnique: uniqueIndex("ActivityBucket_bucketStart_project_key").on(table.bucket_start, table.project),
+  }),
+);
+
+// ─── PersonalReview ──────────────────────────────────────────────────────────
+// Keyed to an ISO week and to nothing else. There is deliberately no due date: §6.6 requires the
+// review to slip forward gracefully, and a date-pinned review manufactures a miss out of a Sunday
+// spent elsewhere — exactly the failure state §16 exists to avoid. A week reviewed on Tuesday is
+// not late, and a week never reviewed simply never completes.
+export const personalReview = mysqlTable(
+  "PersonalReview",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    plan_week: varchar("planWeek", { length: 16 }).notNull(),
+    opened_at: datetime("openedAt", { fsp: 3 }).notNull(),
+    // Null forever is a legitimate resting state, not a failure. Nothing reports on it.
+    completed_at: datetime("completedAt", { fsp: 3 }),
+    someday_swept_at: datetime("somedaySweptAt", { fsp: 3 }),
+    note: text("note"),
+  },
+  (table) => ({
+    weekUnique: uniqueIndex("PersonalReview_planWeek_key").on(table.plan_week),
+  }),
+);
+
+// ─── PersonalTaskDeferral ────────────────────────────────────────────────────
+// One row per push-out. PersonalTask.deferral_count stays as the cheap read the row badge uses;
+// this is what makes §3.4's discriminator computable — a task deferred to a changed date with a
+// stable estimate is scheduling, one deferred repeatedly onto consecutive days is avoidance. A
+// bare counter records how many times and never to when or why.
+export const personalTaskDeferral = mysqlTable(
+  "PersonalTaskDeferral",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    task_id: varchar("taskId", { length: 191 }).notNull(),
+    from_date: datetime("fromDate", { fsp: 3 }),
+    // Set only when the exit was "schedule with a reason"; null for every other way out.
+    to_date: datetime("toDate", { fsp: 3 }),
+    reason: varchar("reason", { length: 512 }),
+  },
+  (table) => ({
+    taskIndex: index("PersonalTaskDeferral_taskId_idx").on(table.task_id),
   }),
 );

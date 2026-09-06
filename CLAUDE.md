@@ -13,6 +13,13 @@ bun run db:generate  # drizzle-kit generate migrations from schema
 bun run upgrade-packages  # ncu latest-with-holds + bun install
 ```
 
+Fresh clone setup — neither travels with the clone:
+
+```bash
+git submodule update --init personal   # private content; the clone still works without access
+git config core.hooksPath .githooks    # enables the pre-push guard against personal content
+```
+
 ## Critical: Never Run Dev Servers
 
 Never run `bun run dev` (or any watch/long-running server) — the user runs it themselves. Verify changes with `bun run tsc` and `bunx biome check` instead.

@@ -1,3 +1,4 @@
+import type { MessagePart } from "@server/mail/providers/structure";
 export type MailboxCapabilities = {
   condstore: boolean;
   qresync: boolean;
@@ -50,6 +51,9 @@ export type FetchedMessage = {
   labels: string[] | null;
   envelope: FetchedEnvelope;
   headers: HeaderMap;
+  // BODYSTRUCTURE, normalized. Null when the server returned none — which stays a real answer rather than
+  // an error, because this is a capability the sync degrades around rather than depends on.
+  structure: MessagePart | null;
 };
 
 export type MessageIdentity = {
@@ -70,6 +74,78 @@ export type FlagChangeResult = {
   qresync_used: boolean;
 };
 
+// RFC 4315 §3: a batched UID MOVE or UID COPY returns one COPYUID response code carrying the source
+// set and the destination set as they arrived on the wire, pairing element N of one with element N of
+// the other. imapflow parses that into a Map before we ever see it; a pair here is one entry of it.
+export type UidPair = {
+  source_uid: number;
+  destination_uid: number;
+};
+
+// `pairs` and `unconfirmed_uids` together account for every UID the caller asked for, and never for
+// any it did not. A server that relocates 399 of 400 messages reports 399 in COPYUID, and the 400th
+// has no destination address — journalling it as relocated would orphan it until the next full sync
+// and leave undo with nowhere to write (§7.2). It is returned rather than thrown because throwing
+// would discard the 399 destination addresses that *are* known, turning a partial success into total
+// loss; §11 marks only the unconfirmed UIDs failed.
+export type CopyUidResult = {
+  target_folder: string;
+  destination_uid_validity: string;
+  pairs: UidPair[];
+  unconfirmed_uids: number[];
+};
+
+export type LabelResult = {
+  folder: string;
+  uids: number[];
+  added_labels: string[];
+  removed_labels: string[];
+};
+
+export type LabelChange = {
+  add_labels: string[];
+  remove_labels: string[];
+};
+
+// Named FlagWrite rather than FlagChange because FlagChange is already taken, above, by something almost
+// opposite: that one is an OBSERVATION — the flags CONDSTORE reported for one uid — and this one is an
+// INSTRUCTION about flags to add and remove. Two types called FlagChange, one read and one write, in the
+// file that enumerates what may mutate a mailbox, is a confusion worth a longer name to avoid.
+export type FlagWrite = {
+  add_flags: string[];
+  remove_flags: string[];
+};
+
+export type FlagWriteResult = {
+  folder: string;
+  uids: number[];
+  added_flags: string[];
+  removed_flags: string[];
+};
+
+// The mutating contract, opened in Phase 4 (§7.2), widened in Phase 5 (§6) and again by the inbox-dwell
+// spec §1.6. Phases 1-3 held this type strictly read-only and nothing under `server/mail` could change a
+// mailbox at all. `moveMessages`, `setLabels`, `setFlags` and `createFolder` are the ONLY members that
+// may — this list is exhaustive by construction, so a fifth member joining it silently is exactly the
+// drift the enumeration exists to prevent. They exist for
+// `server/mail/actions/executor.ts`, `undo.ts` and `server/mail/filing/resolver.ts`, and they are
+// implemented only in `server/mail/providers/imap.ts` — which is also the only file where a write lock
+// may appear. `createFolder` is the narrowest of the four and takes no lock at all — see its own comment
+// below for why. Every other method here, and every other file under `server/mail`, stays read-only.
+//
+// Each MESSAGE mutation resolves with the UIDs it actually confirmed, or throws. There is no
+// partial-success return: the executor issues an ordered sequence per message and must be able to tell a
+// wholly applied action from one that stopped halfway. `createFolder` is outside that rule because it
+// addresses no messages — it resolves void, and its postcondition is only that the folder now exists.
+//
+// `purge` is deliberately absent and must stay absent. §1.7 puts irreversible deletion behind a
+// separate scheduled sweep (Phase 8) with its own dwell, digest and eligibility rules; a `purge`
+// method here would put the one unrecoverable operation a single call away from the classification
+// path. `copyMessages` and `expungeUids` were deleted for the same reason once a review found neither had
+// a caller: the no-MOVE fallback finishes its move through a private helper inside imap.ts, so a public
+// expunge was the only way to delete mail and nothing was reaching for it. This list exists to enumerate
+// what can happen to a mailbox, which makes an entry no one calls worse than a missing one — Phase 8 adds
+// back whatever its sweep genuinely needs.
 export type MailboxProvider = {
   capabilities: MailboxCapabilities;
   listFolders: () => Promise<FolderInfo[]>;
@@ -78,5 +154,18 @@ export type MailboxProvider = {
   fetchIdentities: (folder: string) => Promise<MessageIdentity[]>;
   fetchFlagChanges: (folder: string, since_modseq: string) => Promise<FlagChangeResult>;
   listUids: (folder: string) => Promise<number[]>;
+  moveMessages: (folder: string, uids: number[], target_folder: string) => Promise<CopyUidResult>;
+  setLabels: (folder: string, uids: number[], change: LabelChange) => Promise<LabelResult>;
+  // Inbox-dwell §1.6: the fourth mutating member, and the only one that changes nothing about where a
+  // message lives. It exists so an action can mark its own messages read in the same batch as the move
+  // that hides them — a quarantined first contact otherwise carries its unread badge into a folder the
+  // operator never opens. Unlike setLabels it is not Gmail-only: every IMAP server has flags.
+  setFlags: (folder: string, uids: number[], change: FlagWrite) => Promise<FlagWriteResult>;
+  // Phase 5 (§6): filing creates a destination folder on first use. Deliberately the narrowest possible
+  // mutation — it creates, and it cannot delete, rename, unsubscribe or move anything. A folder that
+  // already exists is success, not an error, so the create-then-use path is idempotent under a race with
+  // the operator's own mail client. Alone among the four it needs no selected mailbox and
+  // therefore no write lock, unlike moveMessages, setLabels and setFlags, which all take one.
+  createFolder: (folder: string) => Promise<void>;
   disconnect: () => Promise<void>;
 };

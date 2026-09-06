@@ -1,10 +1,11 @@
 import { message, senderSuppression, threadState } from "@server/db/schema";
+import { GMAIL_INBOX_LABEL } from "@server/mail/actions/kinds";
 import type { ThreadStateValue } from "@server/mail/classify/rules";
 import { THREAD_STATE_VALUES } from "@server/mail/classify/rules";
 import { AUTOMATED_LOCAL_PART_PATTERN, BULK_PRECEDENCE_VALUES } from "@server/mail/classify/signals";
 import type { MailboxFlavor } from "@server/mail/types";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 // A column, an expression, or a CTE's aliased column — the three shapes a caller can hand a predicate
 // that has to be spliced into SQL over both a base table and a common table expression.
@@ -54,6 +55,18 @@ export function isSentByMeSql(flavor: MailboxFlavor, sent_folders: string[]): SQ
     return sql<boolean>`0`;
   }
   return sql<boolean>`${inArray(message.folder, sent_folders)}`;
+}
+
+// The one spelling of "this message is in the inbox", which differs per flavor and is easy to get subtly
+// wrong. Gmail keeps INBOX as a LABEL on the canonical All Mail folder, so the folder column says nothing;
+// generic IMAP uses a real folder. Matching the label with LIKE '%Inbox%' — which query/senders.ts did
+// until this existed — also matches a user label called "Inbox archive", which is harmless in a count and
+// not harmless in a sweep that moves mail.
+export function isInInboxSql(flavor: MailboxFlavor): SQL<boolean> {
+  if (flavor === "gmail") {
+    return sql<boolean>`JSON_CONTAINS(COALESCE(${message.labels}, '[]'), JSON_QUOTE(${GMAIL_INBOX_LABEL}))`;
+  }
+  return sql<boolean>`${eq(message.folder, "INBOX")}`;
 }
 
 // The one spelling of the thread group key: a null threadKey cannot be grouped against other messages, so

@@ -69,6 +69,7 @@ describe("isAutomatedSql agrees with deriveSignals", () => {
       to_me: true,
       cc_me: false,
       dkim_aligned: null,
+      is_calendar: null,
       internal_date: past,
       sender_message_count: 1,
       my_reply_count: 0,

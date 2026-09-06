@@ -360,3 +360,809 @@ Those numbers only fall as YOU snooze and dismiss threads through the
 UI — each of those actions is what populates the two tables. If you turn
 Phase 3 on and the queue does not shrink immediately, that is expected;
 it is not a sign the filters are broken.
+
+
+=============================================================================
+PHASE 4 — THE FIRST REAL MAILBOX MUTATION (added 2026-08-19)
+=============================================================================
+
+Phase 4 adds the executor, undo and the Action Journal. It is the first
+code in this project that can move or delete a real message.
+
+Nothing in it has ever touched a real mailbox. Every mutating path was
+verified by typecheck, by unit tests over a fake provider, and by reading.
+Those tests assert which IMAP commands get issued; they cannot prove a real
+server answers them the way the code expects. So the sequence below is not a
+smoke test to get through — it IS the acceptance test for the whole phase,
+and it is the only thing that will tell you whether the executor and undo
+actually work.
+
+Do it once, deliberately, on one message you would not mind losing.
+
+
+-----------------------------------------------------------------------------
+THE ORDER — EACH STEP DEPENDS ON THE ONE BEFORE IT
+-----------------------------------------------------------------------------
+
+  1. Apply migration 0005:
+
+         bun run db:migrate
+
+     server/db/migrations/0005_bumpy_lily_hollister.sql adds Action.mailboxId
+     (nullable) plus an index on (mailboxId, status). It has NOT been applied
+     yet — as of this write-up
+
+         SELECT COUNT(mailboxId) FROM Action;
+
+     still fails with ER_BAD_FIELD_ERROR. Nothing below works until it does.
+
+  2. Re-run a shadow pass, per mailbox, from /admin/shadow.
+
+     REQUIRED, not optional. See the next section for why: without a fresh
+     pass, Phase 4 is inert and every approve button does nothing.
+
+  3. Review the shadow report at /admin/shadow and pick ONE decision.
+
+  4. Approve exactly one decision. The approval ceremony differs by what the
+     decision would do:
+
+       - a destructive decision (trash) makes you TYPE the phrase
+         APPROVE TRASH — a checkbox is not enough
+       - an organisational decision (archive, keep_inbox) needs only the
+         acknowledgement checkbox
+       - a file decision cannot be approved at all in this phase; the button
+         is disabled and says why. See "what Phase 4 deliberately left out"
+
+     For the first ceremony, an organisational single row is the sane choice.
+
+  5. Apply it. The "Apply approved actions" panel lives on the Needs Action
+     and Senders screens (same component, both places). It takes ONE mailbox
+     and a batch size — there is deliberately no apply-everything button.
+
+     USE BATCH SIZE 1. The default is 25.
+
+  6. Go and look in the actual mail client. Not the dashboard — the mail
+     client. Confirm the message is where the decision said it would go and
+     that nothing else moved.
+
+     This is the step the tests cannot do for you, and it is the whole point
+     of the ceremony. Do not skip it because the journal says "applied": the
+     journal records what the code believes happened.
+
+  7. Undo it from the Action Journal at /admin/journal.
+
+  8. Go and look in the actual mail client AGAIN. Confirm the message is back
+     in its original folder and — on Gmail — that its labels came back too.
+     See "Reasoned but never measured" below for why the labels are the
+     interesting half.
+
+  9. ONLY THEN approve a batch.
+
+Steps 6 and 8 are the acceptance test. Steps 1-5, 7 and 9 are plumbing
+around them.
+
+
+-----------------------------------------------------------------------------
+THE BLAST RADIUS OF ONE CLICK — TWO BOUNDS, NOT ONE
+-----------------------------------------------------------------------------
+
+Apply and undo are NOT bounded the same way, and reading the apply bound as
+the phase's maximum understates undo by a factor of the mailbox count.
+
+APPLY — 200 messages, in ONE mailbox. applyPending takes a single mailbox_id
+string and there is no all-mailboxes option anywhere in its input. The batch
+size defaults to 25 and is capped at MAX_ACTION_BATCH_SIZE = 200, clamped
+client-side and again by the ORPC input schema.
+
+UNDO BY POLICY — 200 messages PER MAILBOX, across every enabled mailbox.
+undoByPolicy takes mailbox_id: string | null, and null is what the journal
+screen offers by default ("Every enabled mailbox"). The handler loops the
+mailboxes and hands the SAME batch size to each, so the batch size bounds
+each mailbox separately rather than the sweep: 200 x the number of enabled
+mailboxes, which is 800 with the four here. Each row costs up to two
+mutations — the move back, then the set_labels restoring what from_state
+recorded — so up to 1,600 writes reach real servers from that one click.
+
+Neither figure is one to go near on a first run. Step 5 of the ceremony says
+batch size 1 for this reason, and the undo panel lets you name a single
+mailbox instead of taking the default.
+
+
+-----------------------------------------------------------------------------
+WHY THE SHADOW PASS MUST BE RE-RUN — PHASE 3'S ROWS CANNOT BE APPROVED
+-----------------------------------------------------------------------------
+
+Until commit 9c08118 the shadow runner never recorded action.mailbox_id, so
+every one of the roughly 29,000 rows a Phase 3 pass wrote has that column
+NULL.
+
+Phase 4 matches on that column everywhere it matters:
+
+    promoteAction              (server/mail/actions/promote.ts)
+    loadShadowActionsByPolicy  (server/mail/actions/journal.ts)
+    loadPendingActions         (server/mail/actions/journal.ts)
+    loadActionForUndo          (server/mail/actions/journal.ts)
+    loadUndoableActionsByPolicy(server/mail/actions/journal.ts)
+
+A NULL there matches no mailbox, so those rows are readable and permanently
+un-approvable. Approve one and the answer is "that action belongs to mailbox
+(none recorded)". The /admin/shadow list labels them, so this is a known
+limitation rather than a dead button — but if you skip step 2, EVERY row you
+can see is one of them and the whole phase does nothing.
+
+NO BACKFILL OF THE OLD ROWS IS NEEDED. Don't write one. The shadow report
+reads only the latest run id, so a fresh pass both mints rows with the column
+populated and is what the report shows you. The old rows just sit there.
+
+
+-----------------------------------------------------------------------------
+THE READ-ONLY INVARIANT, REDEFINED — RUN THESE GREPS IN THE NEXT PHASE
+-----------------------------------------------------------------------------
+
+Phases 1-3 held a flat rule: nothing under server/mail may mutate a mailbox.
+Phase 4 narrowed that rule rather than removing it. Phase 5 (§6) widens it
+again, deliberately, in the same commit that adds the third mutation:
+filing needs to create a destination folder on first use. The live contract
+is now:
+
+  - mutating IMAP calls exist ONLY in server/mail/providers/imap.ts
+  - they are reached ONLY through the MailboxProvider mutation methods —
+    moveMessages, setLabels and createFolder, which are the only three the
+    interface has
+  - those are called ONLY from server/mail/actions/executor.ts,
+    server/mail/actions/undo.ts and server/mail/filing/resolver.ts
+  - read paths still pass { readOnly: true }; exactly ONE non-read-only
+    getMailboxLock exists, inside withWriteLock — createFolder needs no
+    selected mailbox and therefore takes no lock at all, so it does not
+    add a second one
+
+Grep 1 — every mutating imapflow call, and where it lives:
+
+    grep -rn 'messageMove\|messageCopy\|messageDelete\|messageFlagsAdd\|messageFlagsRemove\|messageFlagsSet\|mailboxCreate' server --include='*.ts' | grep -v '\.test\.ts'
+
+Output on 2026-08-20, RE-RUN after the Phase 5 fix round, all nine lines in one
+file. NOT unchanged from the first recording (2026-08-19), on three counts: the
+grep pattern itself gained |mailboxCreate, a ninth line appeared for the
+mailboxCreate call Phase 5 added, and every line number moved because Phase 5
+added lines to imap.ts above them (183->198, 191->206, 306-308->321-323,
+310->325, 345->360, 349->364). The invariant is unchanged: one file, and the
+only new call is the createFolder the widened contract above admits.
+
+    server/mail/providers/imap.ts:198:    return toCopyUidResult(await client.messageCopy(uids, target_folder, { uid: true }), "UID COPY", target_folder, uids);
+    server/mail/providers/imap.ts:206:    requireApplied(await client.messageDelete(uids, { uid: true }), `UID EXPUNGE ${uids.join(",")}`, folder);
+    server/mail/providers/imap.ts:321:        // Branching on MOVE here rather than leaving it to imapflow is deliberate: its `messageMove`
+    server/mail/providers/imap.ts:322:        // silently emulates a move with COPY + messageDelete when the server lacks MOVE, and that
+    server/mail/providers/imap.ts:323:        // messageDelete is the call that degrades to a bare EXPUNGE. The emulation stays ours.
+    server/mail/providers/imap.ts:325:          return toCopyUidResult(await client.messageMove(uids, target_folder, { uid: true }), "UID MOVE", target_folder, uids);
+    server/mail/providers/imap.ts:360:          const applied = await client.messageFlagsAdd(uids, add_labels, { uid: true, useLabels: true });
+    server/mail/providers/imap.ts:364:          const applied = await client.messageFlagsRemove(uids, remove_labels, { uid: true, useLabels: true });
+    server/mail/providers/imap.ts:376:        await client.mailboxCreate(folder);
+
+Three of those nine are the comment at 321-323, which is prose, not a call.
+Any path OUTSIDE server/mail/providers/imap.ts is a breach.
+
+Re-run for Phase 6 on 2026-08-21: BYTE-IDENTICAL to the block above — same
+nine lines, same file, same line numbers. Phase 6 adds no mutating IMAP call
+site; it only reaches the existing executor from a second caller (the
+scheduled sync). Expected, not a coincidence: a diff here would have been a
+breach, not a documentation update.
+
+Grep 2 — the write lock, which must stay a population of exactly one:
+
+    grep -rn 'getMailboxLock' server --include='*.ts' | grep -v '\.test\.ts'
+
+Output on 2026-08-20, RE-RUN after Phase 5 (line number below moved from :138 to
+:141 versus the first recording of this grep, because Phase 5 added lines to
+types.ts above the comment — content and count are unchanged):
+
+    server/mail/providers/imap.ts:186:    const lock = await client.getMailboxLock(folder, { readOnly: false });
+    server/mail/providers/imap.ts:225:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:245:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:258:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:285:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/imap.ts:302:      const lock = await client.getMailboxLock(folder, { readOnly: true });
+    server/mail/providers/types.ts:141:  // therefore no write lock, which is why imap.ts still holds exactly one non-read-only getMailboxLock.
+
+The last line is the doc comment on MailboxProvider.createFolder naming the
+literal string "getMailboxLock" as prose — grep cannot tell code from a
+comment that quotes code, so it is not a seventh call site. One
+readOnly: false, at line 186, inside withWriteLock. Five read locks in
+imap.ts. A second readOnly: false anywhere is a breach.
+
+Re-run for Phase 6 on 2026-08-21: BYTE-IDENTICAL to the block above — same
+seven lines, same files, same line numbers. Still exactly one
+readOnly: false, still at imap.ts:186. Expected: Phase 6 adds no new caller
+of getMailboxLock.
+
+Grep 3 — who calls the mutation methods. Only three files may appear:
+
+    grep -rn 'provider\.moveMessages\|provider\.setLabels\|provider\.createFolder' server --include='*.ts' | grep -v '\.test\.ts'
+
+Output on 2026-08-20, RE-RUN after the Phase 5 fix round. The caller that was
+missing when the note directly below was written — server/mail/filing/resolver.ts
+— arrived with Phase 5's resolver task, not with the fix round; this is the
+update that note told you to come back for. Line
+numbers moved from the recording taken earlier the same day — executor.ts
+224->226, 241->243 and undo.ts 203->197, 220->214 — because the fix round added
+a column to PendingActionRow and deleted the dead deferred-plan branch from
+both files. The set of files and calls is unchanged:
+
+    server/mail/actions/executor.ts:226:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:243:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:197:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:214:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
+
+Three files — executor.ts, undo.ts, resolver.ts — exactly the set the contract
+above names, and exactly one createFolder call site, inside resolver.ts's
+resolve(), memoised per run. No fourth file appears. Had one appeared, that
+would be a breach of the invariant, not a documentation update, and this
+runbook would say so instead of recording a clean grep.
+
+Re-run for Phase 6 on 2026-08-21. NOT byte-identical this time, and it is a
+line-number move, not a breach: Task 6's safety-contract comment ("THE
+RETURN TYPE IS THE SAFETY CONTRACT...", server/mail/sync/run.ts) landed
+above executor.ts's own code between the Phase 5 recording and now, and
+executor.ts gained lines above both its mutation calls for an unrelated
+reason (the F1 fix's action_ids narrowing). Both executor.ts lines moved
+by +8; undo.ts and resolver.ts did not move at all. The set of files, the
+set of calls and the count of five are unchanged:
+
+    server/mail/actions/executor.ts:234:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:251:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:197:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:214:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
+
+Still three files, still five call sites, still no fourth file — the moved
+lines are a side effect of an earlier task's own edit to executor.ts, not
+anything Phase 6 added to the invariant's reach.
+
+Re-run once more after the Phase 6 FINAL FIX ROUND, same day. Greps 1 and 2
+came back byte-identical to their blocks above. Grep 3 moved again, by the
+same kind of cause: executor.ts's ActionJournal gained four comment lines
+documenting promoteShadowActions's new return value (the ids a run actually
+claimed), pushing both of its mutation calls down by +4. undo.ts and
+resolver.ts did not move.
+
+    server/mail/actions/executor.ts:238:    const result = await provider.moveMessages(folder, uids, mutation.target_folder);
+    server/mail/actions/executor.ts:255:  const result = await provider.setLabels(folder, uids, { add_labels: mutation.add_labels, remove_labels: mutation.remove_labels });
+    server/mail/actions/undo.ts:197:    const result = await provider.moveMessages(address.folder, [address.uid], mutation.target_folder);
+    server/mail/actions/undo.ts:214:  const result = await provider.setLabels(address.folder, [address.uid], {
+    server/mail/filing/resolver.ts:65:        await input.provider.createFolder(folder);
+
+Three files, five call sites, one createFolder. The fix round adds no
+mutating call site anywhere — it only changes which rows reach the executor
+that already existed.
+
+The paragraph below is left as it was written during Phase 4, for the record:
+it is what the previous grep looked like BEFORE resolver.ts existed, and why
+that absence was correct at the time rather than stale.
+
+executor.ts and undo.ts, nothing else — no createFolder caller appears.
+That is correct and expected, not a stale grep: server/mail/filing/resolver.ts,
+the third permitted caller, is Task 5 and does not exist yet at this commit.
+Re-run this grep once resolver.ts lands; it should then gain exactly one more
+line for provider.createFolder.
+
+The interface used to carry two more mutating members, copyMessages and
+expungeUids, and the final review found neither had ever had a caller: the
+no-MOVE fallback uses private helpers inside imap.ts, not the public
+methods. Both were deleted. A public expunge was the only way this contract
+could delete mail, and an entry no one calls misstates the blast radius
+rather than merely sitting there — Phase 8 adds back whatever its sweep
+genuinely needs. createFolder is held to the same standard: it creates, and
+it cannot delete, rename, unsubscribe or move anything, and a folder that
+already exists is success rather than an error.
+
+
+-----------------------------------------------------------------------------
+§11 ERROR HANDLING — WHAT YOU WILL ACTUALLY MEET
+-----------------------------------------------------------------------------
+
+A PARTIAL BATCH FAILURE MARKS ONLY THE UNCONFIRMED UIDS FAILED. COPYUID tells
+the executor exactly which UIDs the server confirmed; the rest are marked
+failed individually. It does not assume the whole batch went one way. The
+executor re-reads state on its next run rather than carrying a belief forward.
+
+A MISSING UIDPLUS HARD-FAILS. It does not fall back. This is deliberate and
+it is the single most important refusal in the phase: without UIDPLUS there
+is no UID EXPUNGE, only a bare EXPUNGE, and a bare EXPUNGE destroys EVERY
+\Deleted-flagged message in the folder — including ones you flagged by hand
+in a mail client ten minutes earlier. imapflow's own messageMove emulates a
+move with COPY + messageDelete when the server lacks MOVE, and that is the
+path that degrades to a bare EXPUNGE, which is why imap.ts branches on MOVE
+itself instead of delegating (see the comment at imap.ts:322).
+
+A CRASH MID-BATCH LEAVES PENDING ROWS. The next run reconciles them; the
+pre-state was journalled before the mutation was issued, so nothing is lost.
+
+A PENDING ROW DOES NOT PROVE THE MUTATION DID NOT HAPPEN. This is the one
+that will mislead you. The pre-state is written before the mutation and the
+outcome after it, so markFailed can itself fail on a mutation that actually
+succeeded. Only comparing real server state against the row's from_state and
+to_state settles what happened. The apply panel says this on screen for the
+same reason.
+
+
+-----------------------------------------------------------------------------
+REASONED BUT NEVER MEASURED — WATCH THESE ON THE FIRST RUN
+-----------------------------------------------------------------------------
+
+These are the things the ceremony exists to prove. They are all defensible
+reasoning, and none of them has met a real server or the production database.
+
+THE GMAIL LABEL-DROP MODEL. The code assumes that moving a message to
+[Gmail]/Trash drops its other labels server-side, so undo issues a move back
+FOLLOWED BY a set_labels restoring what from_state recorded. If Gmail turns
+out to keep the labels, the restore is redundant but harmless; if it drops
+more than assumed, the restore is what saves you. Three of the four mailboxes
+here are Gmail, so this is the common path, not the edge case. Both
+assumption sites carry comments naming what to correct:
+server/mail/actions/kinds.ts:163 (the inverse sequence) and kinds.ts:223 (the
+state model). Step 8 of the ceremony is where you find out.
+
+recordFromState'S FIRST-WRITE-WINS WHERE CLAUSE. journal.ts:83 updates only
+where from_state_json IS NULL or empty, so a retry can never overwrite the
+pre-state a crash left behind. That statement cannot be executed in a test —
+production is the only database this project has — so the ceremony is the
+first time it ever runs.
+
+createDatabaseJournal HAS NO TEST BEHIND IT, for the same reason: it is the
+real-database implementation, and the tests all drive fakes. It now has live
+callers in server/orpc/mail.ts.
+
+THE ORPCError WIRE MAPPING. NOT_FOUND for an unknown mailbox (server/orpc/mail.ts:77)
+and FORBIDDEN for a disabled one (:80) have never been exercised without a dev
+server. Worth one deliberate glance: pick a disabled mailbox in
+the apply panel and confirm you get the amber "disabled" wording rather than
+a red generic failure.
+
+UNDO REFUSES AFTER AN \Archive OR \Trash FOLDER RENAME. undo.ts resolves its
+targets from the server's live SPECIAL-USE attributes, so if a folder was
+renamed or re-flagged since the action, the rebuilt plan does not match the
+recorded to_state and undo declines rather than moving mail out of a folder
+it was never in. If undo refuses, this is the likely reason, and refusing is
+the correct behaviour — not a bug to work around.
+
+JOURNAL DATE FILTERS USE LOCAL-DAY BOUNDS. journal.tsx widens each filter
+date to that day's local edges (T00:00:00 and T23:59:59.999). If the server's
+timezone differs from the browser's, rows near midnight can appear on the
+neighbouring day. Widen the range by a day before concluding a row is missing.
+
+
+-----------------------------------------------------------------------------
+WHAT PHASE 4 DELIBERATELY LEFT OUT
+-----------------------------------------------------------------------------
+
+file DECISIONS ARE NOT APPROVABLE. DO NOT TRY. §6's client axis is Phase 5,
+so filing has no executor, and deferred is a TERMINAL state: promotion only
+moves rows that are still shadow, and an apply run only reads pending, so a
+row the executor defers can never be picked up again by anything in this
+phase. There were roughly 2,366 file decisions across the backlog when this
+was written; approving them would park all 2,366 somewhere Phase 5 could only
+reach with hand-written DML. /admin/shadow refuses the approval in both
+scopes for exactly that reason — a disabled button here is the feature. A row
+already promoted before this gate existed still applies as deferred, and that
+part is a designed outcome, not a failure.
+
+purge DOES NOT EXIST. §1.7 keeps it for Phase 8, behind a separate scheduled
+sweep. Trash is reversible; permanent deletion is not in this phase at all.
+
+NOTHING MAY SET autonomy: "auto". §8 reserves promotion-to-auto for Phase 6.
+Phase 4 is propose-only: every single mutation waits on a human click. There
+is no code path that acts on its own.
+
+RESCUE DETECTION IS PHASE 6. Until then, a policy that makes a mistake stays
+active until YOU suspend it, and the Action Journal is the only mechanism
+that will show you it happened. Read the journal after a batch, not just the
+counters.
+
+
+=============================================================================
+PHASE 5 — FILING TO CLIENT FOLDERS (added 2026-08-20)
+=============================================================================
+
+Phase 5 makes the `file` action real. A `file`-classed message is now filed
+into a folder derived from its sender policy's client/topic mapping, rendered
+with the destination mailbox's own hierarchy delimiter, and created on first
+use if it does not already exist. Anything that cannot be resolved or is not
+trustworthy enough to file automatically lands in a `filing_queue` instead,
+with a reason attached.
+
+Nothing in Phase 5 has ever run against a real IMAP server. Every mutating
+path — the resolver's createFolder call, the executor's file mutation, undo's
+filing-aware resolution — was verified by typecheck, by unit tests over a fake
+provider, and by reading. Those tests assert which calls get issued; they
+cannot prove a real server folder list, delimiter, or CREATE response behaves
+the way the code expects. So, exactly as Phase 4's ceremony was the real
+acceptance test for the executor and undo, the sequence below — specifically
+steps 5 through 7 — is the first time filing touches real mail. Do it once,
+deliberately, on one message and one sender whose destination is obvious.
+
+
+-----------------------------------------------------------------------------
+THE ORDER — EACH STEP DEPENDS ON THE ONE BEFORE IT
+-----------------------------------------------------------------------------
+
+  1. Apply migrations 0005 and 0006:
+
+         bun run db:migrate
+
+     Both are pending as of this write-up; neither has been applied. 0005
+     adds Action.mailboxId (see the Phase 4 section above — if you are doing
+     Phase 4's and Phase 5's migrations in the same sitting, one db:migrate
+     run applies both in order). 0006 (server/db/migrations/0006_confused_fenris.sql)
+     adds the FilingBinding table — the operator's "this logical path already
+     has a home" bindings — and Action.targetPath, the column filing writes
+     its proposed destination into. Nothing below works until both exist.
+
+  2. Dry run the mapping seed:
+
+         bun --env-file=.env scripts/seed-filing-mapping.ts
+
+     Read the output. Expect 41 senders mapped, 1 unmapped
+     (contact-form@tellmann.co.za, deliberately — it is inbound leads from the
+     operator's own site and the triage doc calls it "worth a look before
+     filing", a destination the operator has not decided yet), and 8
+     FilingBinding rows proposed for felix@tellmann.co.za, none for the three
+     Gmail mailboxes (they have no user labels to preserve, so every logical
+     path renders fresh there).
+
+  3. Apply the seed:
+
+         bun --env-file=.env scripts/seed-filing-mapping.ts --apply
+
+     The script preflights that FilingBinding actually exists and refuses
+     with a named error if step 1 has not happened — it will not commit a
+     mapping half of the write with no binding half to match it. All of its
+     writes (both the SenderPolicy updates and the FilingBinding inserts) run
+     inside one transaction, so a failure partway through leaves the database
+     exactly as it was.
+
+  4. Run a FRESH shadow pass:
+
+         bun --env-file=.env tmp/run-shadow.ts
+
+     REQUIRED, not optional. Action.targetPath is written at decision time —
+     the shadow runner computes and stores the proposed folder path the
+     moment it journals a `file` decision, not later when the row is
+     approved. Every Action row minted BEFORE step 3 landed the mapping was
+     computed against a sender policy with no client/topic set, so it carries
+     no proposal and resolves to `no_mapping` in the filing queue. Skipping
+     this step means every visible `file` decision queues instead of files,
+     for a reason that looks like a bug and is actually stale data.
+
+  5. Review the shadow report at /admin/shadow and approve exactly ONE `file`
+     decision, on a sender whose destination is obvious (one of the 41 mapped
+     senders, ideally one bound to an existing tellmann folder rather than one
+     that will mint a brand-new one on the first try).
+
+  6. Apply it from /admin/mail. THIS CREATES A FOLDER ON A REAL SERVER if the
+     resolved path is not already bound to an existing one. Check the folder
+     appeared where expected: right name, right delimiter. On
+     felix@tellmann.co.za that is `.` (so a `Clients/Listify` mapping with no
+     binding renders as `INBOX.Clients.Listify`); on any of the three Gmail
+     mailboxes it is `/`. If the sender is one of the 8 bound paths, confirm
+     the message landed in the operator's existing folder rather than a new
+     one beside it.
+
+  7. Undo it. Check the message went back to where it started. Undo does NOT
+     remove the folder step 6 created, and does not try to: it restores the
+     message, and an empty folder it leaves behind is not a mutation worth
+     reversing. Undo also never CREATES a folder, on purpose — it resolves
+     the filing destination the same way the executor did, but only to find
+     where the message should return to, never to manufacture a place for it
+     that did not already exist.
+
+  8. Only then look at /admin/filing, the queue. Every message the DKIM gate
+     held back, every unmapped sender, and anything else that could not
+     resolve lands here with a reason attached (`no_mapping`,
+     `dkim_unaligned`, `ambiguous_client`, or `unresolvable_folder`). Approve
+     a batch from here only after steps 5 through 7 have proven the single-
+     message path works end to end.
+
+
+-----------------------------------------------------------------------------
+WHAT WAS MEASURED, AND WHAT WAS NOT
+-----------------------------------------------------------------------------
+
+MEASURED, against the live database, before any live IMAP mutation: the 41/1
+mapping split above, the 8 FilingBinding rows for felix@tellmann.co.za, the
+DKIM alignment rates by mailbox that motivated amending §6's gate to
+address-scope-only (recorded in server/mail/filing/paths.ts), and that 40 of
+the 41 seeded `file` policies are address-scoped so the amended gate applies
+to nearly all of them.
+
+NOT MEASURED, until an operator runs steps 5 through 7 above: whether
+createFolder's CREATE actually lands where findNamespaceRoot's INBOX-rooted
+detection predicts on felix@tellmann.co.za; whether a Gmail label created via
+mailboxCreate behaves the way the resolver assumes (a top-level label, not
+INBOX-rooted); whether a bound path's folder name — e.g. "INBOX.Finances -
+Ref", with a space and a hyphen — round-trips through the IMAP LIST/CREATE
+cycle without being mangled; and whether undo's filing-aware resolution
+actually finds the message back in its origin folder rather than declining,
+the same class of risk the Phase 4 section above documents for the archive
+and trash paths. Every one of these is reasoned about in code comments in
+server/mail/filing/resolver.ts, render.ts and paths.ts; none of them has met a
+real server. The ceremony above is what proves or disproves that reasoning.
+
+
+=============================================================================
+PHASE 6 — RESCUE DETECTION AND THE AUTONOMY LADDER (added 2026-08-21)
+=============================================================================
+
+Phase 6 adds two things. First, a safety net: if the operator opens or
+replies to a message a rule already archived, filed or trashed, the rule
+that touched it suspends itself and records why. Second, a gated ladder that
+lets a policy the operator trusts run unattended — classify new mail,
+promote its own shadow decisions, and execute them — without a click, once
+it has earned that through the gates below.
+
+Nothing in this phase has ever run against a real IMAP server or the
+production database. Every mutating path — the promotion write, the
+suspension write, the unattended executor call — was verified by typecheck,
+by unit tests over fake ports, and by reading. The admin routes that render
+a suspension and drive promotion have no component tests in this repo, so
+they were checked by tsc, biome and build only. See "WHAT HAS NOT BEEN
+VERIFIED" below before trusting any of this in front of a real mailbox.
+
+
+-----------------------------------------------------------------------------
+APPLY MIGRATION 0008 — THE ONLY ONE OUTSTANDING
+-----------------------------------------------------------------------------
+
+    bun run db:migrate
+
+server/db/migrations/0008_marvelous_ben_grimm.sql adds three nullable columns
+and one index. It REPLACES the earlier 0008_supreme_flatman.sql, which was
+never applied — the final Phase 6 fix round regenerated it in place rather
+than adding an 0009, so if you have that filename written down anywhere,
+this is the one to run:
+
+    ALTER TABLE `Action` ADD `rescuedAt` datetime(3);
+    ALTER TABLE `SenderPolicy` ADD `autonomyPromotedAt` datetime(3);
+    ALTER TABLE `SyncRun` ADD `note` text;
+    CREATE INDEX `Action_mailboxId_status_appliedAt_idx`
+      ON `Action` (`mailboxId`,`status`,`appliedAt`);
+
+Additive only: three ADD COLUMN, all nullable, and one CREATE INDEX. Nothing
+is dropped, renamed or narrowed, so it cannot lose data on the live table.
+
+`rescuedAt` is the stamp that makes rescue detection idempotent — a rescued
+action never comes back as a candidate. `autonomyPromotedAt` is the clock
+the auto_trash gate measures a shadow cycle from. `note` is where a sync run
+records what a stage reported without failing the run — read the paragraph
+below, because until this migration is applied that note is the only thing
+that will tell you anything is wrong. The index serves the rescue pass's
+`(mailboxId, status, appliedAt)` scan and its keyset pagination on
+appliedAt; without it every pass filesorts.
+
+0005, 0006 and 0007 are applied — the operator applied them during Phase 4
+and Phase 5. 0008 is the only one outstanding.
+
+WHAT ACTUALLY HAPPENS WHILE 0008 IS UNAPPLIED. An earlier draft of this
+runbook said "nothing in this phase's sync changes below has any effect
+until it is applied". That was wrong in both directions, and the correction
+is the reason to apply it promptly:
+
+  - NEW MAIL CLASSIFICATION WORKS FINE UNMIGRATED. It touches none of the
+    three new columns, so every scheduled sync classifies arriving mail and
+    writes Action rows exactly as described below, today, migration or not.
+
+  - RESCUE DETECTION DOES NOT MERELY "HAVE NO EFFECT" — IT THROWS, on every
+    single run, with `Unknown column 'Action.rescuedAt'`. The promotion pass
+    throws the same way on `SenderPolicy.autonomyPromotedAt`. Both throws are
+    caught on purpose (a broken safety net must not cost you your mail), so
+    the run still finishes with status `ok` and exit code 0.
+
+    That is what `SyncRun.note` is for: the caught failure is written there
+    and shown in "Recent sync runs" on /admin/mail. Applying 0008 is what
+    makes both the failure and its fix visible — before it, the message has
+    nowhere to land and the sync reports healthy while two safety nets are
+    down.
+
+
+-----------------------------------------------------------------------------
+WHAT NOW HAPPENS ON EVERY SCHEDULED SYNC, WITHOUT ANYONE ASKING FOR IT
+-----------------------------------------------------------------------------
+
+This is the part that changed the shape of the sync. The `mail-sync
+incremental` task on its existing */15 schedule (see the top of this file)
+now does three more things per mailbox, after its incremental fetch, inside
+the same `runMode` call in server/mail/sync/run.ts — nobody has to trigger
+any of them, and none of them touch backfill, reclassify or reconcile runs:
+
+  1. RESCUE DETECTION runs first, right after the incremental fetch and
+     before the sent-folder scan. It has to run after the fetch: openedAt is
+     only fresh once this run's own \Seen transitions have been observed,
+     and a pass reading stale rows would silently under-report — worse than
+     an error, for a safety net. See below for what it does.
+
+  2. NEW MAIL IS CLASSIFIED — runNewMailShadowPass, not the full
+     runShadowPass the operator's /admin/shadow button uses. The scheduled
+     path takes only messages with NO Action row at all, so its cost tracks
+     how much mail arrived, not how much the mailbox holds. A policy edit
+     does NOT retroactively re-classify old mail on the next sync — that
+     full re-sweep stays the operator's manual action from /admin/shadow,
+     deliberately: silently re-deciding thousands of already-classified
+     messages because a rule changed is what the shadow-and-review cycle
+     exists to prevent.
+
+  3. ROWS BELONGING TO `auto` POLICIES ARE PROMOTED AND EXECUTED. Promotion
+     (promoteAutoActions, server/mail/sync/run.ts) moves each eligible
+     `auto` policy's shadow rows to pending — built on the same
+     promotePolicyActions transition the operator's own approval uses, per
+     Ruling 2, not a second promotion path — and returns the ids it just
+     promoted. The executor is then called scoped to EXACTLY that id list.
+
+Read step 3 again: scoped to exactly that id list. That is not an
+implementation detail, it is the safety property the whole phase rests on —
+see the next section.
+
+
+-----------------------------------------------------------------------------
+THE GUARD THAT MAKES THAT SAFE TODAY
+-----------------------------------------------------------------------------
+
+All 103 sender policies in the database are at autonomy "shadow" today.
+Nothing can reach "auto" except through the gated promotion procedure below
+— upsertPolicy has rejected autonomy: "auto" at its Zod boundary since Phase
+3, and that rejection still holds; editing a policy's label cannot grant it
+unattended write access to a mailbox. So on every scheduled sync as it
+stands right now: promotion finds zero eligible policies, returns an empty
+id list, and step 3 above takes its early return (run.ts, "the inert
+state") — the executor is never called, and the provider is never touched.
+This is the correct inert state, not a workaround, and it has its own test.
+
+The property that survives once a policy IS promoted is the one to hold
+onto: A ROW THE OPERATOR APPROVED BY HAND IS NEVER EXECUTED BY THE SCHEDULED
+SYNC — only rows the run promoted itself. executeActions loads whatever
+pending rows the id list names and nothing else; it does not join on a
+policy's current autonomy, because a row's autonomy at execution time is not
+necessarily what promoted it, and a join is a guess where an id list is
+precise. This is what lets the operator approve a large batch by hand and
+still choose, on their own schedule, when to press Apply — the scheduled
+sync will not do it for them, no matter how long the approved batch sits.
+
+
+-----------------------------------------------------------------------------
+HOW TO READ A SUSPENSION
+-----------------------------------------------------------------------------
+
+A rescue suspends the POLICY (not the single action) and records why on
+SenderPolicy.suspensionReason, guarded so the FIRST rescue's reason survives
+— a second rescue against an already-suspended policy is still stamped, but
+does not overwrite the reason the operator needs to read.
+
+WHERE TO SEE IT:
+
+  - /admin/senders, the Policies panel. A suspended policy shows
+    "suspended" in its row, plus "Suspended YYYY-MM-DD", the reason text,
+    and a "Clear suspension" button.
+  - /admin/journal. The action row that triggered the suspension carries a
+    "Rescued YYYY-MM-DD" badge (row.rescued_at) — this answers "what
+    happened to my mail"; the policy panel on /admin/senders answers "what
+    has the system stopped doing on my behalf".
+
+WHAT THE REASON SENTENCE CONTAINS (rescueSuspensionReason,
+server/mail/rescue/journal.ts) — all four things the operator needs to act
+on it, never just a date: the signal (opened or replied), the message
+subject, when the operator acted, when the rule acted, and a reminder the
+action is reversible. It reads like this:
+
+    rescued: you replied to "Re: invoice #4021" on 2026-08-21 09:14 UTC
+    after this rule archived it on 2026-08-20 22:03 UTC. The rule is
+    suspended until you clear it; the action is in the journal and can be
+    undone.
+
+A reply outranks an open when a message qualifies as both (Ruling 4): an
+open can be an accidental glance while triaging, a reply is unambiguous
+evidence the rule hid something wanted, and the reported signal is meant to
+be the more persuasive of the two.
+
+HOW TO CLEAR ONE: the "Clear suspension" button on /admin/senders calls
+clearPolicySuspension (server/mail/query/policies.ts) — unconditional, no
+gate, sets suspendedAt and suspensionReason back to null. Clearing does NOT
+undo the action that triggered it; undo it separately from /admin/journal
+if the message should go back to where it was.
+
+
+-----------------------------------------------------------------------------
+HOW TO PROMOTE A POLICY, AND WHAT WILL REFUSE
+-----------------------------------------------------------------------------
+
+Promotion is per policy, from the Policies panel on /admin/senders, and
+dispatches on the policy's OWN action (server/mail/actions/autonomy.ts):
+
+  archive and file NEED a reviewed shadow record. The checkbox on the
+  panel sets reviewed_shadow_record: true; without it the button still
+  fires but the server refuses with gate "shadow_review" and a detail
+  naming exactly what is missing: "needs the operator to review this
+  policy's shadow record first (getShadowReport), then promote again with
+  reviewed_shadow_record: true."
+
+  auto_trash needs THREE things at once, all measured from
+  autonomyPromotedAt and reset by any rescue: 30 days elapsed
+  (SHADOW_CYCLE_DAYS), at least 20 decisions since promotion
+  (SHADOW_CYCLE_MIN_DECISIONS), and zero rescues in that window — PLUS
+  Mailbox.trashRetentionDays set on EVERY mailbox, not just the one the
+  policy runs against, because SenderPolicy carries no mailbox scope and a
+  rescue already suspends a policy everywhere for the same reason (§8.2).
+  trashRetentionDays is NULL on all four mailboxes today, so gate
+  "trash_retention" refuses every auto_trash promotion right now, with a
+  detail naming which mailboxes are missing it. NULL means unknown, never
+  unlimited — a trash that silently empties makes "reversible for the
+  retention window" false. That gate stays closed everywhere until the
+  operator records a real number of days on each mailbox.
+
+  purge is refused OUTRIGHT — gate "purge_not_allowed". It is never a
+  per-policy autonomy; the irreversible sweep is a separate scheduled job
+  reserved for Phase 8, with its own dwell and eligibility rules.
+
+  Demotion is UNCONDITIONAL and always available — the "Demote to shadow"
+  button, no gate, cannot fail. Making it cheap is deliberate: an operator
+  who cannot cheaply undo a promotion will not make one, and one who cannot
+  stop a misbehaving rule has no recourse between "leave it running" and
+  "delete the policy".
+
+One more property worth knowing before promoting anything: editing an
+already-promoted policy silently demotes it back to shadow (Ruling 9). A
+promotion rests entirely on the shadow record as it was when reviewed;
+change the rule and that record describes something no longer running, so
+the system requires it to earn trust again rather than carrying the old
+promotion forward on a changed rule.
+
+
+-----------------------------------------------------------------------------
+WHAT THE RESCUE NET DOES NOT CATCH — STATED, NOT DISCOVERED LATER
+-----------------------------------------------------------------------------
+
+A safety net whose holes are undocumented is worse than a smaller net whose
+holes are known. Three gaps, each accepted deliberately rather than missed:
+
+STARRING A RESCUED MESSAGE IS NOT DETECTED. Message.isFlagged records that a
+message IS starred, never WHEN it became starred, so "you starred it after
+the rule hid it" is not expressible without a new flaggedAt column mirroring
+openedAt. An operator who rescues a message purely by starring it, and never
+opens or replies to it, produces no detection at all. RESCUE_SIGNALS is
+"opened" and "replied" only (server/mail/rescue/signals.ts).
+
+A MESSAGE THE OPERATOR MOVES A SECOND TIME BECOMES UNDETECTABLE. The
+detector locates a message by the address the executor's own move recorded
+in Action.to_state_json — folder, uid, uidValidity (messageAddressForAction,
+server/mail/rescue/locate.ts). Move that message again yourself and, on
+generic IMAP, the sync retires that row (disappearedAt) and writes a new
+one at the new address; the recorded address now points at a dead row whose
+openedAt can never change again. The next rescue pass finds nothing to
+judge and reports it as "unresolved", not as a false negative it can name.
+
+RESCUES ARE ONLY LOOKED FOR WITHIN 30 DAYS OF THE ACTION. RESCUE_WINDOW_DAYS
+= 30 (server/mail/rescue/journal.ts), tied deliberately to the same 30 days
+the auto_trash gate requires: a detector window shorter than the promotion
+gate would let a policy accrue rescue-free days out of rows the detector had
+already stopped watching, so the gate would measure silence rather than
+safety. The cost: a message opened or replied to on day 31 or later after
+the rule touched it is not detected as a rescue. Strictly smaller than the
+starring gap above, but real.
+
+
+-----------------------------------------------------------------------------
+WHAT HAS NOT BEEN VERIFIED
+-----------------------------------------------------------------------------
+
+In the same register as Phase 4's and Phase 5's ceremonies: nothing in
+Phase 6 has run against a live database or a real mailbox. Rescue detection
+has never read a real openedAt or a real reply against the production
+Message table; promotion has never actually flipped a real policy to auto;
+the unattended executor path inside the scheduled sync has never issued a
+single real IMAP mutation, because no policy has ever reached auto to
+trigger it. The admin routes that render a suspension, its reason, and the
+promote/demote controls have no component tests in this repository —
+verification for all of it was bun run tsc, bun test (over fake ports and
+recording providers), bun run build, and reading. There is no ceremony
+below the way Phase 4 and Phase 5 have one, because there is nothing to
+click yet: the guard above keeps the executor from ever being reached until
+the operator deliberately promotes a policy, and that first promotion — not
+this write-up — is what will actually exercise any of this against real
+mail.

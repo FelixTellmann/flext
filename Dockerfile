@@ -45,6 +45,11 @@ ENV PORT=3000
 # stage needs the build output and nothing else — no node_modules, no source, no nix store.
 COPY --from=build /app/.output ./.output
 
+# The private submodule, read at runtime (brain files, journal). The directory exists in the clone
+# even when the submodule was not fetched, so a missing deploy key leaves it empty rather than
+# failing the build — /api/health reports whether personal/brain/README.md is actually readable.
+COPY --from=build /app/personal ./personal
+
 EXPOSE 3000
 
 # bun rather than curl: the slim image ships no HTTP client, and adding one would reintroduce the

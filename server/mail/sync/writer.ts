@@ -6,6 +6,7 @@ import { isAddressedToMe, isCcMe } from "@server/mail/classify/identity";
 import { deriveThreadKey } from "@server/mail/classify/thread";
 import type { MailboxRow } from "@server/mail/mailbox";
 import { extractAddresses, headerValue, headerValues } from "@server/mail/providers/headers";
+import { hasHumanAttachment, isCalendarMessage } from "@server/mail/providers/structure";
 import type { FetchedMessage } from "@server/mail/providers/types";
 import { serializeStringList } from "@server/mail/types";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -207,7 +208,16 @@ export async function writeMessages(input: {
       sent_at: entry.envelope.date,
       internal_date: entry.internal_date,
       size: entry.size,
-      has_attachment: (content_type ?? "").toLowerCase().startsWith("multipart/mixed"),
+      // Derived from the MIME parts, not from the top-level Content-Type. That old test was
+      // `multipart/mixed`, which is true of every calendar invitation because the .ics rides as an
+      // attached part — so §5.3's human_attachment guard, meaning "a real person sent me a document",
+      // was firing on ~263 automated meeting invitations as of 2026-08-26.
+      //
+      // Falls back to the old header test only where no structure was returned, so a server that does not
+      // answer BODYSTRUCTURE keeps exactly the behaviour it had rather than losing the column entirely.
+      has_attachment:
+        entry.structure === null ? (content_type ?? "").toLowerCase().startsWith("multipart/mixed") : hasHumanAttachment(entry.structure),
+      is_calendar: isCalendarMessage(entry.structure),
       list_id: clamp(headerValue(entry.headers, "List-Id"), 320),
       list_unsubscribe: headerValue(entry.headers, "List-Unsubscribe"),
       precedence: clamp(headerValue(entry.headers, "Precedence"), 191),

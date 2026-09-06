@@ -11,7 +11,12 @@ export type PolicyScope = "address" | "domain";
 // never inline with classification, so no path through decide() may emit it. The type states it and
 // POLICY_ACTIONS re-checks it at runtime, because `sender_policy.action` is a varchar with no database
 // enum behind it — a hand-written row must not be able to reach the executor with `purge` in it.
-export type PolicyAction = Exclude<ActionClass, "purge">;
+// `quarantine` joins `purge` in the exclusion, for the same reason and by a different route. A policy is
+// a statement about a sender the operator has already met; quarantine is what happens when there is no
+// such statement to make. A policy naming it would be self-cancelling — its own existence disqualifies
+// the message from the rule it names — so the type refuses it rather than leaving a rule that reads as
+// available and silently never fires.
+export type PolicyAction = Exclude<ActionClass, "purge" | "quarantine">;
 
 export const POLICY_ACTIONS = ["keep_inbox", "archive", "file", "auto_trash"] as const satisfies readonly PolicyAction[];
 
@@ -28,6 +33,23 @@ export type DecisionInput = GuardInput & {
   last_in_thread_is_mine: boolean;
   sender_suppressed: boolean;
   policies: readonly SenderPolicyInput[];
+  // Inbox-dwell 1.8/1.9. Computed by the CALLER from stored columns — in the inbox, is_seen, older than
+  // the mailbox's dwell_settled_days — never in here. decide() stays pure over its input and gains no
+  // notion of "now" beyond the age_days it is already handed.
+  //
+  // False on every classification path. The scheduled classify pass looks at mail it has never seen
+  // before, where nothing has had time to settle; only the sweep stage sets this.
+  settled_sweep_candidate: boolean;
+  // Inbox-dwell 1.1/1.9. How many triage sessions this message has sat unread through — computed by the
+  // CALLER from the session log, never in here, for the same reason settled_sweep_candidate is.
+  //
+  // Null means "not a candidate for the unread sweep": already read, not in the inbox, or this pass is
+  // not the unread sweep at all. Distinct from 0, which means the message IS a candidate and has simply
+  // survived no sessions yet.
+  declined_exposures: number | null;
+  // 1.9's two thresholds. Supplied rather than derived here because which one applies depends on whether
+  // the Needs Action signal set claims the message, and the mailbox's own configured count.
+  declined_threshold: number;
 };
 
 export const DECISION_SOURCES = [
@@ -36,11 +58,23 @@ export const DECISION_SOURCES = [
   "address_policy",
   "domain_policy",
   "suspended_policy",
+  "first_contact",
   "derived",
+  "sweep_settled",
+  "sweep_declined",
   "fallback",
 ] as const;
 
 export type DecisionSource = (typeof DECISION_SOURCES)[number];
+
+// The one spelling of the settled sweep's source. The sweep's candidate query filters on it to stay
+// idempotent per message, and 1.11's rescue handler keys on it to know a rescue has no policy to blame —
+// a literal in either place is the two-spellings-of-one-semantic shape this module exists to prevent.
+export const SWEEP_SETTLED_SOURCE = "sweep_settled" as const satisfies DecisionSource;
+
+// The unread sweep's source. Same reasoning as the settled one: the candidate query filters on it to stay
+// idempotent per message, and 1.11's rescue handler keys on it to know a rescue has no policy to blame.
+export const SWEEP_DECLINED_SOURCE = "sweep_declined" as const satisfies DecisionSource;
 
 // `Action.source` is a varchar with no database enum behind it, so a row written by an older build or by
 // hand can hold a value decide() never emits. Null says exactly that — "not one of ours" — rather than an
@@ -66,11 +100,22 @@ export type DerivedAction = (typeof DERIVED_ACTIONS)[number];
 
 export const DERIVED_ARCHIVE_AGE_DAYS = 30;
 
+// Shorter than the bulk-mail window above, deliberately. A meeting that finished a week ago has no
+// further claim on the inbox, and unlike an unrecognised newsletter there is no evidence still accruing
+// about whether the sender matters — the operator has already replied to them.
+export const CALENDAR_ARCHIVE_AGE_DAYS = 7;
+
 type DerivedOutcome = { action: DerivedAction; reasons: string[] };
 
 type PolicyMatch = { policy: SenderPolicyInput; scope: PolicyScope };
 
-export function matchesNeedsActionSignals(input: DecisionInput): boolean {
+// Narrowed to the four things it actually reads, rather than taking the whole DecisionInput. The shadow
+// runner has to ask this question BEFORE it can finish building one — 1.9's double threshold depends on
+// the answer — and widening the parameter would have forced a cast there, which is a lie the type system
+// then stops checking.
+export type NeedsActionSignalInput = Pick<DecisionInput, "signals" | "last_in_thread_is_mine" | "thread_state" | "sender_suppressed">;
+
+export function matchesNeedsActionSignals(input: NeedsActionSignalInput): boolean {
   return (
     !input.signals.is_bulk &&
     !input.signals.is_automated &&
@@ -205,6 +250,28 @@ function derivedOutcome(input: DecisionInput): DerivedOutcome | null {
     };
   }
 
+  // Meeting churn from someone the operator actually works with. The largest single block of unsorted
+  // mail in the estate as of 2026-08-26 — ~263 messages of "Updated invitation" and "Canceled event" from
+  // colleagues — and no policy could name it: resolution is by sender, and those senders also send real
+  // mail, so a rule on them would archive both.
+  //
+  // `sender_known` is load-bearing, not decoration. It limits this to people the operator has written
+  // back to, which is what separates a colleague's meeting series from an invitation sent by a stranger —
+  // the second is a first contact and belongs to the quarantine rung above, not here.
+  //
+  // `=== true` rather than truthiness: is_calendar is a tri-state and null means the structure was never
+  // observed. Archiving on "not definitely false" would sweep every message that predates the column.
+  if (signals.is_calendar === true && signals.sender_known && signals.age_days > CALENDAR_ARCHIVE_AGE_DAYS) {
+    return {
+      action: "archive",
+      reasons: [
+        "a calendar message, by its MIME structure rather than its subject line",
+        "from a sender this mailbox has replied to",
+        `${signals.age_days} days old, past the ${CALENDAR_ARCHIVE_AGE_DAYS}-day calendar-archive age`,
+      ],
+    };
+  }
+
   if (matchesNeedsActionSignals(input)) {
     return {
       action: "needs_action",
@@ -258,7 +325,113 @@ export function decide(input: DecisionInput): Decision {
     return policyDecision(input, verdicts, policy_match);
   }
 
+  // Below every explicit rule and above `derived`, per §D3 of the quarantine spec.
+  //
+  // Reaching this line already proves no address or domain policy names this sender — matchPolicy
+  // returned null above — so the "no policy" third of the first-contact test needs no separate check and
+  // cannot drift out of agreement with the precedence that establishes it.
+  //
+  // `derived` sits below rather than above because a derived rule infers from behaviour with a sender,
+  // and a first contact has no behaviour to infer from. There is nothing here for the two to disagree
+  // about.
+  if (input.signals.is_first_contact) {
+    const suppressed_by = isBlocked(verdicts, "quarantine", false);
+    if (suppressed_by !== null) {
+      return {
+        action: "keep_inbox",
+        source: "first_contact",
+        policy_id: null,
+        suppressed_by,
+        reasons: [
+          `first message ever from ${input.from_address}, never replied to, named by no policy`,
+          `guard ${suppressed_by} blocks quarantining it`,
+        ],
+      };
+    }
+    return {
+      action: "quarantine",
+      source: "first_contact",
+      policy_id: null,
+      suppressed_by: null,
+      reasons: [
+        `first message ever from ${input.from_address}`,
+        "nothing has ever been sent back to this sender",
+        "no address or domain policy names them",
+      ],
+    };
+  }
+
   const derived = derivedOutcome(input);
+
+  // Step 6.4, immediately above the settled sweep and for the same reasons — see the block below for why
+  // position alone does the work of six explicit checks.
+  //
+  // Unread mail the operator has been shown and has declined, session after session. `>=` against a
+  // threshold the CALLER supplies per message, because mail somebody is waiting on gets a longer rope:
+  // 1.9 puts ordinary mail at 3 declines and Needs Action mail at 6, and which applies depends on facts
+  // only the caller has.
+  //
+  // Above settled rather than below it because the two candidate sets are disjoint — settled is read mail,
+  // declined is unread — so the order is a statement of intent rather than a tiebreak. Stated anyway: if
+  // the definitions ever overlap, being declined is the more specific claim and should win.
+  if (input.declined_exposures !== null && input.declined_exposures >= input.declined_threshold) {
+    const suppressed_by = isBlocked(verdicts, "archive", false);
+    if (suppressed_by !== null) {
+      return {
+        action: "keep_inbox",
+        source: SWEEP_DECLINED_SOURCE,
+        policy_id: null,
+        suppressed_by,
+        reasons: [`unread through ${input.declined_exposures} triage sessions`, `suppressed by guard: ${suppressed_by}`],
+      };
+    }
+    return {
+      action: "archive",
+      source: SWEEP_DECLINED_SOURCE,
+      policy_id: null,
+      suppressed_by: null,
+      reasons: [
+        `present and unread through ${input.declined_exposures} triage sessions`,
+        "offered and declined each time, rather than simply old",
+      ],
+    };
+  }
+
+  // Step 6.5, and its POSITION is the whole rule. Every step above either returns or declines before
+  // reaching here, so each of them beats a sweep without a single explicit check, and only step 7's
+  // fallback is displaced. The first draft of this design had the sweep "honour the ladder's verdict",
+  // which for essentially every candidate is that fallback — it would have archived nothing, ever.
+  //
+  // A derived outcome that NAMES an action (archive, or needs_action) keeps it; a derived keep_inbox
+  // means "bulk mail, evidence still accruing", which is not an opinion worth defending against a
+  // message that has demonstrably sat read in the inbox for a week. needs_action winning here is what
+  // protects the Needs Action queue in Branch A, with no special case written anywhere.
+  if (input.settled_sweep_candidate && (derived === null || derived.action === "keep_inbox")) {
+    // 1.10: the Settled sweep, and ONLY the Settled sweep, is exempt from replied_in_thread. That guard
+    // stops a SENDER POLICY archiving live client correspondence; this is a different claim — this
+    // message has been in the inbox a week and has demonstrably been read. A thread answered a week ago
+    // and untouched since is the textbook settled thread, the best candidate rather than the worst.
+    // Every other guard, absolute and scoped, applies unchanged.
+    const sweep_verdicts = verdicts.filter((verdict) => verdict.name !== "replied_in_thread");
+    const suppressed_by = isBlocked(sweep_verdicts, "archive", false);
+    if (suppressed_by !== null) {
+      return {
+        action: "keep_inbox",
+        source: "sweep_settled",
+        policy_id: null,
+        suppressed_by,
+        reasons: ["read, and settled in the inbox past the dwell", `suppressed by guard: ${suppressed_by}`],
+      };
+    }
+    return {
+      action: "archive",
+      source: "sweep_settled",
+      policy_id: null,
+      suppressed_by: null,
+      reasons: ["read, and settled in the inbox past the dwell", "no guard, thread state, policy or derived rule claims this message"],
+    };
+  }
+
   if (derived !== null) {
     const derived_action_class: ActionClass | null = derived.action === "needs_action" ? null : derived.action;
     const suppressed_by = derived_action_class === null ? null : isBlocked(verdicts, derived_action_class, false);

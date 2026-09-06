@@ -5,7 +5,27 @@ const admin_links = [
   { to: "/admin/needs-action", label: "Needs Action", description: "Threads waiting on a reply from you." },
   { to: "/admin/senders", label: "Senders", description: "Who is writing in, and whether you've replied." },
   { to: "/admin/mail", label: "Mailboxes", description: "Connections, sync runs, and certificates." },
+  {
+    to: "/admin/promote",
+    label: "Turn rules on",
+    description: "Rules that have been watching and never allowed to act. Review the big ones and switch them on together.",
+  },
+  {
+    to: "/admin/unsubscribe",
+    label: "Stop mail arriving",
+    description: "Senders who offer a way off their list. Every rule elsewhere only hides mail; this stops it being sent.",
+  },
   { to: "/admin/shadow", label: "Shadow Report", description: "What each policy would have done — review before promoting it to auto." },
+  {
+    to: "/admin/journal",
+    label: "Action Journal",
+    description: "Every action ever decided or taken, with the state it recorded before acting — and how to reverse it.",
+  },
+  {
+    to: "/admin/filing",
+    label: "Filing Queue",
+    description: "`file` actions the filing gate could not resolve on its own — confirm or correct a destination to unstick one.",
+  },
 ] as const;
 
 const AdminHome: FC = () => {

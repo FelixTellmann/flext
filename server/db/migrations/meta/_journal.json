@@ -36,6 +36,97 @@
       "when": 1787146203113,
       "tag": "0004_cooing_robbie_robertson",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1787161984450,
+      "tag": "0005_bumpy_lily_hollister",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1787222980379,
+      "tag": "0006_confused_fenris",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1787230588206,
+      "tag": "0007_overjoyed_cargill",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1787268914849,
+      "tag": "0008_marvelous_ben_grimm",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1787730034646,
+      "tag": "0009_tidy_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1787732506885,
+      "tag": "0010_magical_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1787738615711,
+      "tag": "0011_thankful_adam_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1787832118279,
+      "tag": "0012_heavy_luke_cage",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1787906592536,
+      "tag": "0013_friendly_rhino",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1787916505745,
+      "tag": "0014_ordinary_angel",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1787924077946,
+      "tag": "0015_sturdy_maximus",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1788076709907,
+      "tag": "0016_spooky_moon_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1788076976213,
+      "tag": "0017_talented_silverclaw",
+      "breakpoints": true
     }
   ]
 }

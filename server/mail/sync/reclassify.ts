@@ -6,6 +6,7 @@ import { createIdentityMatcher, isAddressedToMe, isCcMe } from "@server/mail/cla
 import type { MailboxRow } from "@server/mail/mailbox";
 import { mailboxIdentityAddresses } from "@server/mail/mailbox";
 import { extractAddresses, headerValue, headerValues } from "@server/mail/providers/headers";
+import { hasHumanAttachment, isCalendarMessage } from "@server/mail/providers/structure";
 import type { FetchedMessage, HeaderMap, MailboxProvider } from "@server/mail/providers/types";
 import { loadCursor, saveCursor } from "@server/mail/sync/cursor";
 import { selectSyncFolders } from "@server/mail/sync/folders";
@@ -25,12 +26,21 @@ type StoredClassification = {
   to_me: boolean;
   cc_me: boolean;
   dkim_aligned: boolean | null;
+  has_attachment: boolean;
+  is_calendar: boolean | null;
 };
 
 type DerivedClassification = {
   to_me: boolean;
   cc_me: boolean;
   dkim_aligned: boolean | null;
+  // The calendar-detection backfill. This pass already re-fetches every stored message to re-derive
+  // columns — it is how the corrected identity list and the fixed DKIM parser reached existing mail — so
+  // adding BODYSTRUCTURE to its fetch is the whole backfill. ~50,000 rows carry is_calendar = null until
+  // it runs, and a signal that only applied to mail arriving from now on would not solve the problem that
+  // prompted it: the ~263 meeting invitations already sitting in the inbox.
+  has_attachment: boolean;
+  is_calendar: boolean | null;
 };
 
 function headerAddresses(headers: HeaderMap, name: string): string[] {
@@ -59,6 +69,12 @@ function deriveClassification(input: {
     // this fetch: an envelope that comes back without a From would otherwise wipe a correct verdict to
     // NULL, which is the exact failure this pass exists to undo.
     dkim_aligned: dkimAligned(headerValue(input.fetched.headers, "Authentication-Results"), input.stored.from_domain),
+    // Both derived from the MIME structure, and both KEEP their stored value when the server returned
+    // none. Same reasoning as the From-domain line above: a fetch that comes back without a structure
+    // must not wipe a verdict a previous pass established, and null here means "never observed" rather
+    // than "observed to be absent".
+    has_attachment: input.fetched.structure === null ? input.stored.has_attachment : hasHumanAttachment(input.fetched.structure),
+    is_calendar: input.fetched.structure === null ? input.stored.is_calendar : isCalendarMessage(input.fetched.structure),
   };
 }
 
@@ -79,6 +95,8 @@ async function loadStoredClassifications(input: {
       to_me: message.to_me,
       cc_me: message.cc_me,
       dkim_aligned: message.dkim_aligned,
+      has_attachment: message.has_attachment,
+      is_calendar: message.is_calendar,
     })
     .from(message)
     .where(
@@ -111,8 +129,10 @@ async function reclassifyFolder(input: {
   let changed = 0;
 
   for (const range of batchUidRanges({ uid_next: status.uid_next, batch_size: input.batch_size, from_uid: resume_from + 1 })) {
-    // fetchHeaders is the only fetch this pass makes, and it compiles to BODY.PEEK[HEADER.FIELDS (...)]
-    // — a bare BODY[] would set \Seen on every message it read (§4.2).
+    // fetchHeaders is the only fetch this pass makes. It compiles to BODY.PEEK[HEADER.FIELDS (...)] plus
+    // ENVELOPE and BODYSTRUCTURE — a bare BODY[] would set \Seen on every message it read (§4.2), and
+    // BODYSTRUCTURE is the server describing the MIME tree rather than sending any of it, so neither
+    // touches a flag nor transfers a body.
     const fetched = await input.provider.fetchHeaders(input.folder, range);
     const stored = await loadStoredClassifications({
       mailbox_id: input.mailbox_row.id,
@@ -131,7 +151,16 @@ async function reclassifyFolder(input: {
       const derived = deriveClassification({ fetched: entry, stored: row, matcher: input.matcher });
       // Writing every row unconditionally would push updatedAt across the whole table and leave `changed`
       // saying nothing about what the pass actually corrected.
-      if (derived.to_me === row.to_me && derived.cc_me === row.cc_me && derived.dkim_aligned === row.dkim_aligned) {
+      // Every derived field, not the three this pass started with. Comparing a subset would make the
+      // calendar backfill a silent no-op on every row whose identity and DKIM verdicts were already
+      // right — which is nearly all of them, and is precisely the set the backfill exists to reach.
+      if (
+        derived.to_me === row.to_me &&
+        derived.cc_me === row.cc_me &&
+        derived.dkim_aligned === row.dkim_aligned &&
+        derived.has_attachment === row.has_attachment &&
+        derived.is_calendar === row.is_calendar
+      ) {
         continue;
       }
 
