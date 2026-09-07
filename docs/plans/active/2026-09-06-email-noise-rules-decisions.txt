@@ -1092,3 +1092,21 @@ A: yes — proposalsPastTheCut(report, visible) in -review-groups.ts gives the e
    on screen, so the link reads "N more in M smaller groups" correctly however big the backlog;
    topProposalGroups now returns only the visible list, its hidden_* fields having no caller left
 why: an exact count was available; "more on the full page" without a number was the fallback only
+
+[2026-09-07 11:40] rule-edit dismiss — what counts as a shape change
+Q: which fields of an edit retire the policy's shadow rows?
+A: action, client, topic, mark_read — policyShapeChanged in query/policies.ts, compared against the row
+   read before the INSERT ... ON DUPLICATE KEY UPDATE
+   not: source or autonomy too — neither changes the kind/targetPath the executor plans from, so a
+   re-save from another writer or the demotion-on-edit alone would dismiss for nothing
+   not: dismiss on every update — same objection, plus every bulk re-assign would wipe live proposals
+why: the row's own kind is what runs; only fields that feed it make the old rows wrong
+
+[2026-09-07 11:40] rule-edit dismiss — return shape and UI
+Q: how does the count reach callers?
+A: upsertPolicy returns PolicyRow & { dismissed_proposals } (UpsertPolicyResult), so link-action.ts's
+   dependency slot, bulk.ts and the script keep compiling; the ORPC procedure has no .output() so the
+   field flows to the client untouched. /admin/senders shows it on the single-sender assign banner only
+   not: a { policy, dismissed_proposals } wrapper — breaks three callers for one field
+   not: the bulk assign banner — a reduce over settled results, past the one-line budget; left for later
+why: smallest change that makes the count visible where tonight's realign and a manual edit both land

@@ -645,13 +645,18 @@ function AdminSendersPage() {
     setBusyKey(key);
     setPolicyStatus(null);
     try {
-      await orpc.mail.upsertPolicy({
+      const result = await orpc.mail.upsertPolicy({
         scope: "address",
         value: address,
         action,
         mark_read: canMarkRead(action) && mark_read,
         source: "operator",
       });
+      setPolicyStatus(
+        result.dismissed_proposals > 0
+          ? `${address}: ${result.dismissed_proposals} old proposal${result.dismissed_proposals === 1 ? "" : "s"} dismissed — re-run the pass on /admin/shadow to re-propose under the new rule.`
+          : null,
+      );
       await router.invalidate();
     } catch (error) {
       setPolicyStatus(`Assign failed for ${address}: ${error instanceof Error ? error.message : String(error)}`);

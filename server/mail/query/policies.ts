@@ -1,9 +1,11 @@
 import { db } from "@server/db/drizzle";
-import { neverTouchRule, senderPolicy, senderSuppression } from "@server/db/schema";
+import { action, neverTouchRule, senderPolicy, senderSuppression } from "@server/db/schema";
+import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import type { NeverTouchRuleInput, NeverTouchRuleKind } from "@server/mail/classify/guards";
 import type { PolicyAction, PolicyScope } from "@server/mail/classify/rules";
 import { POLICY_ACTIONS } from "@server/mail/classify/rules";
 import { FOLDER_SEGMENT_RULE } from "@server/mail/filing/paths";
+import { DISMISSED_STATUS } from "@server/mail/query/review";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, isNotNull, isNull, like, or } from "drizzle-orm";
 import { z } from "zod";
@@ -50,6 +52,13 @@ export type UpsertPolicyInput = {
   suspended_at?: Date | null;
   suspension_reason?: string | null;
 };
+
+// The written row plus how many of its shadow proposals the edit retired (0 on insert or a re-save).
+export type UpsertPolicyResult = PolicyRow & { dismissed_proposals: number };
+
+// The fields a shadow row's kind/targetPath are derived from. Not `source` or `autonomy`: neither changes
+// what the rule would do to a message, so a re-save or the demotion-on-edit alone retires nothing.
+export type PolicyShape = { action: PolicyAction; client: string | null; topic: string | null; mark_read: boolean };
 
 export type NeverTouchRow = NeverTouchRuleInput & {
   id: string;
@@ -239,9 +248,21 @@ export function policyEditColumns(parsed: z.infer<typeof upsert_policy_schema>, 
   };
 }
 
-export async function upsertPolicy(input: UpsertPolicyInput): Promise<PolicyRow> {
+export function policyShapeChanged(existing: PolicyShape, edit: PolicyShape): boolean {
+  return (
+    existing.action !== edit.action ||
+    existing.client !== edit.client ||
+    existing.topic !== edit.topic ||
+    existing.mark_read !== edit.mark_read
+  );
+}
+
+export async function upsertPolicy(input: UpsertPolicyInput): Promise<UpsertPolicyResult> {
   const parsed = upsert_policy_schema.parse(input);
   const now = new Date();
+  const policy_where = and(eq(senderPolicy.scope, parsed.scope), eq(senderPolicy.value, parsed.value));
+
+  const [existing] = await db.select().from(senderPolicy).where(policy_where).limit(1);
 
   await db
     .insert(senderPolicy)
@@ -256,17 +277,30 @@ export async function upsertPolicy(input: UpsertPolicyInput): Promise<PolicyRow>
     })
     .onDuplicateKeyUpdate({ set: policyEditColumns(parsed, now) });
 
-  const [row] = await db
-    .select()
-    .from(senderPolicy)
-    .where(and(eq(senderPolicy.scope, parsed.scope), eq(senderPolicy.value, parsed.value)))
-    .limit(1);
+  const [row] = await db.select().from(senderPolicy).where(policy_where).limit(1);
 
   if (row === undefined) {
     throw new Error(`upsertPolicy: row for ${parsed.scope}:${parsed.value} vanished immediately after write`);
   }
 
-  return toPolicyRow(row);
+  const dismissed_proposals =
+    existing === undefined || !policyShapeChanged(toPolicyRow(existing), parsed) ? 0 : await dismissShadowProposals(existing.id, now);
+
+  return { ...toPolicyRow(row), dismissed_proposals };
+}
+
+// A shadow row carries the kind and targetPath of the rule AS IT WAS when the row was written, and the
+// executor plans from the row, not from the policy — so after an archive → file edit, switching the
+// rule on would archive. Those rows are retired the way the review page declines a proposal
+// (docs/decisions/2026-09-07-dismissed-proposals.md), guarded on `shadow` so pending/applied/failed rows
+// keep their history. The next scheduled sweep re-proposes under the new shape; an operator Run-pass on
+// /admin/shadow gets the proposals back immediately.
+async function dismissShadowProposals(sender_policy_id: string, now: Date): Promise<number> {
+  const [header] = await db
+    .update(action)
+    .set({ status: DISMISSED_STATUS, updatedAt: now })
+    .where(and(eq(action.sender_policy_id, sender_policy_id), eq(action.status, SHADOW_STATUS)));
+  return header.affectedRows;
 }
 
 export async function deletePolicy(id: string): Promise<void> {

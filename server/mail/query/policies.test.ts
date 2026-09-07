@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { policyEditColumns, upsert_policy_schema, upsertPolicy } from "@server/mail/query/policies";
+import type { PolicyShape } from "@server/mail/query/policies";
+import { policyEditColumns, policyShapeChanged, upsert_policy_schema, upsertPolicy } from "@server/mail/query/policies";
 
 // §8, §4.3: upsertPolicy has rejected autonomy "auto" at its Zod boundary since Phase 3, and Task 8 does
 // NOT weaken that — promotion is a dedicated procedure (autonomy.ts's promotePolicyAutonomy), never a
@@ -104,5 +105,51 @@ describe("mark_read is offered on file and archive only", () => {
     for (const action of ["keep_inbox", "archive", "file", "auto_trash"] as const) {
       expect(upsert_policy_schema.parse({ ...base, action, mark_read: false }).mark_read).toBe(false);
     }
+  });
+});
+
+// A shadow row records the kind/targetPath of the rule as it was when the row was written, and the
+// executor plans from the row — so an edit that changes what the rule does must retire the rows written
+// under the old shape (docs/decisions/2026-09-07-dismissed-proposals.md). This is the comparison that
+// decides "changed", pinned on fixtures: exactly action, client, topic and mark_read, so a re-save, a
+// source change or the demotion-on-edit alone dismisses nothing.
+describe("policyShapeChanged — which edits retire a policy's shadow proposals", () => {
+  const filed: PolicyShape = { action: "file", client: null, topic: "Notifications", mark_read: true };
+
+  test("an identical re-save changes nothing", () => {
+    expect(policyShapeChanged(filed, { ...filed })).toBe(false);
+  });
+
+  test("null client and topic on both sides compare equal", () => {
+    const archived: PolicyShape = { action: "archive", client: null, topic: null, mark_read: false };
+    expect(policyShapeChanged(archived, { ...archived })).toBe(false);
+  });
+
+  test("each of the four shape fields alone is a change", () => {
+    expect(policyShapeChanged(filed, { ...filed, action: "archive" })).toBe(true);
+    expect(policyShapeChanged(filed, { ...filed, client: "Acme" })).toBe(true);
+    expect(policyShapeChanged(filed, { ...filed, topic: "Receipts" })).toBe(true);
+    expect(policyShapeChanged(filed, { ...filed, mark_read: false })).toBe(true);
+  });
+
+  test("tonight's realign — archive to file/Notifications — is a change", () => {
+    const archived: PolicyShape = { action: "archive", client: null, topic: null, mark_read: false };
+    expect(policyShapeChanged(archived, filed)).toBe(true);
+  });
+
+  test("file to archive with the topic dropping to null is a change", () => {
+    expect(policyShapeChanged(filed, { action: "archive", client: null, topic: null, mark_read: true })).toBe(true);
+  });
+
+  test("the parsed schema output is a valid edit side, and source/autonomy are not compared", () => {
+    const parsed = upsert_policy_schema.parse({
+      scope: "address",
+      value: "someone@example.com",
+      action: "file",
+      topic: "Notifications",
+      mark_read: true,
+      source: "another-source",
+    });
+    expect(policyShapeChanged(filed, parsed)).toBe(false);
   });
 });
