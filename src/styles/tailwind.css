@@ -137,6 +137,13 @@
     --color-success: 34 197 94;
     --color-info: 56 189 248;
     --color-warning: 245 158 11;
+    /* 5.00:1 on white and 4.56:1 on the card surface, so 12-13px danger text clears AA. Pure red at
+       252 0 0 was 4.09:1. */
+    --color-danger: 225 0 0;
+  }
+
+  /* The lighter red stays for dark mode: 4.54:1 on the dark bg, where the darker one would fall to 3.71:1. */
+  .dark {
     --color-danger: 252 0 0;
   }
 
