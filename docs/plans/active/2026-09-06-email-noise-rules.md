@@ -82,7 +82,7 @@ Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-b
 
 ### Phase 8 — admin surfaces (operator's extra scope, widget 5)
 - [x] Sessions strip on `/admin` (6194577): when the system last believed the operator was reading mail, on what evidence, in which mailboxes.
-- [ ] `/admin/review`: one page folding together rules waiting to be switched on (top 10 by waiting count, one Switch-on button each), proposals waiting for approval grouped by rule with Approve-all / Dismiss per group, the sessions strip, and unsubscribe candidates with checkboxes and one button. Sketch: `docs/mockups/2026-09-06-first-contact-proposals/index.html`, section 5. Old pages stay.
+- [x] `/admin/review` (34cfe61, b14dd8f, f3e8e0e; decision `2026-09-07-dismissed-proposals.md`): one page folding together rules waiting to be switched on (top 10 by waiting count, one Switch-on button each), proposals waiting for approval grouped by rule with Approve-all / Dismiss per group, the sessions strip, and unsubscribe candidates with checkboxes and one button. Sketch: `docs/mockups/2026-09-06-first-contact-proposals/index.html`, section 5. Old pages stay.
 - [x] `/admin/promote` defaults to the top 10 with samples collapsed (a03c63b).
 
 ### Review
@@ -90,7 +90,7 @@ Decisions: `2026-09-06-sending-account-and-digest.md`, `2026-09-06-unsubscribe-b
 
 ### Deploy and operator batch (session-run, after the review)
 - [ ] Operator runs `bun run db:migrate` once. Session pushes `main`, verifies the engine after the next quarter-hour tick.
-- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write` (realign, then create); `promote-reference-policies.ts --write`; `repair-quarantine-snapshots.ts --write`; `supersede-stale-proposals.ts --write`; `rewrite-first-contact-backlog.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
+- [ ] Batch, in this order, each with a dry-run table first: duplicate count (expect 0); `flatten-tellmann-folders.ts --write`; `flatten-filing-policies.ts --write`; `create-noise-policies.ts --write` (realign, then create); `promote-reference-policies.ts --write`; `repair-quarantine-snapshots.ts --write`; `rewrite-first-contact-backlog.ts --write` (before supersede: the rewrite touches shadow rows only); `supersede-stale-proposals.ts --write`; clear the mailer@shopify.com suspension; `set-source-autonomy.ts --write`; `record-trash-retention.ts --write`; `create-throwaway-policies.ts --write`; `draft-rules.ts --write`; POST `mode=reclassify` last.
 - [ ] Coolify: add the Monday digest task, narrated in the browser.
 - [ ] GitHub: disconnect the dead Vercel integration, narrated in the browser.
 - [ ] `git mv` this plan to `docs/plans/completed/` with the closing marker.
