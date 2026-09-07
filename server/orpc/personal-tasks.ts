@@ -18,8 +18,8 @@ import { slugify } from "utils/slugify";
 import { z } from "zod";
 import { authed } from "./base";
 
-// The states a task is still live in. `someday` is live but deliberately out of sight, and it is
-// therefore excluded here and surfaced only through listHidden.
+// The states a task is still live in. `someday` is live but deliberately out of sight: excluded here, and
+// reached only through the hidden panel, the Someday screen and the palette search.
 const ACTIVE_STATES = ["inbox", "open"] as const;
 
 type TaskRow = typeof personalTask.$inferSelect;
@@ -130,6 +130,17 @@ const dayToInstant = (day: string | null | undefined): Date | null | undefined =
 
 export const capture_input_schema = z.object({ title: z.string().min(1).max(512) });
 
+// One past the highest position in the same set listPool orders, so an appended task lands after every
+// task already there. mysql2 hands MAX back as a string; Number() at the boundary, as everywhere else.
+const nextPoolOrder = async (plan_week: string): Promise<number> => {
+  const [row] = await db
+    .select({ highest: sql<number | string | null>`MAX(${personalTask.pool_order})` })
+    .from(personalTask)
+    .where(and(eq(personalTask.plan_week, plan_week), inArray(personalTask.state, [...ACTIVE_STATES]), isNull(personalTask.when_date)));
+
+  return row?.highest === null || row?.highest === undefined ? 0 : Number(row.highest) + 1;
+};
+
 // Shared with src/routes/api/personal-capture.ts, which the iOS Shortcut posts to with a bearer token and
 // no session — it cannot reach an `authed` procedure, and capture is the one thing that must work from
 // wherever the thought turns up.
@@ -143,8 +154,8 @@ export const insertCapturedTask = async (title: string): Promise<{ id: string }>
 
 // The one way back out of someday, shared by revive and the review sweep's reviveToPool. It clears the
 // date and the week so the task lands in Anytime (or the pool it is given) and nothing else: notes,
-// filing, deadline and the deferral count are history the task keeps. pool_order goes back to the column
-// default, the position a freshly captured task also starts from, because the column is not nullable.
+// filing, deadline and the deferral count are history the task keeps. A task revived into a pool joins
+// the end of it — the order in that pool was decided on purpose, and a revival should not jump it.
 export const reviveSomedayTask = async (id: string, plan_week: string | null): Promise<void> => {
   const [row] = await db.select({ state: personalTask.state }).from(personalTask).where(eq(personalTask.id, id)).limit(1);
 
@@ -156,9 +167,11 @@ export const reviveSomedayTask = async (id: string, plan_week: string | null): P
     throw new ORPCError("BAD_REQUEST", { message: "only a someday task can be revived" });
   }
 
+  const pool_order = plan_week === null ? 0 : await nextPoolOrder(plan_week);
+
   await db
     .update(personalTask)
-    .set({ state: "open", when_date: null, plan_week, pool_order: 0, updatedAt: new Date() })
+    .set({ state: "open", when_date: null, plan_week, pool_order, updatedAt: new Date() })
     .where(eq(personalTask.id, id));
 };
 

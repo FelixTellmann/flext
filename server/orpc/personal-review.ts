@@ -207,8 +207,8 @@ export const personalReviewProcedures = {
     };
   }),
 
-  // The sweep's revive lands in the pool of the week under review rather than in Anytime: a sweep is
-  // planning next week, and a task worth reviving there is a task worth carrying.
+  // The sweep's revive lands in the pool of the week under review (the ISO week containing now) rather
+  // than in Anytime: the sweep is part of planning, and a task worth reviving there is worth carrying.
   reviveToPool: authed.input(z.object({ id: z.string().min(1), plan_week: z.string().min(1).max(16) })).handler(async ({ input }) => {
     await reviveSomedayTask(input.id, input.plan_week);
 

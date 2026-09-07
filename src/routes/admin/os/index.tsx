@@ -98,9 +98,9 @@ function PersonalOsTodayPage() {
     await loadHidden();
   };
 
-  // The hidden list is local state the loader never touches, so it is dropped from at once and re-read
-  // once the save has settled either way: the re-read is the confirmation on success and the rollback
-  // on failure.
+  // The hidden list is local state the loader never touches, so the row is dropped from it at once and
+  // the list re-read once the save has settled either way: the re-read is the confirmation on success
+  // and the rollback on failure.
   const revive = async (id: string) => {
     setHidden((current) => (current === null ? null : current.filter((task) => task.id !== id)));
 
