@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { scoreWeek } from "@server/personal-scorecard";
+import { percentOf, scoreWeek } from "@server/personal-scorecard";
 
 // The score is only honest over planned tactics (spec 4.3's first trap), and it has to say "nothing" for a
 // week with nothing planned rather than "0%" (spec 16). Each case below is one of those edges.
@@ -51,5 +51,12 @@ describe("scoreWeek", () => {
     ];
 
     expect(scoreWeek(tasks, week, week_range)).toEqual({ planned: 3, completed: 2, percent: 67 });
+  });
+});
+
+describe("percentOf", () => {
+  test("frozen counts score the same way a live week does", () => {
+    expect(percentOf(0, 0)).toBeNull();
+    expect(percentOf(3, 2)).toBe(67);
   });
 });

@@ -5,6 +5,11 @@ export type ScoredTask = { plan_week: string | null; goal_id: string | null; com
 
 export type WeekScore = { planned: number; completed: number; percent: number | null };
 
+// Null, never zero: a week with nothing planned has no score, and rendering it as 0% would manufacture a
+// miss out of an absence (spec 16). Shared with the frozen counts a reviewed week reads back.
+export const percentOf = (planned: number, completed: number): number | null =>
+  planned === 0 ? null : Math.round((completed / planned) * 100);
+
 // `week_range.to` is exclusive: the instant the following week begins.
 export const scoreWeek = (tasks: ScoredTask[], week: string, week_range: { from: Date; to: Date }): WeekScore => {
   const planned_tasks = tasks.filter((task) => task.plan_week === week && task.goal_id !== null);
@@ -13,7 +18,5 @@ export const scoreWeek = (tasks: ScoredTask[], week: string, week_range: { from:
   ).length;
   const planned = planned_tasks.length;
 
-  // Null, never zero: a week with nothing planned has no score, and rendering it as 0% would manufacture
-  // a miss out of an absence (spec 16).
-  return { planned, completed, percent: planned === 0 ? null : Math.round((completed / planned) * 100) };
+  return { planned, completed, percent: percentOf(planned, completed) };
 };

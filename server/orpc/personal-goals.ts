@@ -12,7 +12,7 @@ import {
   personalTask,
 } from "@server/db/schema";
 import { DAY_MS, isoWeekOf, isoWeekRange, operatorDateOf, operatorDayStartOf } from "@server/operator-day";
-import { scoreWeek, type WeekScore } from "@server/personal-scorecard";
+import { percentOf, scoreWeek, type WeekScore } from "@server/personal-scorecard";
 import { readSetting } from "@server/personal-settings";
 import { EXECUTION_BENCHMARK } from "@server/personal-thresholds";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lte } from "drizzle-orm";
@@ -212,10 +212,9 @@ const scorecardStrip = async (week: string): Promise<Array<{ week: string } & We
     const review = frozen.get(strip_week);
 
     if (review !== undefined && review.planned_count !== null && review.completed_count !== null) {
-      const planned = review.planned_count;
-      const completed = review.completed_count;
+      const { planned_count: planned, completed_count: completed } = review;
 
-      return { week: strip_week, planned, completed, percent: planned === 0 ? null : Math.round((completed / planned) * 100) };
+      return { week: strip_week, planned, completed, percent: percentOf(planned, completed) };
     }
 
     return { week: strip_week, ...scoreWeek(tasks, strip_week, weekInstants(strip_week)) };
