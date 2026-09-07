@@ -141,6 +141,33 @@ export const insertCapturedTask = async (title: string): Promise<{ id: string }>
   return { id };
 };
 
+// The one way back out of someday, shared by revive and the review sweep's reviveToPool. It clears the
+// date and the week so the task lands in Anytime (or the pool it is given) and nothing else: notes,
+// filing, deadline and the deferral count are history the task keeps.
+export const reviveSomedayTask = async (id: string, plan_week: string | null): Promise<void> => {
+  const [row] = await db.select({ state: personalTask.state }).from(personalTask).where(eq(personalTask.id, id)).limit(1);
+
+  if (!row) {
+    throw new ORPCError("NOT_FOUND");
+  }
+
+  if (row.state !== "someday") {
+    throw new ORPCError("BAD_REQUEST", { message: "only a someday task can be revived" });
+  }
+
+  await db
+    .update(personalTask)
+    .set({ state: "open", when_date: null, plan_week, pool_order: null, updatedAt: new Date() })
+    .where(eq(personalTask.id, id));
+};
+
+// Searched across every state so a someday item is findable by name, which is the promise the ageing rule
+// makes. The order groups live work first and settled work last; LIKE is escaped so a title with a literal
+// percent sign is searchable by it.
+const SEARCH_STATE_ORDER = ["open", "inbox", "someday", "completed", "cancelled"] as const;
+
+const escapeLike = (query: string): string => query.replace(/[\\%_]/g, (character) => `\\${character}`);
+
 export const personalTaskProcedures = {
   listToday: authed.handler(async () => {
     const day_start = operatorDayStart();
@@ -262,6 +289,39 @@ export const personalTaskProcedures = {
       .where(eq(personalTask.id, row.id));
 
     return { id: row.id, deferral_count, blocked: false };
+  }),
+
+  revive: authed.input(id_schema).handler(async ({ input }) => {
+    await reviveSomedayTask(input.id, null);
+
+    return { id: input.id };
+  }),
+
+  // Oldest first: the item that has sat longest is the one a sweep should meet first. Age is measured from
+  // the last touch rather than from entering someday, which the row does not record.
+  listSomeday: authed.handler(async () => {
+    const now = Date.now();
+    const rows = await db.select().from(personalTask).where(eq(personalTask.state, "someday")).orderBy(asc(personalTask.updatedAt));
+
+    return rows.map((row) => ({ ...mapTask(row), someday_days: Math.floor((now - row.updatedAt.getTime()) / DAY_MS) }));
+  }),
+
+  searchTasks: authed.input(z.object({ query: z.string().trim().min(2).max(191) })).handler(async ({ input }) => {
+    const pattern = `%${escapeLike(input.query.toLowerCase())}%`;
+    const rows = await db
+      .select()
+      .from(personalTask)
+      .where(sql`LOWER(${personalTask.title}) LIKE ${pattern}`)
+      .orderBy(
+        sql`FIELD(${personalTask.state}, ${sql.join(
+          SEARCH_STATE_ORDER.map((state) => sql`${state}`),
+          sql`, `,
+        )})`,
+        desc(personalTask.updatedAt),
+      )
+      .limit(20);
+
+    return rows.map(mapTask);
   }),
 
   setState: authed.input(id_schema.extend({ state: settable_state_schema })).handler(async ({ input }) => {

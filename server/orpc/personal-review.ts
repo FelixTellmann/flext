@@ -6,6 +6,7 @@ import { DEFERRAL_LIMIT, SOMEDAY_AGE_DAYS } from "@server/personal-thresholds";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
+import { reviveSomedayTask } from "./personal-tasks";
 
 const ACTIVE_STATES = ["inbox", "open"] as const;
 
@@ -204,6 +205,14 @@ export const personalReviewProcedures = {
       items: rows.map((row) => ({ id: row.id, title: row.title, updated_at: row.updatedAt.toISOString() })),
       last_swept_at: last_swept?.someday_swept_at?.toISOString() ?? null,
     };
+  }),
+
+  // The sweep's revive lands in the pool of the week under review rather than in Anytime: a sweep is
+  // planning next week, and a task worth reviving there is a task worth carrying.
+  reviveToPool: authed.input(z.object({ id: z.string().min(1), plan_week: z.string().min(1).max(16) })).handler(async ({ input }) => {
+    await reviveSomedayTask(input.id, input.plan_week);
+
+    return { id: input.id, plan_week: input.plan_week };
   }),
 
   sweepSomeday: authed.handler(async () => {
