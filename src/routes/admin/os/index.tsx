@@ -80,6 +80,14 @@ function PersonalOsTodayPage() {
 
   // Peek reveals and changes nothing, so it loads its own list on demand rather than riding the loader —
   // hiding is only bearable while you can prove the hidden things are still there.
+  const loadHidden = async () => {
+    try {
+      setHidden(await orpc.personalTasks.listHidden());
+    } catch (error) {
+      setBanner(toFailureBanner("Could not read what is hidden", error));
+    }
+  };
+
   const togglePeek = async () => {
     if (hidden !== null) {
       setHidden(null);
@@ -87,11 +95,20 @@ function PersonalOsTodayPage() {
     }
 
     setBanner(null);
-    try {
-      setHidden(await orpc.personalTasks.listHidden());
-    } catch (error) {
-      setBanner(toFailureBanner("Could not read what is hidden", error));
-    }
+    await loadHidden();
+  };
+
+  // The hidden list is local state the loader never touches, so it is dropped from at once and re-read
+  // once the save has settled either way: the re-read is the confirmation on success and the rollback
+  // on failure.
+  const revive = async (id: string) => {
+    setHidden((current) => (current === null ? null : current.filter((task) => task.id !== id)));
+
+    await run(id, "Could not revive the task", async () => {
+      await orpc.personalTasks.revive({ id });
+    });
+
+    await loadHidden();
   };
 
   const renderTask = (task: PersonalTask, overdue_since: string | null) => (
@@ -273,8 +290,20 @@ function PersonalOsTodayPage() {
               <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1 dark:border-dark-border" key={task.id}>
                 <span className="flex-grow text-gray-500 text-sm dark:text-dark-text">{task.title}</span>
                 <span className="rounded-sm border border-gray-300 px-1.5 text-gray-500 text-xs dark:border-dark-border dark:text-dark-text">
-                  {task.when_date === null ? "someday" : `when ${formatDay(task.when_date)}`}
+                  {task.state === "someday" || task.when_date === null ? "someday" : `when ${formatDay(task.when_date)}`}
                 </span>
+                {/* Only a someday row: a future-dated one is hidden by its when, not by its state, and
+                    arrives on its own. */}
+                {task.state === "someday" && (
+                  <button
+                    className="rounded border border-gray-300 px-2 py-1 text-gray-600 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-text"
+                    disabled={busy_key !== null}
+                    onClick={() => void revive(task.id)}
+                    type="button"
+                  >
+                    Revive
+                  </button>
+                )}
               </div>
             ))}
           </div>

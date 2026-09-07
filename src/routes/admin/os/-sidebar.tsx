@@ -4,6 +4,7 @@ import {
   ChartBarIcon,
   ClockIcon,
   MagnifyingGlassIcon,
+  MoonIcon,
   RectangleStackIcon,
   Squares2X2Icon,
   SunIcon,
@@ -18,6 +19,7 @@ import type { FC } from "react";
 export const os_screens = [
   { Icon: SunIcon, label: "Today", to: "/admin/os" },
   { Icon: RectangleStackIcon, label: "Week pool", to: "/admin/os/pool" },
+  { Icon: MoonIcon, label: "Someday", to: "/admin/os/someday" },
   { Icon: Squares2X2Icon, label: "Areas", to: "/admin/os/areas" },
   { Icon: ChartBarIcon, label: "Ledger", to: "/admin/os/ledger" },
   { Icon: CalendarDaysIcon, label: "Weekly review", to: "/admin/os/review" },

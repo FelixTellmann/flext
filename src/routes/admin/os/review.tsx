@@ -5,7 +5,7 @@ import { type FC, type ReactNode, useState } from "react";
 import { orpc } from "~/integrations/orpc";
 import { Banner } from "../-outcome-banner";
 import { formatColon, formatDay } from "./-format";
-import { OsPanel } from "./-task-row";
+import { OsPanel, TaskTitleLink } from "./-task-row";
 import { useTaskAction } from "./-use-task-action";
 
 type Disposition = Awaited<ReturnType<typeof orpc.personalReview.listDispositionsRequired>>[number];
@@ -56,6 +56,16 @@ function PersonalOsReviewPage() {
       setSchedulingId(null);
       setScheduleDate("");
       setScheduleReason("");
+    });
+
+  const reviveToPool = (id: string) =>
+    run(id, "Could not revive the task", async () => {
+      await orpc.personalReview.reviveToPool({ id, plan_week: review.plan_week });
+    });
+
+  const cancel = (id: string) =>
+    run(id, "Could not cancel the task", async () => {
+      await orpc.personalTasks.setState({ id, state: "cancelled" });
     });
 
   const under_floor = ledger.streams.filter((stream) => (stream.deficit_seconds ?? 0) > 0);
@@ -195,6 +205,26 @@ function PersonalOsReviewPage() {
             Mark swept
           </button>
         </div>
+        {someday.items.map((item) => (
+          <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1.5 pl-4 dark:border-dark-border" key={item.id}>
+            <TaskTitleLink task={item} />
+            <span className="text-[13px] text-gray-500 dark:text-dark-text">since {formatDay(item.updated_at)}</span>
+            {[
+              { label: "Revive to pool", run: () => reviveToPool(item.id) },
+              { label: "Cancel", run: () => cancel(item.id) },
+            ].map((exit) => (
+              <button
+                className="rounded border border-gray-300 px-2.5 py-1 text-gray-900 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info disabled:cursor-not-allowed disabled:opacity-50 dark:border-dark-border dark:text-dark-headings"
+                disabled={busy_key !== null}
+                key={exit.label}
+                onClick={() => exit.run()}
+                type="button"
+              >
+                {exit.label}
+              </button>
+            ))}
+          </div>
+        ))}
         <div className="flex items-center gap-3 border-gray-200 border-b border-dotted py-1.5 dark:border-dark-border">
           <span className="flex-grow text-gray-600 text-sm dark:text-dark-text">Inbox triage</span>
           <span className="text-[13px] text-gray-500 dark:text-dark-text">{inbox_count} captured</span>
