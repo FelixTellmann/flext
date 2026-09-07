@@ -39,6 +39,13 @@ export const DEFERRED_STATUS = "deferred" as const;
 // by markApplied for every OTHER shadow row on the applied row's message, never by a pass.
 export const SUPERSEDED_STATUS = "superseded" as const;
 
+// The bound on how much mail one run may mutate, whichever door it comes through: the ORPC procedures cap
+// every batch_size on it, the unsubscribe button and the digest link hand it to unsubscribeBulk as the
+// per-mailbox pending cap, and review.tsx mirrors it for the client bundle. Four mailboxes hold ~14,700
+// messages and the shadow pass journals a decision for almost every one of them, so an unbounded call
+// would be a mailbox-wide sweep started by one click.
+export const MAX_ACTION_BATCH_SIZE = 200;
+
 export type PendingActionRow = {
   action_id: string;
   message_id: string;
@@ -54,8 +61,8 @@ export type PendingActionRow = {
   policy_scope: PolicyScope | null;
   dkim_aligned: boolean | null;
   filing_confirmed_at: Date | null;
-  // SenderPolicy.markRead through the same left join as policy_scope, false for a row whose policy is
-  // gone. Only planFor's `file` and `archive` branches read it.
+  // SenderPolicy.markRead through the same left join as policy_scope, or true for a Declined-sweep row,
+  // which has no policy (journal.ts pendingMarkRead). Only planFor's `file` and `archive` branches read it.
   mark_read: boolean;
 };
 

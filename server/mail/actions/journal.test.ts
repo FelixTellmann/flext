@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { supersedeSiblingsUpdate } from "@server/mail/actions/journal";
+import { pendingMarkRead, supersedeSiblingsUpdate } from "@server/mail/actions/journal";
+import { SWEEP_DECLINED_SOURCE, SWEEP_SETTLED_SOURCE } from "@server/mail/classify/rules";
 
 // journal.ts is the drizzle-backed port and every DATABASE_URL points at the same production MySQL, so
 // its statements are inspected, never executed — the same discipline run.test.ts applies to the shadow
@@ -33,5 +34,30 @@ describe("what a superseded row can never reach", () => {
 
     expect(by_policy).toContain("eq(action.status, SHADOW_STATUS)");
     expect(by_source).toContain("eq(action.status, SHADOW_STATUS)");
+  });
+});
+
+// Inbox-dwell 1.9: a Declined-sweep row has no policy, so its \Seen prefix cannot come from the policy
+// join. pendingMarkRead is what the loader folds into PendingActionRow.mark_read, and executor.test.ts
+// already pins that a mark_read row STOREs \Seen before its move — so this is the missing link.
+describe("pendingMarkRead", () => {
+  test("a sweep_declined row marks read with no policy behind it", () => {
+    expect(pendingMarkRead({ policy_mark_read: null, source: SWEEP_DECLINED_SOURCE })).toBe(true);
+  });
+
+  test("a sweep_settled row does not", () => {
+    expect(pendingMarkRead({ policy_mark_read: null, source: SWEEP_SETTLED_SOURCE })).toBe(false);
+  });
+
+  test("a policy that marks read still does, whatever the source", () => {
+    expect(pendingMarkRead({ policy_mark_read: true, source: "address_policy" })).toBe(true);
+    expect(pendingMarkRead({ policy_mark_read: false, source: "address_policy" })).toBe(false);
+  });
+
+  test("loadPendingActions selects the source and folds it through the helper", async () => {
+    const source = await Bun.file(`${import.meta.dir}/journal.ts`).text();
+    const loader = source.split("async function loadPendingActions(")[1]?.split("async function ")[0] ?? "";
+    expect(loader).toContain("source: action.source");
+    expect(loader).toContain("mark_read: pendingMarkRead({ policy_mark_read: row.policy_mark_read, source: row.source })");
   });
 });

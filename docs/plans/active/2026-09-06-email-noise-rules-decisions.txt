@@ -1057,3 +1057,38 @@ A: no param: every section is capped (ten rules, ten groups, sixty senders, seve
    gets long enough to collapse. Groups are per mailbox because approval writes rows the executor runs
    against that mailbox; the sketch's mailbox selector is the same idea, one line per mailbox instead
 why: the parameter would carry state the page never needs
+
+[2026-09-07 10:20] final fix — declined-sweep rows mark read
+Q: the fix asked for a fixture test that a sweep_declined row plans the \Seen prefix; PendingActionRow
+   carries no source and executor fixtures take mark_read pre-resolved, so no fixture can show it
+A: the derivation is a pure exported pendingMarkRead({ policy_mark_read, source }) in journal.ts, pinned
+   in journal.test.ts (declined+null policy → true, settled+null → false, policy true → true) plus a
+   source-text pin that loadPendingActions selects action.source and folds it through the helper; the
+   existing executor tests already pin mark_read → \Seen before the move
+   not: add `source` to PendingActionRow — widens the executor's port for a flag the loader can resolve
+why: the executor stays ignorant of decision sources; the journal port is where the row is assembled
+
+[2026-09-07 10:20] final fix — unsubscribe picker consolidation
+Q: the picker imports the orpc client as a value, so a test of its label helper drags the server router in
+A: pure parts (isTickable, candidateKey, attempt_tone, attemptLabel, policy_wording, senderTone,
+   senderLine) moved to -unsubscribe-outcome.ts with a type-only orpc import, tested in
+   -unsubscribe-outcome.test.ts; the picker stays the single UI and now renders the AttemptChip and the
+   mailto-titled "by email" chip so /admin/unsubscribe loses nothing by pointing at it; the page keeps
+   only the link-only rows
+   not: test through the picker — same server-router-in-the-test shape -action-journal.ts exists to avoid
+why: the repo's standing pattern for route-adjacent pure code
+
+[2026-09-07 10:20] final fix — where the 200 cap lives
+Q: export MAX_ACTION_BATCH_SIZE from orpc/mail.ts, or from the executor?
+A: server/mail/actions/executor.ts owns it; orpc/mail.ts and digest/link-action.ts import it, review.tsx
+   mirrors it with a comment naming the source
+   not: export from orpc/mail.ts — nothing under server/mail imports the API layer today, and
+   link-action.ts would have been the first (query layer → API layer, a cycle risk)
+why: the executor is what the cap bounds
+
+[2026-09-07 10:20] final fix — the review page's "more" count
+Q: the query returns total_groups/total_proposals over every row before its own slice; use them?
+A: yes — proposalsPastTheCut(report, visible) in -review-groups.ts gives the exact remainder past the ten
+   on screen, so the link reads "N more in M smaller groups" correctly however big the backlog;
+   topProposalGroups now returns only the visible list, its hidden_* fields having no caller left
+why: an exact count was available; "more on the full page" without a number was the fallback only

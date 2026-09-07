@@ -1,145 +1,25 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import clsx from "clsx";
-import { type FC, useState } from "react";
+import type { FC } from "react";
 import { orpc } from "~/integrations/orpc";
-import type { BannerTone, OutcomeBanner } from "./-outcome-banner";
-import { Banner, banner_style, toFailureBanner } from "./-outcome-banner";
-import { ActionButton, accent_button, Panel, secondary_button } from "./-ui";
-
-type Candidate = Awaited<ReturnType<typeof orpc.mail.listUnsubscribeCandidates>>[number];
-type BulkResult = Awaited<ReturnType<typeof orpc.mail.unsubscribeBulk>>;
-type SenderOutcome = BulkResult["senders"][number];
-type LastAttempt = NonNullable<Candidate["last_attempt"]>;
+import { Panel, secondary_button } from "./-ui";
+import type { UnsubscribeCandidate } from "./-unsubscribe-outcome";
+import { candidateKey, isTickable } from "./-unsubscribe-outcome";
+import { AttemptChip, UnsubscribePicker } from "./-unsubscribe-picker";
 
 const CANDIDATE_LIMIT = 60;
-// Mirrors the procedure's own max on `senders`; a bigger tick set is sent in two presses.
-const BULK_LIMIT = 50;
 
 const focus_ring = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info";
-const checkbox_input = clsx("h-4 w-4 rounded border-gray-300 text-accent dark:border-dark-border dark:bg-dark-bg", focus_ring);
-const accent_button_focus = clsx(accent_button, focus_ring);
 const secondary_button_focus = clsx(secondary_button, focus_ring);
-
-function candidateKey(candidate: Pick<Candidate, "mailbox_label" | "from_address">): string {
-  return `${candidate.mailbox_label}:${candidate.from_address}`;
-}
-
-const attempt_tone: Record<LastAttempt["status"], BannerTone> = {
-  sent: "success",
-  failed: "danger",
-  skipped: "info",
-};
-
-function attemptLabel(attempt: LastAttempt): string {
-  if (attempt.status === "skipped") {
-    return "skipped";
-  }
-  if (attempt.method === "mailto") {
-    return attempt.status === "sent" ? "email sent" : `email ${attempt.status} · ${attempt.error ?? "no response"}`;
-  }
-  return attempt.response_code === null
-    ? `one-click ${attempt.status} · ${attempt.error ?? "no response"}`
-    : `one-click ${attempt.status} ${attempt.response_code}`;
-}
-
-const policy_wording: Record<SenderOutcome["policy"], string> = {
-  created: "rule created at auto",
-  promoted: "rule promoted to auto",
-  left: "existing rule left as it was",
-};
-
-function senderTone(outcome: SenderOutcome): BannerTone {
-  if (outcome.errors.length > 0 || outcome.failed > 0 || outcome.attempt?.status === "failed") {
-    return "danger";
-  }
-  if (outcome.attempt?.status === "skipped" || outcome.policy === "left" || outcome.refused > 0) {
-    return "warning";
-  }
-  return "success";
-}
-
-function senderLine(outcome: SenderOutcome): string {
-  const attempt = outcome.attempt === null ? "unsubscribe not recorded" : `unsubscribe ${attemptLabel(outcome.attempt)}`;
-  const counts = [`${outcome.archived} archived`];
-  if (outcome.failed > 0) {
-    counts.push(`${outcome.failed} failed`);
-  }
-  if (outcome.retried > 0) {
-    counts.push(`${outcome.retried} retried from an earlier press`);
-  }
-  if (outcome.refused > 0) {
-    counts.push(`${outcome.refused} kept by a guard`);
-  }
-  if (outcome.waiting > 0) {
-    counts.push(`${outcome.waiting} waiting for the next tick`);
-  }
-  const errors = outcome.errors.length === 0 ? "" : ` — ${outcome.errors.join("; ")}`;
-  return `${outcome.from_address}: ${attempt}; ${policy_wording[outcome.policy]}; ${counts.join(", ")}${errors}`;
-}
 
 // Every rule in this system hides mail. Archive moves it, file moves it, even trash only moves it.
 // Unsubscribing is the only action that reduces the volume rather than relocating it.
 const Unsubscribe: FC = () => {
   const candidates = Route.useLoaderData();
-  const router = useRouter();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState(false);
-  const [banner, setBanner] = useState<OutcomeBanner | null>(null);
-  const [result, setResult] = useState<BulkResult | null>(null);
 
-  // Tickable: a one-click POST, or a mailto the server emails. A plain link is neither.
-  const one_click = candidates.filter((candidate) => candidate.one_click || candidate.target.http === null);
-  const link_only = candidates.filter((candidate) => !candidate.one_click && candidate.target.http !== null);
-  const reachable = one_click.reduce((sum, candidate) => sum + candidate.in_inbox, 0);
-
-  // The list keys rows by (mailbox, address), so one address ticked in two mailboxes is one sender: the
-  // count, the cap hint and what the press sends all come from this one deduped list.
-  const selected_addresses = one_click
-    .filter((candidate) => selected.has(candidateKey(candidate)))
-    .map((candidate) => candidate.from_address)
-    .filter((address, index, addresses) => addresses.findIndex((other) => other.toLowerCase() === address.toLowerCase()) === index);
-  const distinct_addresses = selected_addresses.length;
-  const all_one_click_selected = one_click.length > 0 && one_click.every((candidate) => selected.has(candidateKey(candidate)));
-  const pressed_count = Math.min(distinct_addresses, BULK_LIMIT);
-
-  const toggle = (key: string) => {
-    setSelected((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  };
-
-  const runBulk = async () => {
-    setBusy(true);
-    setResult(null);
-    setBanner({
-      text: `Unsubscribing ${pressed_count} sender${pressed_count === 1 ? "" : "s"} — sending, writing rules, archiving…`,
-      tone: "info",
-    });
-    try {
-      const outcome = await orpc.mail.unsubscribeBulk({
-        senders: selected_addresses.slice(0, BULK_LIMIT).map((from_address) => ({ from_address })),
-      });
-      setResult(outcome);
-      const archived = outcome.senders.reduce((sum, sender) => sum + sender.archived, 0);
-      const sent = outcome.senders.filter((sender) => sender.attempt?.status === "sent").length;
-      setBanner({
-        text: `${sent} of ${outcome.senders.length} unsubscribe request${outcome.senders.length === 1 ? "" : "s"} accepted; ${archived} message${archived === 1 ? "" : "s"} archived${outcome.more_waiting ? "; the rest waits for the next tick" : ""}.`,
-        tone: outcome.mailbox_errors.length > 0 ? "warning" : "success",
-      });
-      setSelected(new Set());
-      await router.invalidate();
-    } catch (error) {
-      setBanner(toFailureBanner("Unsubscribe failed", error));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const tickable = candidates.filter(isTickable);
+  const link_only = candidates.filter((candidate) => !isTickable(candidate));
+  const reachable = tickable.reduce((sum, candidate) => sum + candidate.in_inbox, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,49 +36,8 @@ const Unsubscribe: FC = () => {
         </p>
       </Panel>
 
-      <Panel title={`One click or by email (${one_click.length} senders, ${reachable} still reaching an inbox)`}>
-        {one_click.length === 0 && (
-          <p className="text-sm text-zinc-600 dark:text-dark-text">Nothing accepts a one-click unsubscribe or an unsubscribe email.</p>
-        )}
-        {one_click.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-dark-text">
-              <input
-                checked={all_one_click_selected}
-                className={checkbox_input}
-                disabled={busy}
-                onChange={() => setSelected(all_one_click_selected ? new Set() : new Set(one_click.map(candidateKey)))}
-                type="checkbox"
-              />
-              Select all
-            </label>
-            <ActionButton
-              busy={busy}
-              disabled={busy || distinct_addresses === 0}
-              label={`Unsubscribe and archive ${pressed_count} sender${pressed_count === 1 ? "" : "s"}`}
-              onClick={() => void runBulk()}
-              variant={accent_button_focus}
-            />
-            {distinct_addresses > BULK_LIMIT && (
-              <span className="text-xs text-zinc-500 dark:text-dark-text">
-                The first {BULK_LIMIT} go in this press; tick the rest afterwards.
-              </span>
-            )}
-          </div>
-        )}
-        {banner !== null && <Banner banner={banner} className="mb-3" />}
-        {result !== null && <BulkOutcome result={result} />}
-        <ul className="flex flex-col gap-1">
-          {one_click.map((candidate) => (
-            <Row
-              busy={busy}
-              candidate={candidate}
-              key={candidateKey(candidate)}
-              onToggle={() => toggle(candidateKey(candidate))}
-              selected={selected.has(candidateKey(candidate))}
-            />
-          ))}
-        </ul>
+      <Panel title={`One click or by email (${tickable.length} senders, ${reachable} still reaching an inbox)`}>
+        <UnsubscribePicker candidates={candidates} />
       </Panel>
 
       {link_only.length > 0 && (
@@ -209,7 +48,7 @@ const Unsubscribe: FC = () => {
           </p>
           <ul className="flex flex-col gap-1">
             {link_only.map((candidate) => (
-              <Row busy={busy} candidate={candidate} key={candidateKey(candidate)} onToggle={null} selected={false} />
+              <LinkOnlyRow candidate={candidate} key={candidateKey(candidate)} />
             ))}
           </ul>
         </Panel>
@@ -218,38 +57,8 @@ const Unsubscribe: FC = () => {
   );
 };
 
-const AttemptChip: FC<{ attempt: LastAttempt }> = ({ attempt }) => (
-  <span
-    className={clsx("ml-2 inline-block shrink-0 rounded border px-2 py-0.5 text-xs", banner_style[attempt_tone[attempt.status]])}
-    title={`${attempt.method} · ${new Date(attempt.attempted_at).toLocaleString()}${attempt.error === null ? "" : ` · ${attempt.error}`}`}
-  >
-    {attemptLabel(attempt)}
-  </span>
-);
-
-const BulkOutcome: FC<{ result: BulkResult }> = ({ result }) => (
-  <ul className="mb-3 flex flex-col gap-1">
-    {result.senders.map((outcome) => (
-      <li className={clsx("rounded border p-2 text-sm", banner_style[senderTone(outcome)])} key={outcome.from_address}>
-        {senderLine(outcome)}
-      </li>
-    ))}
-    {result.mailbox_errors.map((entry) => (
-      <li className={clsx("rounded border p-2 text-sm", banner_style.warning)} key={entry.label}>
-        {entry.label}: {entry.error}
-      </li>
-    ))}
-  </ul>
-);
-
-const Row: FC<{ busy: boolean; candidate: Candidate; onToggle: (() => void) | null; selected: boolean }> = ({
-  busy,
-  candidate,
-  onToggle,
-  selected,
-}) => (
+const LinkOnlyRow: FC<{ candidate: UnsubscribeCandidate }> = ({ candidate }) => (
   <li className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-zinc-100 border-b py-2 last:border-0 dark:border-dark-border">
-    {onToggle !== null && <input checked={selected} className={checkbox_input} disabled={busy} onChange={onToggle} type="checkbox" />}
     <span className="w-16 shrink-0 text-right font-medium tabular-nums">{candidate.in_inbox}</span>
     <span className="min-w-0 flex-1">
       <span className="block truncate text-zinc-900 dark:text-dark-headings">{candidate.from_address}</span>
@@ -266,14 +75,6 @@ const Row: FC<{ busy: boolean; candidate: Candidate; onToggle: (() => void) | nu
       </span>
     )}
     {candidate.last_attempt !== null && <AttemptChip attempt={candidate.last_attempt} />}
-    {candidate.target.http === null && (
-      <span
-        className="shrink-0 rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-dark-bg dark:text-dark-text"
-        title={candidate.target.mailto ?? undefined}
-      >
-        by email
-      </span>
-    )}
     {candidate.target.http !== null && (
       <a className={clsx(secondary_button_focus, "shrink-0")} href={candidate.target.http} rel="noreferrer noopener" target="_blank">
         Open link

@@ -1,24 +1,50 @@
 import { describe, expect, test } from "bun:test";
-import { approvalPasses, DEFAULT_VISIBLE_GROUPS, groupKeyString, settleSection, topProposalGroups } from "./-review-groups";
+import {
+  approvalPasses,
+  DEFAULT_VISIBLE_GROUPS,
+  groupKeyString,
+  proposalsPastTheCut,
+  settleSection,
+  topProposalGroups,
+} from "./-review-groups";
 
 const groups = Array.from({ length: 14 }, (_, index) => ({ label: `g${index}`, count: (index + 1) * 5 }));
 
 describe("topProposalGroups", () => {
-  test("cuts to the ten largest groups and totals what the link to the full page stands for", () => {
-    const { visible, hidden_groups, hidden_proposals } = topProposalGroups(groups);
+  test("cuts to the ten largest groups", () => {
+    const visible = topProposalGroups(groups);
     expect(visible).toHaveLength(DEFAULT_VISIBLE_GROUPS);
     expect(visible.map((group) => group.count)).toEqual([70, 65, 60, 55, 50, 45, 40, 35, 30, 25]);
-    expect(hidden_groups).toBe(4);
-    expect(hidden_proposals).toBe(5 + 10 + 15 + 20);
   });
 
   test("ten or fewer groups are never cut", () => {
     const few = groups.slice(0, 10);
-    expect(topProposalGroups(few)).toEqual({ visible: [...few].reverse(), hidden_groups: 0, hidden_proposals: 0 });
+    expect(topProposalGroups(few)).toEqual([...few].reverse());
   });
 
-  test("an empty report has nothing to show and nothing hidden", () => {
-    expect(topProposalGroups([])).toEqual({ visible: [], hidden_groups: 0, hidden_proposals: 0 });
+  test("an empty report has nothing to show", () => {
+    expect(topProposalGroups([])).toEqual([]);
+  });
+});
+
+describe("proposalsPastTheCut", () => {
+  const totals = { total_groups: groups.length, total_proposals: groups.reduce((sum, group) => sum + group.count, 0) };
+
+  test("totals what the link to the full page stands for", () => {
+    expect(proposalsPastTheCut(totals, topProposalGroups(groups))).toEqual({ groups: 4, proposals: 5 + 10 + 15 + 20 });
+  });
+
+  // The loader caps the rows it returns, so the report's totals are the only count that sees past it.
+  test("counts groups the loader never returned", () => {
+    const loaded = groups.slice(0, 12);
+    const past = proposalsPastTheCut({ total_groups: 60, total_proposals: 900 }, topProposalGroups(loaded));
+    expect(past.groups).toBe(50);
+    expect(past.proposals).toBe(900 - (60 + 55 + 50 + 45 + 40 + 35 + 30 + 25 + 20 + 15));
+  });
+
+  test("nothing past the cut when everything is on screen", () => {
+    const few = groups.slice(0, 10);
+    expect(proposalsPastTheCut({ total_groups: 10, total_proposals: 275 }, topProposalGroups(few))).toEqual({ groups: 0, proposals: 0 });
   });
 });
 

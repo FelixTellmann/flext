@@ -6,7 +6,7 @@ import type { OutcomeBanner } from "./-outcome-banner";
 import { Banner, toFailureBanner } from "./-outcome-banner";
 import { visibleRules } from "./-promote-list";
 import type { SectionResult } from "./-review-groups";
-import { approvalPasses, groupKeyString, settleSection, topProposalGroups } from "./-review-groups";
+import { approvalPasses, groupKeyString, proposalsPastTheCut, settleSection, topProposalGroups } from "./-review-groups";
 import { SessionsStrip } from "./-sessions-strip";
 import { ActionButton, accent_button, Panel, secondary_button } from "./-ui";
 import { UnsubscribePicker } from "./-unsubscribe-picker";
@@ -21,7 +21,9 @@ const SESSION_STRIP_LIMIT = 7;
 const RULE_LIMIT = 40;
 const GROUP_LIMIT = 40;
 const UNSUBSCRIBE_LIMIT = 60;
-// Mirrors MAX_ACTION_BATCH_SIZE on the procedures; "Approve all" covers a bigger group in bounded passes.
+// Mirrors MAX_ACTION_BATCH_SIZE in server/mail/actions/executor.ts, which the procedures cap batch_size on
+// and a route cannot import without pulling the execution stack into the client bundle. "Approve all"
+// covers a bigger group in bounded passes.
 const GROUP_BATCH_SIZE = 200;
 
 const focus_ring = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info";
@@ -212,14 +214,15 @@ const ProposalGroupRow: FC<{
   </li>
 );
 
-// "Approve all" is bounded by the count on screen: as many 200-row passes as that count needs, stopping
-// early when a pass moves nothing. A group that grew under the loop waits for the next press.
+// "Approve all" is bounded by the count on screen: as many GROUP_BATCH_SIZE-row passes as that count
+// needs, stopping early when a pass moves nothing. A group that grew under the loop waits for the next press.
 const ProposalGroups: FC<{ report: ProposalReport }> = ({ report }) => {
   const router = useRouter();
   const [busy_key, setBusyKey] = useState<string | null>(null);
   const [outcomes, setOutcomes] = useState<Record<string, GroupOutcome>>({});
 
-  const { visible, hidden_groups, hidden_proposals } = topProposalGroups(report.groups);
+  const visible = topProposalGroups(report.groups);
+  const past_cut = proposalsPastTheCut(report, visible);
 
   const runGroup = async (group: ProposalGroup, verb: "approve" | "dismiss") => {
     const key = groupKeyString(group.key);
@@ -275,9 +278,9 @@ const ProposalGroups: FC<{ report: ProposalReport }> = ({ report }) => {
           />
         ))}
       </ul>
-      {(hidden_groups > 0 || report.total_groups > report.groups.length) && (
+      {past_cut.groups > 0 && (
         <Link className={clsx(link_style, "mt-3 inline-block")} to="/admin/shadow">
-          {hidden_proposals > 0 ? `${hidden_proposals} more in ${hidden_groups} smaller groups` : "The rest"} on the shadow page
+          {past_cut.proposals} more in {past_cut.groups} smaller groups on the shadow page
         </Link>
       )}
     </>

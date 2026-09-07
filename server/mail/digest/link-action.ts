@@ -1,4 +1,5 @@
 import { serverEnv } from "@server/env";
+import { MAX_ACTION_BATCH_SIZE } from "@server/mail/actions/executor";
 import { SITE_ORIGIN, verifyDigestLink } from "@server/mail/digest/links";
 import type { PolicyIndex, PolicyRow, UpsertPolicyInput } from "@server/mail/query/policies";
 import { loadPolicyIndex, upsertPolicy } from "@server/mail/query/policies";
@@ -12,10 +13,6 @@ import { unsubscribeBulk } from "@server/mail/unsubscribe/bulk";
 // The rules the File link creates carry their own source, as the button's do (bulk.ts), so
 // /admin/senders can tell "tapped in the digest" from "assigned on the sender table".
 export const DIGEST_POLICY_SOURCE = "digest";
-
-// server/orpc/mail.ts's MAX_ACTION_BATCH_SIZE, which it does not export: the executor's per-mailbox cap
-// per press. The tick picks up anything past it.
-export const DIGEST_PENDING_CAP = 200;
 
 // Bun closes a request socket silent for 10 s (see src/routes/api/mail-sync.ts), and one-click.ts alone
 // may spend that long on the sender's endpoint before the IMAP archive starts. The handler waits this
@@ -49,7 +46,7 @@ function liveDependencies(): DigestLinkDependencies {
     secret: serverEnv().SCRIPT_SECRET,
     loadPolicyIndex,
     upsertPolicy,
-    unsubscribe: (from_address) => unsubscribeBulk({ from_addresses: [from_address], pending_cap: DIGEST_PENDING_CAP }),
+    unsubscribe: (from_address) => unsubscribeBulk({ from_addresses: [from_address], pending_cap: MAX_ACTION_BATCH_SIZE }),
     wait_ms: DIGEST_LINK_WAIT_MS,
   };
 }

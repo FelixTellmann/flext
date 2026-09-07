@@ -7,6 +7,7 @@ import {
   error_meaning_detail,
   error_meaning_headline,
   error_meaning_style,
+  journal_status_filters,
   status_label,
   status_meaning,
   status_style,
@@ -102,16 +103,22 @@ describe("rows whose states came through the real serializer", () => {
 });
 
 describe("the status vocabulary the screen renders", () => {
-  // status.ts is DB-free but reaches the seven constants through executor/promote/undo, so importing it into
-  // a route would pull the execution stack into the client bundle. The copy is therefore pinned here
+  // status.ts is DB-free but reaches the status constants through executor/promote/undo, so importing it
+  // into a route would pull the execution stack into the client bundle. The copy is therefore pinned here
   // instead: an edit to either side fails this test rather than leaving two spellings of one meaning.
   test("every meaning matches the server's, verbatim", () => {
     expect(status_meaning).toEqual(ACTION_STATUS_MEANINGS);
   });
 
-  test("all seven statuses have a label and a style", () => {
+  test("every status has a label and a style", () => {
     expect(Object.keys(status_label).sort()).toEqual([...ACTION_STATUSES].sort());
     expect(Object.keys(status_style).sort()).toEqual([...ACTION_STATUSES].sort());
+  });
+
+  // Order matters here, not just membership: the tuple is the filter row as rendered, so it is pinned
+  // against the server's spelling unsorted.
+  test("the filter row is 'all' followed by every status, in the server's order", () => {
+    expect([...journal_status_filters]).toEqual(["all", ...ACTION_STATUSES]);
   });
 
   // Every meaning classifyActionError can emit has to have a presentation, or an error note would render

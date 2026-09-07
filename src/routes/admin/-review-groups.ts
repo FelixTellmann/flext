@@ -8,15 +8,19 @@ export const DEFAULT_VISIBLE_GROUPS = 10;
 export type CountedGroup = { count: number };
 
 // Sorted here rather than trusted from the query, so the cut is "largest groups first" whatever order the
-// rows arrived in. The hidden totals are what the "see the rest" link stands for.
-export function topProposalGroups<T extends CountedGroup>(
-  groups: T[],
-  limit: number = DEFAULT_VISIBLE_GROUPS,
-): { visible: T[]; hidden_groups: number; hidden_proposals: number } {
-  const ordered = [...groups].sort((a, b) => b.count - a.count);
-  const visible = ordered.slice(0, limit);
-  const hidden = ordered.slice(limit);
-  return { visible, hidden_groups: hidden.length, hidden_proposals: hidden.reduce((sum, group) => sum + group.count, 0) };
+// rows arrived in.
+export function topProposalGroups<T extends CountedGroup>(groups: T[], limit: number = DEFAULT_VISIBLE_GROUPS): T[] {
+  return [...groups].sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
+export type ProposalTotals = { total_groups: number; total_proposals: number };
+
+// What the "see the rest" link stands for. Counted from the report's totals rather than from the rows in
+// hand, because the loader is itself capped and the groups past that cap never arrive — a sum over the
+// rows here would undercount exactly when the backlog is biggest.
+export function proposalsPastTheCut(totals: ProposalTotals, visible: readonly CountedGroup[]): { groups: number; proposals: number } {
+  const shown = visible.reduce((sum, group) => sum + group.count, 0);
+  return { groups: Math.max(0, totals.total_groups - visible.length), proposals: Math.max(0, totals.total_proposals - shown) };
 }
 
 // How many bounded calls "Approve all" needs to cover a group of this size. Bounded by the count on

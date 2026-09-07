@@ -7,7 +7,7 @@ import {
   promotePolicyAutonomy,
   promotePolicyAutonomyBatch,
 } from "@server/mail/actions/autonomy";
-import { executeActions } from "@server/mail/actions/executor";
+import { executeActions, MAX_ACTION_BATCH_SIZE } from "@server/mail/actions/executor";
 import { createDatabaseJournal } from "@server/mail/actions/journal";
 import { promoteAction, promotePolicyActions, resolveFilingAction } from "@server/mail/actions/promote";
 import type { UndoResult } from "@server/mail/actions/undo";
@@ -71,11 +71,6 @@ const policy_autonomy_schema = z
   .refine((value): value is "shadow" => value === "shadow", {
     message: 'policy autonomy must be "shadow" here — promote it through promotePolicyAutonomy, which runs §4.2\'s gates (§8)',
   });
-
-// Phase 4's mutating procedures are bounded on both axes: an explicit mailbox, and a batch size that can
-// never exceed this. Four mailboxes hold ~14,700 messages and the shadow pass journals a decision for
-// almost every one of them, so an unbounded call would be a mailbox-wide sweep started by one click.
-const MAX_ACTION_BATCH_SIZE = 200;
 
 // A mutation must not run against a mailbox whose connection is not trusted: `enabled` is cleared by
 // nextMailboxStateAfterFailure after an SPKI change or a third consecutive auth failure, and the sync

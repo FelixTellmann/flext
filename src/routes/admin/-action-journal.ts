@@ -11,9 +11,25 @@ export type StateSnapshot = NonNullable<JournalRow["from_state"]>;
 export type KnownStatus = NonNullable<JournalRow["known_status"]>;
 export type ErrorMeaning = NonNullable<JournalRow["error"]>["meaning"];
 
+// Mirrors ACTION_JOURNAL_STATUS_FILTERS in server/mail/query/actions.ts — an admin route can't import a
+// server value without pulling the action modules (and the db handle) into the client bundle, the same
+// reasoning shadow.tsx and senders.tsx already carry. The server re-validates this enum on every call,
+// and the test pins the tuple against ACTION_STATUSES so a new status cannot drop out of the filter row.
+export const journal_status_filters = [
+  "all",
+  "shadow",
+  "pending",
+  "applied",
+  "failed",
+  "deferred",
+  "undone",
+  "superseded",
+  "dismissed",
+] as const;
+
 // Mirrors ACTION_STATUS_MEANINGS in server/mail/actions/status.ts. It cannot be imported: status.ts takes
-// its seven constants from executor.ts, promote.ts and undo.ts, and importing it here would pull the whole
-// execution stack (kinds, state, providers, errors) into the client bundle. The keys are pinned by
+// its status constants from executor.ts, promote.ts and undo.ts, and importing it here would pull the
+// whole execution stack (kinds, state, providers, errors) into the client bundle. The keys are pinned by
 // KnownStatus, which comes from the server row type — only the prose can drift, and the test asserts it
 // against the real record, so an edit to one side fails the suite instead of quietly disagreeing.
 export const status_meaning: Record<KnownStatus, string> = {

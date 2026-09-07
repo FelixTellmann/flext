@@ -2,18 +2,14 @@ import { useRouter } from "@tanstack/react-router";
 import clsx from "clsx";
 import { type FC, useState } from "react";
 import { orpc } from "~/integrations/orpc";
-import type { BannerTone, OutcomeBanner } from "./-outcome-banner";
+import type { OutcomeBanner } from "./-outcome-banner";
 import { Banner, banner_style, toFailureBanner } from "./-outcome-banner";
 import { ActionButton, accent_button } from "./-ui";
+import type { UnsubscribeAttempt, UnsubscribeBulkResult, UnsubscribeCandidate } from "./-unsubscribe-outcome";
+import { attempt_tone, attemptLabel, candidateKey, isTickable, senderLine, senderTone } from "./-unsubscribe-outcome";
 
-// The tickable half of /admin/unsubscribe, for the review page. unsubscribe.tsx keeps its own copy of the
-// list and the outcome wording: it was under concurrent edit when this was written (phase 7's mailto
-// group), so the two are duplicated rather than shared for now — the decision register for phase 8b
-// names the follow-up. Anything changed in one belongs in the other.
-
-type Candidate = Awaited<ReturnType<typeof orpc.mail.listUnsubscribeCandidates>>[number];
-type BulkResult = Awaited<ReturnType<typeof orpc.mail.unsubscribeBulk>>;
-type SenderOutcome = BulkResult["senders"][number];
+// The tickable half of /admin/unsubscribe: the one implementation, rendered there and folded into the
+// review page. The wording of what a press did lives in -unsubscribe-outcome.ts.
 
 // Mirrors the procedure's own max on `senders`; a bigger tick set is sent in two presses.
 const BULK_LIMIT = 50;
@@ -21,75 +17,33 @@ const BULK_LIMIT = 50;
 const focus_ring = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info";
 const checkbox_input = clsx("h-4 w-4 rounded border-gray-300 text-accent dark:border-dark-border dark:bg-dark-bg", focus_ring);
 
-function candidateKey(candidate: Pick<Candidate, "mailbox_label" | "from_address">): string {
-  return `${candidate.mailbox_label}:${candidate.from_address}`;
-}
+export const AttemptChip: FC<{ attempt: UnsubscribeAttempt }> = ({ attempt }) => (
+  <span
+    className={clsx("ml-2 inline-block shrink-0 rounded border px-2 py-0.5 text-xs", banner_style[attempt_tone[attempt.status]])}
+    title={`${attempt.method} · ${new Date(attempt.attempted_at).toLocaleString()}${attempt.error === null ? "" : ` · ${attempt.error}`}`}
+  >
+    {attemptLabel(attempt)}
+  </span>
+);
 
-// A one-click POST, or a mailto the server emails. A plain link is neither, and stays on the full page.
-export function isTickable(candidate: Pick<Candidate, "one_click" | "target">): boolean {
-  return candidate.one_click || candidate.target.http === null;
-}
-
-const policy_wording: Record<SenderOutcome["policy"], string> = {
-  created: "rule created at auto",
-  promoted: "rule promoted to auto",
-  left: "existing rule left as it was",
-};
-
-function senderTone(outcome: SenderOutcome): BannerTone {
-  if (outcome.errors.length > 0 || outcome.failed > 0 || outcome.attempt?.status === "failed") {
-    return "danger";
-  }
-  if (outcome.attempt?.status === "skipped" || outcome.policy === "left" || outcome.refused > 0) {
-    return "warning";
-  }
-  return "success";
-}
-
-function attemptLabel(attempt: NonNullable<SenderOutcome["attempt"]>): string {
-  if (attempt.status === "skipped") {
-    return "skipped";
-  }
-  const method = attempt.method === "mailto" ? "email" : "one-click";
-  if (attempt.status === "sent") {
-    return `${method} sent`;
-  }
-  return `${method} ${attempt.status} · ${attempt.error ?? "no response"}`;
-}
-
-function senderLine(outcome: SenderOutcome): string {
-  const attempt = outcome.attempt === null ? "unsubscribe not recorded" : `unsubscribe ${attemptLabel(outcome.attempt)}`;
-  const counts = [`${outcome.archived} archived`];
-  if (outcome.failed > 0) {
-    counts.push(`${outcome.failed} failed`);
-  }
-  if (outcome.refused > 0) {
-    counts.push(`${outcome.refused} kept by a guard`);
-  }
-  if (outcome.waiting > 0) {
-    counts.push(`${outcome.waiting} waiting for the next tick`);
-  }
-  const errors = outcome.errors.length === 0 ? "" : ` — ${outcome.errors.join("; ")}`;
-  return `${outcome.from_address}: ${attempt}; ${policy_wording[outcome.policy]}; ${counts.join(", ")}${errors}`;
-}
-
-export const UnsubscribePicker: FC<{ candidates: Candidate[] }> = ({ candidates }) => {
+export const UnsubscribePicker: FC<{ candidates: UnsubscribeCandidate[] }> = ({ candidates }) => {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<OutcomeBanner | null>(null);
-  const [result, setResult] = useState<BulkResult | null>(null);
+  const [result, setResult] = useState<UnsubscribeBulkResult | null>(null);
 
   const tickable = candidates.filter(isTickable);
 
   // Rows are keyed by (mailbox, address), so one address ticked in two mailboxes is one sender: the
-  // count and what the press sends both come from this one deduped list.
+  // count, the cap hint and what the press sends all come from this one deduped list.
   const selected_addresses = tickable
     .filter((candidate) => selected.has(candidateKey(candidate)))
     .map((candidate) => candidate.from_address)
     .filter((address, index, addresses) => addresses.findIndex((other) => other.toLowerCase() === address.toLowerCase()) === index);
   const distinct_addresses = selected_addresses.length;
   const all_selected = tickable.length > 0 && tickable.every((candidate) => selected.has(candidateKey(candidate)));
+  const pressed_count = Math.min(distinct_addresses, BULK_LIMIT);
 
   const toggle = (key: string) => {
     setSelected((previous) => {
@@ -107,7 +61,7 @@ export const UnsubscribePicker: FC<{ candidates: Candidate[] }> = ({ candidates 
     setBusy(true);
     setResult(null);
     setBanner({
-      text: `Unsubscribing ${distinct_addresses} sender${distinct_addresses === 1 ? "" : "s"} — sending, writing rules, archiving…`,
+      text: `Unsubscribing ${pressed_count} sender${pressed_count === 1 ? "" : "s"} — sending, writing rules, archiving…`,
       tone: "info",
     });
     try {
@@ -150,7 +104,7 @@ export const UnsubscribePicker: FC<{ candidates: Candidate[] }> = ({ candidates 
         <ActionButton
           busy={busy}
           disabled={busy || distinct_addresses === 0}
-          label={`Unsubscribe and archive ${distinct_addresses} sender${distinct_addresses === 1 ? "" : "s"}`}
+          label={`Unsubscribe and archive ${pressed_count} sender${pressed_count === 1 ? "" : "s"}`}
           onClick={() => void runBulk()}
           variant={clsx(accent_button, focus_ring)}
         />
@@ -196,13 +150,20 @@ export const UnsubscribePicker: FC<{ candidates: Candidate[] }> = ({ candidates 
               )}
             </span>
             <span className="shrink-0 text-xs text-zinc-500 dark:text-dark-text">
-              {candidate.one_click ? "one-click" : "by email"} · {candidate.total} total · {candidate.mailbox_label}
+              {candidate.total} total · {candidate.mailbox_label}
             </span>
             {candidate.has_policy && (
               <span className="shrink-0 rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-dark-bg dark:text-dark-text">
                 rule exists
               </span>
             )}
+            {candidate.last_attempt !== null && <AttemptChip attempt={candidate.last_attempt} />}
+            <span
+              className="shrink-0 rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-dark-bg dark:text-dark-text"
+              title={candidate.one_click ? undefined : (candidate.target.mailto ?? undefined)}
+            >
+              {candidate.one_click ? "one-click" : "by email"}
+            </span>
           </li>
         ))}
       </ul>

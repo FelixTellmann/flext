@@ -9,6 +9,7 @@ import {
   error_meaning_detail,
   error_meaning_headline,
   error_meaning_style,
+  journal_status_filters,
   status_label,
   status_meaning,
   status_style,
@@ -16,11 +17,6 @@ import {
 import type { OutcomeBanner } from "./-outcome-banner";
 import { Banner, toFailureBanner } from "./-outcome-banner";
 import { ActionButton, accent_button, field, Panel, secondary_button } from "./-ui";
-
-// Mirrors ACTION_JOURNAL_STATUS_FILTERS in server/mail/query/actions.ts — an admin route can't import a
-// server value without pulling the action modules (and the db handle) into the client bundle, the same
-// reasoning shadow.tsx and senders.tsx already carry. The server re-validates this enum on every call.
-const journal_status_filters = ["all", "shadow", "pending", "applied", "failed", "deferred", "undone", "superseded", "dismissed"] as const;
 
 const journal_search_schema = z.object({
   mailbox_id: z.string().optional(),

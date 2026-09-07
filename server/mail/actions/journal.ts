@@ -21,6 +21,7 @@ import { FILE_KIND, isExecutableActionKind } from "@server/mail/actions/kinds";
 import { SHADOW_STATUS } from "@server/mail/actions/promote";
 import { UNDONE_STATUS } from "@server/mail/actions/undo";
 import type { PolicyScope } from "@server/mail/classify/rules";
+import { SWEEP_DECLINED_SOURCE } from "@server/mail/classify/rules";
 import { loadFilingBindings } from "@server/mail/filing/bindings";
 import type { SQL } from "drizzle-orm";
 import { and, asc, desc, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
@@ -35,6 +36,15 @@ import { and, asc, desc, eq, gt, inArray, isNull, ne, or } from "drizzle-orm";
 // `file` row — and §6's gate reads null as "no policy chose this path".
 function toPolicyScope(raw: string | null): PolicyScope | null {
   return raw === "address" || raw === "domain" ? raw : null;
+}
+
+// Inbox-dwell 1.9's table: the Declined sweep "sets \Seen", and docs/decisions/2026-09-06-declined-needs-
+// action-archives.md keeps that for the Needs Action variant. decide() emits those rows with policy_id
+// null, so the policy join alone would execute them without the prefix and the unread count would never
+// reach zero — the row's source has to carry the flag where no policy can. Exported so journal.test.ts
+// can pin it without a connection.
+export function pendingMarkRead(input: { policy_mark_read: boolean | null; source: string }): boolean {
+  return (input.policy_mark_read ?? false) || input.source === SWEEP_DECLINED_SOURCE;
 }
 
 async function loadPendingActions(input: { mailbox_id: string; batch_size: number; action_ids?: string[] }): Promise<PendingActionRow[]> {
@@ -63,11 +73,12 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
       message_id: action.message_id,
       kind: action.kind,
       run_id: action.run_id,
+      source: action.source,
       folder: message.folder,
       uid: message.uid,
       target_path: action.target_path,
       policy_scope: senderPolicy.scope,
-      mark_read: senderPolicy.mark_read,
+      policy_mark_read: senderPolicy.mark_read,
       dkim_aligned: message.dkim_aligned,
       filing_confirmed_at: action.filing_confirmed_at,
     })
@@ -102,7 +113,7 @@ async function loadPendingActions(input: { mailbox_id: string; batch_size: numbe
             uid: row.uid,
             target_path: row.target_path,
             policy_scope: toPolicyScope(row.policy_scope),
-            mark_read: row.mark_read ?? false,
+            mark_read: pendingMarkRead({ policy_mark_read: row.policy_mark_read, source: row.source }),
             dkim_aligned: row.dkim_aligned,
             filing_confirmed_at: row.filing_confirmed_at,
           },
