@@ -169,6 +169,13 @@
       "when": 1788726258268,
       "tag": "0023_bent_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1788764501304,
+      "tag": "0024_petite_gravity",
+      "breakpoints": true
     }
   ]
 }

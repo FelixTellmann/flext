@@ -1,11 +1,13 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   datetime,
   decimal,
   float,
   index,
   int,
+  json,
   mysqlTable,
   primaryKey,
   text,
@@ -671,12 +673,15 @@ export const personalTask = mysqlTable(
     deferral_count: int("deferralCount").default(0).notNull(),
     estimate_minutes: int("estimateMinutes"),
     focus: boolean("focus").default(false).notNull(),
+    // A task carrying this AND plan_week is a tactic (spec 4.3): the weekly plan is a query, never a list.
+    goal_id: varchar("goalId", { length: 191 }),
     completed_at: datetime("completedAt", { fsp: 3 }),
     cancelled_at: datetime("cancelledAt", { fsp: 3 }),
   },
   (table) => ({
     stateWhenIndex: index("PersonalTask_state_whenDate_idx").on(table.state, table.when_date),
     planWeekIndex: index("PersonalTask_planWeek_poolOrder_idx").on(table.plan_week, table.pool_order),
+    goalIndex: index("PersonalTask_goalId_idx").on(table.goal_id),
   }),
 );
 
@@ -724,9 +729,9 @@ export const activityBucket = mysqlTable(
     // Fraction of the bucket attributed to this project, 0–1, summing to 1 per bucket. That constraint is
     // the reason a day's totals can never exceed wall-clock time however many editors were open.
     //
-    // The only decimal column in this database, and mysql2 hands decimals back as STRINGS — every read of
-    // this column must go through Number() at the row-mapping boundary, the way the mail queries already
-    // treat COUNT and SUM. `seconds` beside it is an int and needs no such care.
+    // mysql2 hands decimals back as STRINGS — every read of this column (and of the goal and progress
+    // decimals below) must go through Number() at the row-mapping boundary, the way the mail queries
+    // already treat COUNT and SUM. `seconds` beside it is an int and needs no such care.
     share: decimal("share", { precision: 5, scale: 4 }).notNull(),
     seconds: int("seconds").notNull(),
   },
@@ -752,6 +757,10 @@ export const personalReview = mysqlTable(
     completed_at: datetime("completedAt", { fsp: 3 }),
     someday_swept_at: datetime("somedaySweptAt", { fsp: 3 }),
     note: text("note"),
+    // The execution score, frozen when the review completes so history never shifts as tasks move.
+    // Null until then; a live week is computed from the tasks instead.
+    planned_count: int("plannedCount"),
+    completed_count: int("completedCount"),
   },
   (table) => ({
     weekUnique: uniqueIndex("PersonalReview_planWeek_key").on(table.plan_week),
@@ -776,5 +785,143 @@ export const personalTaskDeferral = mysqlTable(
   },
   (table) => ({
     taskIndex: index("PersonalTaskDeferral_taskId_idx").on(table.task_id),
+  }),
+);
+
+// ─── PersonalGoal ────────────────────────────────────────────────────────────
+// The numbers only. The why, what done looks like and the non-goals live in personal/brain/goals/<slug>.md,
+// which the slug points at; MySQL stores nothing narrative.
+export const personalGoal = mysqlTable(
+  "PersonalGoal",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }).notNull(),
+    slug: varchar("slug", { length: 191 }),
+    title: varchar("title", { length: 191 }).notNull(),
+    // stretch | boundary — validated at the zod layer. There is no action kind: a repeated behaviour is
+    // a practice linked by goal_id.
+    kind: varchar("kind", { length: 191 }).notNull(),
+    metric: varchar("metric", { length: 191 }).notNull(),
+    // up | down
+    direction: varchar("direction", { length: 191 }).default("up").notNull(),
+    baseline: decimal("baseline", { precision: 12, scale: 2 }),
+    target: decimal("target", { precision: 12, scale: 2 }),
+    unit: varchar("unit", { length: 191 }),
+    starts_on: date("startsOn", { mode: "string" }),
+    due_on: date("dueOn", { mode: "string" }),
+    // active | achieved | dropped | suspended
+    status: varchar("status", { length: 191 }).default("active").notNull(),
+    cycle_id: varchar("cycleId", { length: 191 }),
+    sort_order: int("sortOrder").default(0).notNull(),
+  },
+  (table) => ({
+    slugUnique: uniqueIndex("PersonalGoal_slug_key").on(table.slug),
+    areaIndex: index("PersonalGoal_areaId_idx").on(table.area_id),
+  }),
+);
+
+// ─── PersonalGoalProgress ────────────────────────────────────────────────────
+export const personalGoalProgress = mysqlTable(
+  "PersonalGoalProgress",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    goal_id: varchar("goalId", { length: 191 }).notNull(),
+    recorded_on: date("recordedOn", { mode: "string" }).notNull(),
+    // An absolute snapshot, never a delta: the latest row is the current reading with no summing.
+    value: decimal("value", { precision: 12, scale: 2 }).notNull(),
+    note: varchar("note", { length: 512 }),
+  },
+  (table) => ({
+    goalRecordedIndex: index("PersonalGoalProgress_goalId_recordedOn_idx").on(table.goal_id, table.recorded_on),
+  }),
+);
+
+// ─── PersonalCycle ───────────────────────────────────────────────────────────
+// Per area and concurrent: suspension attaches here, never to the system (spec 4.4).
+export const personalCycle = mysqlTable(
+  "PersonalCycle",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }).notNull(),
+    number: int("number").notNull(),
+    starts_on: date("startsOn", { mode: "string" }).notNull(),
+    ends_on: date("endsOn", { mode: "string" }).notNull(),
+    suspended_at: datetime("suspendedAt", { fsp: 3 }),
+    resumed_at: datetime("resumedAt", { fsp: 3 }),
+    note: varchar("note", { length: 512 }),
+  },
+  (table) => ({
+    areaIndex: index("PersonalCycle_areaId_idx").on(table.area_id),
+  }),
+);
+
+// The two trigger kinds from spec 5.1 in use before stage 7; anchor and situation arrive with it.
+export type PracticeTrigger = { kind: "time"; at: string } | { kind: "event"; event: string };
+
+// ─── PersonalPractice ────────────────────────────────────────────────────────
+// A repeated behaviour, freq_num times per freq_den days. A goal's lead measures are the practices linked
+// to it. Stage 7 extends this row (automaticity, ladder, interventions) and moves nothing.
+export const personalPractice = mysqlTable(
+  "PersonalPractice",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }).notNull(),
+    goal_id: varchar("goalId", { length: 191 }),
+    name: varchar("name", { length: 191 }).notNull(),
+    freq_num: int("freqNum").notNull(),
+    freq_den: int("freqDen").notNull(),
+    trigger: json("trigger").$type<PracticeTrigger>(),
+    retired_at: datetime("retiredAt", { fsp: 3 }),
+    sort_order: int("sortOrder").default(0).notNull(),
+  },
+  (table) => ({
+    areaIndex: index("PersonalPractice_areaId_idx").on(table.area_id),
+    goalIndex: index("PersonalPractice_goalId_idx").on(table.goal_id),
+  }),
+);
+
+// ─── PersonalPracticeEntry ───────────────────────────────────────────────────
+// Deliberately no unique on (practice, date): three sessions in one day are three rows.
+export const personalPracticeEntry = mysqlTable(
+  "PersonalPracticeEntry",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    practice_id: varchar("practiceId", { length: 191 }).notNull(),
+    occurred_on: date("occurredOn", { mode: "string" }).notNull(),
+    // done | missed | skipped | not_expected — the last two exist for stage 7 and count in no denominator.
+    status: varchar("status", { length: 191 }).notNull(),
+    note: varchar("note", { length: 512 }),
+  },
+  (table) => ({
+    practiceOccurredIndex: index("PersonalPracticeEntry_practiceId_occurredOn_idx").on(table.practice_id, table.occurred_on),
+  }),
+);
+
+// ─── PersonalAntiGoal ────────────────────────────────────────────────────────
+// One line of constraint per row. Filing a task to the area shows its holding rows as a notice and
+// never blocks (spec decision 4).
+export const personalAntiGoal = mysqlTable(
+  "PersonalAntiGoal",
+  {
+    id: varchar("id", { length: 191 }).primaryKey().default(sql`(UUID())`),
+    createdAt: datetime("createdAt", { fsp: 3 }).default(sql`CURRENT_TIMESTAMP(3)`).notNull(),
+    updatedAt: datetime("updatedAt", { fsp: 3 }).notNull(),
+    area_id: varchar("areaId", { length: 191 }).notNull(),
+    cycle_id: varchar("cycleId", { length: 191 }),
+    constraint_text: varchar("constraintText", { length: 191 }).notNull(),
+    // holding | breached | retired
+    status: varchar("status", { length: 191 }).default("holding").notNull(),
+    sort_order: int("sortOrder").default(0).notNull(),
+  },
+  (table) => ({
+    areaIndex: index("PersonalAntiGoal_areaId_idx").on(table.area_id),
   }),
 );
