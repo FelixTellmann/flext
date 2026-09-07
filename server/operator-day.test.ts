@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isoWeekOf, operatorDateOf, operatorDayStart, operatorDayStartOf, operatorWeekRange } from "@server/operator-day";
+import { isoWeekOf, isoWeekRange, operatorDateOf, operatorDayStart, operatorDayStartOf, operatorWeekRange } from "@server/operator-day";
 
 // Every screen, bucket and ingest window in the personal OS agrees on one definition of "today". These
 // tests exist because the failure is silent: a boundary that drifts by two hours does not throw, it just
@@ -61,5 +61,32 @@ describe("operatorWeekRange runs Monday to Sunday", () => {
 
   test("a Monday is the first day of its own week", () => {
     expect(operatorWeekRange(new Date("2026-08-24T10:00:00.000Z"))).toEqual({ from: "2026-08-24", to: "2026-08-30" });
+  });
+});
+
+describe("isoWeekRange is the inverse of isoWeekOf", () => {
+  test("a mid-year label resolves to the Monday and Sunday operatorWeekRange gives", () => {
+    expect(isoWeekRange("2026-W35")).toEqual({ from: "2026-08-24", to: "2026-08-30" });
+  });
+
+  test("week 1 can begin in the previous calendar year", () => {
+    expect(isoWeekRange("2026-W01")).toEqual({ from: "2025-12-29", to: "2026-01-04" });
+  });
+
+  test("week 53 exists in a year that has one", () => {
+    expect(isoWeekRange("2026-W53")).toEqual({ from: "2026-12-28", to: "2027-01-03" });
+  });
+
+  test("every day of the range labels back to the same week", () => {
+    for (const week of ["2026-W01", "2026-W35", "2026-W53", "2027-W01"]) {
+      const { from, to } = isoWeekRange(week);
+
+      expect(isoWeekOf(operatorDayStartOf(from))).toBe(week);
+      expect(isoWeekOf(operatorDayStartOf(to))).toBe(week);
+    }
+  });
+
+  test("a label that is not an ISO week throws", () => {
+    expect(() => isoWeekRange("2026-35")).toThrow();
   });
 });

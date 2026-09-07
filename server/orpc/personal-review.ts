@@ -6,6 +6,7 @@ import { DEFERRAL_LIMIT, SOMEDAY_AGE_DAYS } from "@server/personal-thresholds";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import { authed } from "./base";
+import { freezeExecutionCounts } from "./personal-goals";
 import { reviveSomedayTask } from "./personal-tasks";
 
 const ACTIVE_STATES = ["inbox", "open"] as const;
@@ -226,15 +227,20 @@ export const personalReviewProcedures = {
     return { someday_swept_at: now.toISOString() };
   }),
 
+  // Completing freezes the week's execution counts onto the row (spec decision 2), so the scorecard's
+  // history stops moving with the tasks the moment the week is signed off.
   complete: authed.input(z.object({ note: z.string().max(4000).optional() })).handler(async ({ input }) => {
     const now = new Date();
+    const plan_week = isoWeekOf(now);
 
     await db
       .update(personalReview)
       .set({ completed_at: now, note: input.note ?? null, updatedAt: now })
-      .where(eq(personalReview.plan_week, isoWeekOf(now)));
+      .where(eq(personalReview.plan_week, plan_week));
 
-    return { completed_at: now.toISOString() };
+    const score = await freezeExecutionCounts(plan_week);
+
+    return { completed_at: now.toISOString(), planned_count: score?.planned ?? null, completed_count: score?.completed ?? null };
   }),
 
   // Cancelling is only a real exit if there is somewhere to land. Without this, "cancel to logbook"

@@ -43,3 +43,19 @@ export const operatorWeekRange = (at: Date = new Date()): { from: string; to: st
 
   return { from: monday.toISOString().slice(0, 10), to: new Date(monday.getTime() + 6 * DAY_MS).toISOString().slice(0, 10) };
 };
+
+// Monday to Sunday of an ISO week label ("2026-W37"), as YYYY-MM-DD. Jan 4 is always inside week 1, so
+// week 1's Monday is Jan 4 pulled back to its Monday and every later week is a whole number of sevens on.
+export const isoWeekRange = (week: string): { from: string; to: string } => {
+  const match = /^(\d{4})-W(\d{2})$/.exec(week);
+
+  if (match === null) {
+    throw new Error(`not an ISO week: ${week}`);
+  }
+
+  const january_fourth = new Date(Date.UTC(Number(match[1]), 0, 4));
+  const week_one_monday = january_fourth.getTime() - ((january_fourth.getUTCDay() + 6) % 7) * DAY_MS;
+  const monday = new Date(week_one_monday + (Number(match[2]) - 1) * 7 * DAY_MS);
+
+  return { from: monday.toISOString().slice(0, 10), to: new Date(monday.getTime() + 6 * DAY_MS).toISOString().slice(0, 10) };
+};

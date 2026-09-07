@@ -14,6 +14,7 @@ import { resolveStreams } from "@server/personal-streams";
 import { DEFERRAL_LIMIT } from "@server/personal-thresholds";
 import { normaliseProjectName, UNKNOWN_PROJECT } from "@server/wakatime/bucket-heartbeats";
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, like, lt, ne, or, sql } from "drizzle-orm";
+import type { MySqlColumn, MySqlTable } from "drizzle-orm/mysql-core";
 import { slugify } from "utils/slugify";
 import { z } from "zod";
 import { authed } from "./base";
@@ -24,10 +25,11 @@ const ACTIVE_STATES = ["inbox", "open"] as const;
 
 type TaskRow = typeof personalTask.$inferSelect;
 
-const mapTask = (row: TaskRow) => ({
+export const mapTask = (row: TaskRow) => ({
   id: row.id,
   area_id: row.area_id,
   project_id: row.project_id,
+  goal_id: row.goal_id,
   title: row.title,
   notes: row.notes,
   state: row.state,
@@ -75,16 +77,17 @@ const deleteWakaNameRows = async (normalised_name: string): Promise<void> => {
 
 // The unique index covers archived areas too, so the collision check does not filter on archived_at. A
 // name with nothing slug-worthy in it gets no slug rather than an empty one the index would reject twice.
-const freeSlug = async (base: string): Promise<string | null> => {
+// Shared with goals, which point at brain files the same way.
+export const freeSlug = async (base: string, table: MySqlTable, slug_column: MySqlColumn): Promise<string | null> => {
   if (base === "") {
     return null;
   }
 
   const rows = await db
-    .select({ slug: personalArea.slug })
-    .from(personalArea)
-    .where(like(personalArea.slug, `${base}%`));
-  const taken = new Set(rows.map((row) => row.slug));
+    .select({ slug: slug_column })
+    .from(table)
+    .where(like(slug_column, `${base}%`));
+  const taken = new Set<unknown>(rows.map((row) => row.slug));
 
   if (!taken.has(base)) {
     return base;
@@ -115,7 +118,7 @@ const stateColumns = (state: z.infer<typeof settable_state_schema>, now: Date) =
 // `when` of today lands exactly where pullToToday puts it and the screens agree about which day it is.
 // The round trip through Date is the calendar check: "2026-13-45" matches the pattern and comes back as
 // something else.
-const day_schema = z
+export const day_schema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine((day) => new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) === day, { message: "not a calendar day" });
@@ -360,6 +363,7 @@ export const personalTaskProcedures = {
         notes: z.string().max(20_000).nullable().optional(),
         area_id: z.string().min(1).nullable().optional(),
         project_id: z.string().min(1).nullable().optional(),
+        goal_id: z.string().min(1).nullable().optional(),
         when_date: day_schema.nullable().optional(),
         deadline: day_schema.nullable().optional(),
         estimate_minutes: z.number().int().min(0).max(100_000).nullable().optional(),
@@ -560,7 +564,7 @@ export const personalTaskProcedures = {
     .input(z.object({ name: z.string().min(1).max(191), mode: mode_schema.default("always_on"), sort_order: z.number().int().default(0) }))
     .handler(async ({ input }) => {
       const id = crypto.randomUUID();
-      const slug = await freeSlug(slugify(input.name));
+      const slug = await freeSlug(slugify(input.name), personalArea, personalArea.slug);
 
       await db
         .insert(personalArea)
