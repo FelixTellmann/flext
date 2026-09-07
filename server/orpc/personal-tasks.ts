@@ -143,7 +143,8 @@ export const insertCapturedTask = async (title: string): Promise<{ id: string }>
 
 // The one way back out of someday, shared by revive and the review sweep's reviveToPool. It clears the
 // date and the week so the task lands in Anytime (or the pool it is given) and nothing else: notes,
-// filing, deadline and the deferral count are history the task keeps.
+// filing, deadline and the deferral count are history the task keeps. pool_order goes back to the column
+// default, the position a freshly captured task also starts from, because the column is not nullable.
 export const reviveSomedayTask = async (id: string, plan_week: string | null): Promise<void> => {
   const [row] = await db.select({ state: personalTask.state }).from(personalTask).where(eq(personalTask.id, id)).limit(1);
 
@@ -157,7 +158,7 @@ export const reviveSomedayTask = async (id: string, plan_week: string | null): P
 
   await db
     .update(personalTask)
-    .set({ state: "open", when_date: null, plan_week, pool_order: null, updatedAt: new Date() })
+    .set({ state: "open", when_date: null, plan_week, pool_order: 0, updatedAt: new Date() })
     .where(eq(personalTask.id, id));
 };
 
